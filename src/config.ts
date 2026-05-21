@@ -1,11 +1,23 @@
 import 'dotenv/config';
 import { z } from 'zod';
 
+function stripTrailingSlash(u: string): string {
+  return u.replace(/\/+$/, '');
+}
+
+/** Trim + strip trailing slash before Zod `.url()` (Railway often copies URLs with `/`). */
+function normalizeEnvUrl(raw: unknown): unknown {
+  if (typeof raw !== 'string') return raw;
+  return stripTrailingSlash(raw.trim());
+}
+
+const envUrl = z.preprocess(normalizeEnvUrl, z.string().url());
+
 const schema = z.object({
   PORT: z.coerce.number().default(3002),
-  MCP_PUBLIC_URL: z.string().url(),
-  DASHBOARD_URL: z.string().url(),
-  SUPABASE_URL: z.string().url(),
+  MCP_PUBLIC_URL: envUrl,
+  DASHBOARD_URL: envUrl,
+  SUPABASE_URL: envUrl,
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
   OPENAI_API_KEY: z.string().optional().default(''),
   OAUTH_CLIENT_ID: z.string().default('aimemory-claude'),
@@ -28,10 +40,6 @@ const schema = z.object({
         .filter(Boolean)
     ),
 });
-
-function stripTrailingSlash(u: string): string {
-  return u.replace(/\/+$/, '');
-}
 
 const parsed = schema.parse(process.env);
 
