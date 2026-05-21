@@ -25,6 +25,19 @@ npm run lint
 npm run typecheck
 ```
 
+## Railway deploy
+
+Guía completa: [STEP_BY_STEP.md §6](STEP_BY_STEP.md#6-deploy-a-railway).
+
+- Variables en Railway → Settings → Variables (no subir `.env`).
+- `MCP_PUBLIC_URL` = URL pública del servicio (Networking), sin `/mcp`.
+- Health check: `/health` ([`railway.toml`](railway.toml)).
+
+```bash
+npx skills add railwayapp/railway-skills --skill deploy
+npx skills add railwayapp/railway-skills --skill environment
+```
+
 ## OAuth flow
 
 1. Client reads `/.well-known/oauth-authorization-server`

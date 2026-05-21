@@ -83,7 +83,7 @@ npm install
 cp .env.example .env
 ```
 
-El servidor carga `.env` automáticamente al arrancar (vía `dotenv` en `src/config.ts`; en producción `npm start` también usa `--env-file=.env`).
+El servidor carga `.env` automáticamente en local (vía `dotenv` en `src/config.ts`). En Railway **no** subas `.env`: configurá las variables en Settings → Variables; `npm start` ejecuta `node dist/index.js` y lee `process.env` del contenedor.
 
 Editar `.env`:
 
@@ -322,6 +322,7 @@ La respuesta debe traer un header `mcp-session-id`. Guardalo y usalo en las llam
 
 Settings → Variables. Mínimo:
 
+**`MCP_PUBLIC_URL`:** copiá la URL pública del servicio en Railway → Settings → **Networking** (ej. `https://nombre-servicio.up.railway.app`). Sin barra final y **sin** `/mcp`. No subas un archivo `.env` al deploy.
 
 | Variable                    | Valor (prod)                                                                              |
 | --------------------------- | ----------------------------------------------------------------------------------------- |
@@ -442,6 +443,7 @@ Camino separado: usar el [Custom GPT existente](../AIMemory/packages/custom-gpt/
 
 | Síntoma                                        | Causa probable                                                | Fix                                                                                                    |
 | ---------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `node: .env: not found` en logs Railway        | `start` antiguo con `--env-file=.env` (archivo no va al deploy) | Usar `npm start` = `node dist/index.js`; vars en Railway panel; redeploy                              |
 | `curl /health` → connection refused            | Server no levantó                                             | Revisar logs `npm run dev`; `.env` sin parsear (probablemente falta una var requerida por `config.ts`) |
 | `EADDRINUSE :::3002`                           | Puerto ocupado por otra instancia                             | `netstat -ano \| findstr :3002` y `taskkill /PID <pid> /F` (Windows) o cerrar el `npm run dev` anterior |
 | `jq: command not found` / `curl: (23)`         | `jq` no instalado; el JSON sí llegó                           | Usar `curl -s` sin pipe, `python -m json.tool`, o instalar `jq` (ver §3.4)                              |
