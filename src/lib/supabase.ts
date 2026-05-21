@@ -1,5 +1,13 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClientOptions } from '@supabase/supabase-js';
+import ws from 'ws';
 import { config } from '../config.js';
+
+type ClientOptions = SupabaseClientOptions<'public'>;
+type RealtimeTransport = NonNullable<ClientOptions['realtime']>['transport'];
+
+const supabaseRealtimeOptions: Pick<ClientOptions, 'realtime'> = {
+  realtime: { transport: ws as RealtimeTransport },
+};
 
 function normalizeUrl(raw: string): string {
   return raw
@@ -14,5 +22,8 @@ function normalizeUrl(raw: string): string {
 export const supabase = createClient(
   normalizeUrl(config.SUPABASE_URL),
   config.SUPABASE_SERVICE_ROLE_KEY,
-  { auth: { autoRefreshToken: false, persistSession: false } }
+  {
+    auth: { autoRefreshToken: false, persistSession: false },
+    ...supabaseRealtimeOptions,
+  }
 );

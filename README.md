@@ -32,6 +32,7 @@ Guía completa: [STEP_BY_STEP.md §6](STEP_BY_STEP.md#6-deploy-a-railway).
 - Variables en Railway → Settings → Variables (no subir `.env`).
 - `MCP_PUBLIC_URL` = URL pública del servicio (Networking), sin `/mcp`.
 - Health check: `/health` ([`railway.toml`](railway.toml)).
+- Node 20 on Railway: Supabase Realtime needs the `ws` package (configured in `src/lib/supabase.ts`). Optional: `RAILPACK_NODE_VERSION=22` for native WebSocket.
 
 ```bash
 npx skills add railwayapp/railway-skills --skill deploy
