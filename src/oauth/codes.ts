@@ -70,20 +70,21 @@ export interface ConsumedCode {
 
 export async function consumeCode(rawCode: string): Promise<ConsumedCode | null> {
   const codeHash = hashApiKey(rawCode);
+  const now = new Date().toISOString();
+
   const { data, error } = await supabase
     .from('oauth_codes')
-    .select('id, user_id, client_id, redirect_uri, code_challenge, code_challenge_method, scope, used_at, expires_at')
+    .update({ used_at: now })
     .eq('code_hash', codeHash)
-    .single();
-  if (error || !data) return null;
-  if (data.used_at) return null;
-  if (!data.user_id) return null;
-  if (new Date(data.expires_at).getTime() < Date.now()) return null;
+    .is('used_at', null)
+    .not('user_id', 'is', null)
+    .gt('expires_at', now)
+    .select(
+      'id, user_id, client_id, redirect_uri, code_challenge, code_challenge_method, scope'
+    )
+    .maybeSingle();
 
-  await supabase
-    .from('oauth_codes')
-    .update({ used_at: new Date().toISOString() })
-    .eq('id', data.id);
+  if (error || !data) return null;
 
   return {
     userId: data.user_id as string,

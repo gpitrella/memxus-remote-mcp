@@ -11,6 +11,7 @@ import { authorize } from './oauth/authorize.js';
 import { token } from './oauth/token.js';
 import { register } from './oauth/register.js';
 import { bearerAuth } from './lib/auth.js';
+import { oauthRateLimit } from './middleware/oauthRateLimit.js';
 import { handleMcp, handleMcpGet, handleMcpDelete } from './mcp/transport.js';
 
 const app = express();
@@ -33,8 +34,8 @@ app.get('/health', health);
 
 app.get('/.well-known/oauth-authorization-server', authorizationServerMetadata);
 app.get('/.well-known/oauth-protected-resource', protectedResourceMetadata);
-app.get('/oauth/authorize', authorize);
-app.post('/oauth/token', token);
+app.get('/oauth/authorize', oauthRateLimit, authorize);
+app.post('/oauth/token', oauthRateLimit, token);
 app.post('/oauth/register', register);
 
 app.post('/mcp', bearerAuth, handleMcp);

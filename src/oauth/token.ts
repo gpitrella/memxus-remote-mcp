@@ -40,6 +40,13 @@ export async function token(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  await supabase
+    .from('api_keys')
+    .update({ is_active: false })
+    .eq('user_id', consumed.userId)
+    .eq('oauth_client_id', consumed.clientId)
+    .eq('is_active', true);
+
   const apiKey = generateApiKey();
   const { error } = await supabase.from('api_keys').insert({
     user_id: consumed.userId,

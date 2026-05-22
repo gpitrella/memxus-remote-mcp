@@ -22,9 +22,7 @@ export async function authorize(req: Request, res: Response): Promise<void> {
     return;
   }
   if (!redirect_uri || !config.ALLOWED_REDIRECT_URIS.includes(redirect_uri)) {
-    res
-      .status(400)
-      .json({ error: 'invalid_redirect_uri', allowed: config.ALLOWED_REDIRECT_URIS });
+    res.status(400).json({ error: 'invalid_redirect_uri' });
     return;
   }
   if (!code_challenge) {
