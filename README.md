@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="brand/logo.png" alt="AI Memory Logo" width="120" />
+</p>
+
 # AI Memory Remote MCP Server
 
 OAuth 2.1 + PKCE remote MCP server for Claude Connectors. Streamable HTTP transport; proxies memory tools to Supabase.

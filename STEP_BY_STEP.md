@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="brand/logo.png" alt="AI Memory Logo" width="96" />
+</p>
+
 # AI Memory Remote MCP — Step by Step
 
 Guía operativa, end-to-end, para llevar el Remote MCP de cero hasta usuarios reales conectados. Cubre desarrollo local, base de datos, deploy a Railway, integración con dashboard y landing, y conexión desde cada cliente (Claude, Cursor, VS Code).
