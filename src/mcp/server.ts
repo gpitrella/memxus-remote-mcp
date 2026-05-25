@@ -11,6 +11,7 @@ import {
   saveMemory,
   searchMemories,
   listMemories,
+  listCollections,
   deleteMemory,
   getStats,
 } from './tools.js';
@@ -27,11 +28,26 @@ export interface McpContext {
   apiKeyId?: string;
 }
 
+const memoryTypeEnum = z.enum(['general', 'preference', 'fact', 'instruction', 'conversation']);
+
+const scopeFields = {
+  collection: {
+    type: 'string',
+    description:
+      'Scope slug for this memory (e.g. project:henry-memory, personal:preferences, work:client-x). Use the same collection in recall/get_context when the user asks about that topic.',
+  },
+  tags: {
+    type: 'array',
+    items: { type: 'string' },
+    description: 'Optional tags. A tag like project:my-app also sets collection automatically.',
+  },
+};
+
 const TOOLS: Tool[] = [
   {
     name: 'remember',
     description:
-      'Save important information to long-term memory. Use when the user shares preferences, facts, decisions, instructions, or anything to recall later.',
+      'Save important information to long-term memory. Always set collection when the topic is clear: project work → project:<slug>, personal tastes → personal:preferences. Use append_to to extend an existing memory instead of creating duplicates.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -41,8 +57,12 @@ const TOOLS: Tool[] = [
           enum: ['general', 'preference', 'fact', 'instruction', 'conversation'],
           default: 'general',
         },
-        tags: { type: 'array', items: { type: 'string' }, default: [] },
+        ...scopeFields,
         importance: { type: 'number', minimum: 0, maximum: 1, default: 0.5 },
+        append_to: {
+          type: 'string',
+          description: 'UUID of an existing memory to append to (same user). Keeps revision history.',
+        },
       },
       required: ['content'],
     },
@@ -50,7 +70,7 @@ const TOOLS: Tool[] = [
   {
     name: 'recall',
     description:
-      'Search long-term memory for information relevant to the current conversation.',
+      'Search long-term memory. Pass collection (and/or tags, type) to search only that scope — e.g. collection=project:henry-memory for project questions, collection=personal:preferences for tastes.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -60,6 +80,7 @@ const TOOLS: Tool[] = [
           type: 'string',
           enum: ['general', 'preference', 'fact', 'instruction', 'conversation'],
         },
+        ...scopeFields,
       },
       required: ['query'],
     },
@@ -67,19 +88,24 @@ const TOOLS: Tool[] = [
   {
     name: 'get_context',
     description:
-      'Build a formatted context block with memories relevant to the current topic.',
+      'Build a formatted context block for the current topic. Use collection to limit results to one domain (project, preferences, etc.).',
     inputSchema: {
       type: 'object',
       properties: {
         topic: { type: 'string' },
         max_memories: { type: 'number', default: 5, minimum: 1, maximum: 10 },
+        type: {
+          type: 'string',
+          enum: ['general', 'preference', 'fact', 'instruction', 'conversation'],
+        },
+        ...scopeFields,
       },
       required: ['topic'],
     },
   },
   {
     name: 'list_memories',
-    description: 'List the most recent memories stored.',
+    description: 'List recent memories. Filter by collection, tags, or type to browse one group.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -88,8 +114,15 @@ const TOOLS: Tool[] = [
           type: 'string',
           enum: ['general', 'preference', 'fact', 'instruction', 'conversation'],
         },
+        ...scopeFields,
       },
     },
+  },
+  {
+    name: 'list_collections',
+    description:
+      'List memory collections (folders/scopes) for this user. Use slugs in remember/recall/get_context.',
+    inputSchema: { type: 'object', properties: {} },
   },
   {
     name: 'forget',
@@ -102,10 +135,26 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'memory_stats',
-    description: 'Show statistics about the stored memories.',
+    description: 'Show statistics about stored memories (by type and collection).',
     inputSchema: { type: 'object', properties: {} },
   },
 ];
+
+function formatMemoryLine(m: {
+  id: string;
+  memory_type: string;
+  importance: number;
+  tags: string[];
+  collection: string | null;
+  content: string;
+  created_at: string;
+}, i: number, verbose = true): string {
+  const coll = m.collection ? ` | Collection: ${m.collection}` : '';
+  if (!verbose) {
+    return `[${i + 1}] ID: ${m.id}\n[${m.memory_type}] ${m.content.slice(0, 120)}${m.content.length > 120 ? '...' : ''}\nTags: ${m.tags.join(', ') || 'none'}${coll} | ${new Date(m.created_at).toLocaleDateString()}`;
+  }
+  return `[${i + 1}] ID: ${m.id}\nType: ${m.memory_type} | Importance: ${m.importance}\nTags: ${m.tags.join(', ') || 'none'}${coll}\n${m.content}\nSaved: ${new Date(m.created_at).toLocaleDateString()}`;
+}
 
 export function createMCPServer(ctx: McpContext): Server {
   const { userId, apiKeyId } = ctx;
@@ -148,19 +197,27 @@ export function createMCPServer(ctx: McpContext): Server {
           const input = z
             .object({
               content: z.string().min(1),
-              type: z
-                .enum(['general', 'preference', 'fact', 'instruction', 'conversation'])
-                .default('general'),
+              type: memoryTypeEnum.default('general'),
               tags: z.array(z.string()).default([]),
+              collection: z.string().optional().nullable(),
               importance: z.number().min(0).max(1).default(0.5),
+              append_to: z.string().uuid().optional(),
             })
             .parse(a);
-          const m = await saveMemory({ userId, ...input });
+          const m = await saveMemory({
+            userId,
+            content: input.content,
+            type: input.type,
+            tags: input.tags,
+            collection: input.collection,
+            importance: input.importance,
+            append_to: input.append_to,
+          });
           result = {
             content: [
               {
                 type: 'text',
-                text: `Remembered (ID: ${m.id})\nType: ${m.memory_type}\nTags: ${m.tags.join(', ') || 'none'}\nImportance: ${m.importance}`,
+                text: `Remembered (ID: ${m.id})\nType: ${m.memory_type}\nCollection: ${m.collection || 'none'}\nTags: ${m.tags.join(', ') || 'none'}\nImportance: ${m.importance}`,
               },
             ],
           };
@@ -171,21 +228,24 @@ export function createMCPServer(ctx: McpContext): Server {
             .object({
               query: z.string().min(1),
               limit: z.number().int().min(1).max(20).default(5),
-              type: z
-                .enum(['general', 'preference', 'fact', 'instruction', 'conversation'])
-                .optional(),
+              type: memoryTypeEnum.optional(),
+              collection: z.string().optional().nullable(),
+              tags: z.array(z.string()).optional(),
             })
             .parse(a);
-          const ms = await searchMemories({ userId, ...input });
+          const ms = await searchMemories({
+            userId,
+            query: input.query,
+            limit: input.limit,
+            type: input.type,
+            collection: input.collection,
+            tags: input.tags,
+          });
           if (ms.length === 0) {
-            result = { content: [{ type: 'text', text: 'No memories found for that query.' }] };
+            const scope = input.collection ? ` in collection "${input.collection}"` : '';
+            result = { content: [{ type: 'text', text: `No memories found for that query${scope}.` }] };
           } else {
-            const formatted = ms
-              .map(
-                (m, i) =>
-                  `[${i + 1}] ID: ${m.id}\nType: ${m.memory_type} | Importance: ${m.importance}\nTags: ${m.tags.join(', ') || 'none'}\n${m.content}\nSaved: ${new Date(m.created_at).toLocaleDateString()}`
-              )
-              .join('\n\n---\n\n');
+            const formatted = ms.map((m, i) => formatMemoryLine(m, i)).join('\n\n---\n\n');
             result = { content: [{ type: 'text', text: `Found ${ms.length}:\n\n${formatted}` }] };
           }
           break;
@@ -195,24 +255,35 @@ export function createMCPServer(ctx: McpContext): Server {
             .object({
               topic: z.string().min(1),
               max_memories: z.number().int().min(1).max(10).default(5),
+              type: memoryTypeEnum.optional(),
+              collection: z.string().optional().nullable(),
+              tags: z.array(z.string()).optional(),
             })
             .parse(a);
           const ms = await searchMemories({
             userId,
             query: input.topic,
             limit: input.max_memories,
+            type: input.type,
+            collection: input.collection,
+            tags: input.tags,
           });
           if (ms.length === 0) {
+            const scope = input.collection ? ` (collection: ${input.collection})` : '';
             result = {
-              content: [{ type: 'text', text: 'No relevant memories found for this topic.' }],
+              content: [{ type: 'text', text: `No relevant memories found for this topic${scope}.` }],
             };
           } else {
+            const collLine = input.collection ? `Collection: ${input.collection}\n` : '';
             const block = [
               '=== AI Memory Context ===',
               `Topic: ${input.topic}`,
-              `Memories retrieved: ${ms.length}`,
+              collLine + `Memories retrieved: ${ms.length}`,
               '',
-              ...ms.map((m, i) => `[${i + 1}] [${m.memory_type.toUpperCase()}] ${m.content}`),
+              ...ms.map((m, i) => {
+                const coll = m.collection ? ` [${m.collection}]` : '';
+                return `[${i + 1}] [${m.memory_type.toUpperCase()}]${coll} ${m.content}`;
+              }),
               '',
               '=== End of Memory Context ===',
             ].join('\n');
@@ -224,12 +295,18 @@ export function createMCPServer(ctx: McpContext): Server {
           const input = z
             .object({
               limit: z.number().int().min(1).max(50).default(10),
-              type: z
-                .enum(['general', 'preference', 'fact', 'instruction', 'conversation'])
-                .optional(),
+              type: memoryTypeEnum.optional(),
+              collection: z.string().optional().nullable(),
+              tags: z.array(z.string()).optional(),
             })
             .parse(a);
-          const ms = await listMemories({ userId, ...input });
+          const ms = await listMemories({
+            userId,
+            limit: input.limit,
+            type: input.type,
+            collection: input.collection,
+            tags: input.tags,
+          });
           if (ms.length === 0) {
             result = {
               content: [
@@ -240,16 +317,34 @@ export function createMCPServer(ctx: McpContext): Server {
               ],
             };
           } else {
-            const formatted = ms
-              .map(
-                (m, i) =>
-                  `[${i + 1}] ID: ${m.id}\n[${m.memory_type}] ${m.content.slice(0, 120)}${m.content.length > 120 ? '...' : ''}\nTags: ${m.tags.join(', ') || 'none'} | ${new Date(m.created_at).toLocaleDateString()}`
-              )
-              .join('\n\n');
+            const formatted = ms.map((m, i) => formatMemoryLine(m, i, false)).join('\n\n');
             result = {
               content: [
                 { type: 'text', text: `Your ${ms.length} most recent memories:\n\n${formatted}` },
               ],
+            };
+          }
+          break;
+        }
+        case 'list_collections': {
+          const cols = await listCollections(userId);
+          if (cols.length === 0) {
+            result = {
+              content: [
+                {
+                  type: 'text',
+                  text:
+                    'No collections yet. Use remember with collection=project:<name> or personal:preferences.',
+                },
+              ],
+            };
+          } else {
+            const lines = cols.map(
+              (c, i) =>
+                `[${i + 1}] ${c.slug}${c.name !== c.slug ? ` (${c.name})` : ''}${c.description ? `\n    ${c.description}` : ''}`
+            );
+            result = {
+              content: [{ type: 'text', text: `Collections (${cols.length}):\n\n${lines.join('\n')}` }],
             };
           }
           break;
@@ -266,14 +361,17 @@ export function createMCPServer(ctx: McpContext): Server {
         }
         case 'memory_stats': {
           const s = await getStats(userId);
-          const breakdown = Object.entries(s.byType)
+          const typeBreakdown = Object.entries(s.byType)
+            .map(([t, c]) => `  ${t}: ${c}`)
+            .join('\n');
+          const collBreakdown = Object.entries(s.byCollection)
             .map(([t, c]) => `  ${t}: ${c}`)
             .join('\n');
           result = {
             content: [
               {
                 type: 'text',
-                text: `Memory Statistics\n\nTotal: ${s.total}\n\nBy type:\n${breakdown || '  (no memories yet)'}`,
+                text: `Memory Statistics\n\nTotal: ${s.total}\n\nBy type:\n${typeBreakdown || '  (none)'}\n\nBy collection:\n${collBreakdown || '  (none)'}`,
               },
             ],
           };
