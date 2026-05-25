@@ -7,6 +7,8 @@ import {
   normalizeCollectionSlug,
   normalizeTags,
   resolveCollection,
+  ensureMemoryCollectionRegistered,
+  mergeCollectionLists,
   MemoryScopeFilters,
   MAX_MEMORY_CONTENT_LENGTH,
   APPEND_SEPARATOR,
@@ -56,6 +58,12 @@ export async function saveMemory(p: {
     collection: p.collection,
     tags,
     memory_type: p.type ?? 'general',
+  });
+
+  await ensureMemoryCollectionRegistered(supabase, {
+    userId: p.userId,
+    slug: collection,
+    defaultMemoryType: p.type ?? 'general',
   });
 
   const { data, error } = await supabase
@@ -198,9 +206,7 @@ export async function listCollections(userId: string): Promise<
     .eq('user_id', userId)
     .order('name');
 
-  if (!regError && registered?.length) {
-    return registered;
-  }
+  if (regError) throw new Error(`listCollections: ${regError.message}`);
 
   const { data: memories, error: memError } = await supabase
     .from('memories')
@@ -215,11 +221,7 @@ export async function listCollections(userId: string): Promise<
     if (row.collection) slugs.add(row.collection);
   }
 
-  return [...slugs].sort().map((slug) => ({
-    slug,
-    name: slug,
-    description: null,
-  }));
+  return mergeCollectionLists(registered ?? [], slugs);
 }
 
 export async function deleteMemory(p: { userId: string; memoryId: string }): Promise<void> {

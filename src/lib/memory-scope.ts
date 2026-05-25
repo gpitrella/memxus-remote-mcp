@@ -80,3 +80,83 @@ export function buildVectorRpcParams(
 
 export const MAX_MEMORY_CONTENT_LENGTH = 8000;
 export const APPEND_SEPARATOR = '\n---\n';
+
+export type CollectionListItem = {
+  slug: string;
+  name: string;
+  description: string | null;
+};
+
+function capitalizeSegment(segment: string): string {
+  return segment
+    .split('-')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/** Human-readable default name for a collection slug (dashboard may override). */
+export function deriveCollectionName(slug: string): string {
+  const parts = slug.split(':').filter(Boolean);
+  if (parts.length >= 2) {
+    const prefix = capitalizeSegment(parts[0]);
+    const rest = parts.slice(1).map(capitalizeSegment).join(' ');
+    return `${prefix}: ${rest}`;
+  }
+  return capitalizeSegment(slug);
+}
+
+export function mergeCollectionLists(
+  registered: CollectionListItem[],
+  memorySlugs: Iterable<string>
+): CollectionListItem[] {
+  const bySlug = new Map<string, CollectionListItem>();
+  for (const row of registered) {
+    bySlug.set(row.slug, row);
+  }
+  for (const slug of memorySlugs) {
+    if (!bySlug.has(slug)) {
+      bySlug.set(slug, {
+        slug,
+        name: deriveCollectionName(slug),
+        description: null,
+      });
+    }
+  }
+  return [...bySlug.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export interface MemoryCollectionsUpsertClient {
+  from(table: 'memory_collections'): {
+    upsert(
+      values: Record<string, unknown>,
+      options: { onConflict: string; ignoreDuplicates: boolean }
+    ): PromiseLike<{ error: { message: string } | null }>;
+  };
+}
+
+/** Register collection folder on first memory save; never overwrite existing rows. */
+export async function ensureMemoryCollectionRegistered(
+  client: MemoryCollectionsUpsertClient,
+  p: { userId: string; slug: string | null; defaultMemoryType: string }
+): Promise<void> {
+  if (!p.slug) return;
+
+  const { error } = await client.from('memory_collections').upsert(
+    {
+      user_id: p.userId,
+      slug: p.slug,
+      name: deriveCollectionName(p.slug),
+      description: null,
+      default_memory_type: p.defaultMemoryType,
+    },
+    { onConflict: 'user_id,slug', ignoreDuplicates: true }
+  );
+
+  if (error) {
+    console.warn(
+      `[memory_collections] ensure registered failed for ${p.slug}:`,
+      error.message
+    );
+  }
+}
