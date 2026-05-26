@@ -22,6 +22,7 @@ import {
   logUsage,
   PlanLimitError,
 } from '../lib/plan-enforcement.js';
+import { estimateTokens } from '../lib/estimate-tokens.js';
 
 export interface McpContext {
   userId: string;
@@ -382,12 +383,14 @@ export function createMCPServer(ctx: McpContext): Server {
       }
 
       if (!isForget) {
+        const responseText = result.content.map((c) => c.text).join('\n');
         logUsage({
           userId,
           apiKeyId,
           endpoint,
           status: 'success',
           latencyMs: Date.now() - started,
+          tokensUsed: estimateTokens(responseText),
         });
       }
 
@@ -400,6 +403,7 @@ export function createMCPServer(ctx: McpContext): Server {
           endpoint,
           status: 'error',
           latencyMs: Date.now() - started,
+          tokensUsed: 0,
         });
         return {
           content: [{ type: 'text', text: formatPlanLimitToolError(err) }],
@@ -413,6 +417,7 @@ export function createMCPServer(ctx: McpContext): Server {
         endpoint,
         status: 'error',
         latencyMs: Date.now() - started,
+        tokensUsed: 0,
       });
       return { content: [{ type: 'text', text: `Error: ${message}` }], isError: true };
     }

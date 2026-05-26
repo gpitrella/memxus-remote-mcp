@@ -165,6 +165,7 @@ export interface LogUsageInput {
   method?: string | null;
   status?: string;
   latencyMs?: number;
+  tokensUsed?: number;
 }
 
 export function logUsage(input: LogUsageInput): void {
@@ -177,6 +178,7 @@ export function logUsage(input: LogUsageInput): void {
       method: input.method ?? null,
       status: input.status ?? 'success',
       latency_ms: input.latencyMs ?? 0,
+      tokens_used: input.tokensUsed ?? 0,
     })
     .then(({ error }) => {
       if (error) {
