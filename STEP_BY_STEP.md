@@ -331,8 +331,8 @@ Settings → Variables. Mínimo:
 | Variable                    | Valor (prod)                                                                              |
 | --------------------------- | ----------------------------------------------------------------------------------------- |
 | `PORT`                      | `3002` (Railway lo sobrescribe con el suyo — está bien)                                   |
-| `MCP_PUBLIC_URL`            | `https://TU-SERVICIO.up.railway.app` (o `https://mcp.aimemory.lat` cuando configures DNS) |
-| `DASHBOARD_URL`             | `https://ia-memory-dashboard.vercel.app` (o tu dominio del dashboard)                     |
+| `MCP_PUBLIC_URL`            | `https://TU-SERVICIO.up.railway.app` (o `https://mcp.memxus.com` cuando configures DNS) |
+| `DASHBOARD_URL`             | `https://dashboard.memxus.com` (o tu dominio del dashboard)                               |
 | `SUPABASE_URL`              | mismo que API y Dashboard                                                                 |
 | `SUPABASE_SERVICE_ROLE_KEY` | mismo que API y Dashboard                                                                 |
 | `OPENAI_API_KEY`            | opcional, mejora el recall                                                                |
@@ -352,9 +352,9 @@ curl https://TU-SERVICIO.up.railway.app/health
 curl https://TU-SERVICIO.up.railway.app/.well-known/oauth-authorization-server
 ```
 
-### 6.5 (Opcional) Dominio custom `mcp.aimemory.lat`
+### 6.5 (Opcional) Dominio custom `mcp.memxus.com`
 
-Railway → Settings → Networking → Custom Domain → `mcp.aimemory.lat`. Te da un `CNAME` para apuntar en tu DNS (Cloudflare/Vercel DNS). Después actualizá `MCP_PUBLIC_URL` en Railway → redeploy → actualizá `NEXT_PUBLIC_MCP_PUBLIC_URL` en Vercel (Dashboard y Landing).
+Railway → Settings → Networking → Custom Domain → `mcp.memxus.com`. Te da un `CNAME` para apuntar en tu DNS (Cloudflare/Vercel DNS). Después actualizá `MCP_PUBLIC_URL` en Railway → redeploy → actualizá `NEXT_PUBLIC_MCP_PUBLIC_URL` en Vercel (Dashboard y Landing).
 
 ---
 
@@ -376,7 +376,7 @@ Verificar que `/api/oauth/mcp/authorize?ticket=xxx` exista (debe responder 400 s
 
 Mismo procedimiento, mismo nombre de variable. Redeploy.
 
-Verificar `https://aimemory.lat/install` — el botón debe llevar a `claude://mcp/install?...` con la URL correcta.
+Verificar `https://memxus.com/install` — el botón debe llevar a `claude://mcp/install?...` con la URL correcta.
 
 ---
 
@@ -384,7 +384,7 @@ Verificar `https://aimemory.lat/install` — el botón debe llevar a `claude://m
 
 ### 8.1 Claude Desktop / claude.ai (OAuth, one-click)
 
-1. Usuario abre `https://aimemory.lat/install`.
+1. Usuario abre `https://memxus.com/install`.
 2. Hace clic en **Connect with One Click**.
 3. El browser abre `claude://mcp/install?name=AI%20Memory&url=https://TU-SERVICIO.up.railway.app/mcp`.
 4. Claude Desktop pide confirmación → confirma.
@@ -397,7 +397,7 @@ Si la versión de Claude no soporta el deep link, usar el fallback de la misma p
 
 Cursor todavía no implementa OAuth para MCP. Flujo:
 
-1. Usuario va a `https://ia-memory-dashboard.vercel.app/api-keys` y copia su `aimem_`* (ya provisionado en el primer login).
+1. Usuario va a `https://dashboard.memxus.com/api-keys` y copia su `aimem_`* (ya provisionado en el primer login).
 2. En Cursor: `Settings → MCP → + Add new MCP server`.
 3. Pegar este JSON:
 

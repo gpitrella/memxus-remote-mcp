@@ -5,7 +5,7 @@ import { getPlan, PLANS, type PlanDefinition, type PlanId } from './plans.js';
 export type PlanLimitCode = 'PLAN_LIMIT_MEMORY' | 'PLAN_LIMIT_DAILY';
 
 export const BILLING_UPGRADE_URL =
-  process.env.BILLING_UPGRADE_URL || 'https://ia-memory-dashboard.vercel.app/billing';
+  process.env.BILLING_UPGRADE_URL || 'https://dashboard.memxus.com/billing';
 
 export class PlanLimitError extends Error {
   readonly code: PlanLimitCode;
