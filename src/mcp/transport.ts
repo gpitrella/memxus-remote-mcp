@@ -50,6 +50,7 @@ export async function handleMcp(req: AuthedRequest, res: Response): Promise<void
     const server = createMCPServer({
       userId: req.userId,
       apiKeyId: req.apiKeyId,
+      workforceWorkspaceId: req.workforceWorkspaceId,
     });
     await server.connect(transport);
     session = { transport, userId: req.userId, apiKeyId: req.apiKeyId };

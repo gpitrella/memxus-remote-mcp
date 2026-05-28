@@ -48,14 +48,31 @@ export async function token(req: Request, res: Response): Promise<void> {
     .eq('is_active', true);
 
   const apiKey = generateApiKey();
+  const oauthMeta = (consumed.metadata ?? {}) as Record<string, unknown>;
+  const workforceWorkspaceId =
+    typeof oauthMeta.workforce_workspace_id === 'string'
+      ? oauthMeta.workforce_workspace_id
+      : undefined;
+
+  const keyMetadata: Record<string, unknown> = {
+    source: 'oauth',
+    issued_at: new Date().toISOString(),
+  };
+  if (workforceWorkspaceId) {
+    keyMetadata.workforce_workspace_id = workforceWorkspaceId;
+    keyMetadata.key_type = 'workforce';
+  }
+
   const { error } = await supabase.from('api_keys').insert({
     user_id: consumed.userId,
     key_hash: hashApiKey(apiKey),
     key_prefix: getApiKeyPrefix(apiKey),
-    name: `Claude (${consumed.clientId})`,
+    name: workforceWorkspaceId
+      ? `Claude Workforce (${consumed.clientId})`
+      : `Claude (${consumed.clientId})`,
     is_active: true,
     oauth_client_id: consumed.clientId,
-    metadata: { source: 'oauth', issued_at: new Date().toISOString() },
+    metadata: keyMetadata,
   });
   if (error) {
     res.status(500).json({ error: 'server_error', error_description: error.message });

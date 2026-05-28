@@ -14,6 +14,21 @@ import {
   APPEND_SEPARATOR,
 } from '../lib/memory-scope.js';
 
+export type TenantFilter = {
+  userId: string;
+  workforceWorkspaceId?: string;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyTenantToQuery(query: any, tenant: TenantFilter): any {
+  if (tenant.workforceWorkspaceId) {
+    return query
+      .eq('scope', 'workforce')
+      .eq('workforce_workspace_id', tenant.workforceWorkspaceId);
+  }
+  return query.eq('user_id', tenant.userId).eq('scope', 'personal');
+}
+
 export interface MemoryRow {
   id: string;
   user_id: string;
@@ -36,6 +51,7 @@ export interface RevisionEntry {
 
 export async function saveMemory(p: {
   userId: string;
+  workforceWorkspaceId?: string;
   content: string;
   type?: MemoryRow['memory_type'];
   tags?: string[];
@@ -48,6 +64,7 @@ export async function saveMemory(p: {
   if (p.append_to) {
     return appendToMemory({
       userId: p.userId,
+      workforceWorkspaceId: p.workforceWorkspaceId,
       memoryId: p.append_to,
       newContent: p.content,
     });
@@ -66,6 +83,8 @@ export async function saveMemory(p: {
     defaultMemoryType: p.type ?? 'general',
   });
 
+  const memoryScope = p.workforceWorkspaceId ? 'workforce' : 'personal';
+
   const { data, error } = await supabase
     .from('memories')
     .insert({
@@ -77,6 +96,8 @@ export async function saveMemory(p: {
       thread_id: p.thread_id ?? null,
       importance: p.importance ?? 0.5,
       metadata: p.metadata ?? {},
+      scope: memoryScope,
+      workforce_workspace_id: p.workforceWorkspaceId ?? null,
     })
     .select()
     .single();
@@ -86,15 +107,16 @@ export async function saveMemory(p: {
 
 export async function appendToMemory(p: {
   userId: string;
+  workforceWorkspaceId?: string;
   memoryId: string;
   newContent: string;
 }): Promise<MemoryRow> {
-  const { data: existing, error: fetchError } = await supabase
-    .from('memories')
-    .select('*')
-    .eq('id', p.memoryId)
-    .eq('user_id', p.userId)
-    .single();
+  let fetchQ = supabase.from('memories').select('*').eq('id', p.memoryId);
+  fetchQ = applyTenantToQuery(fetchQ, {
+    userId: p.userId,
+    workforceWorkspaceId: p.workforceWorkspaceId,
+  });
+  const { data: existing, error: fetchError } = await fetchQ.single();
 
   if (fetchError || !existing) throw new Error('Memory not found');
 
@@ -120,13 +142,12 @@ export async function appendToMemory(p: {
   const embedding = await generateEmbedding(merged);
   if (embedding) updates.embedding = embedding;
 
-  const { data, error } = await supabase
-    .from('memories')
-    .update(updates)
-    .eq('id', p.memoryId)
-    .eq('user_id', p.userId)
-    .select()
-    .single();
+  let updateQ = supabase.from('memories').update(updates).eq('id', p.memoryId);
+  updateQ = applyTenantToQuery(updateQ, {
+    userId: p.userId,
+    workforceWorkspaceId: p.workforceWorkspaceId,
+  });
+  const { data, error } = await updateQ.select().single();
 
   if (error) throw new Error(`appendToMemory: ${error.message}`);
   return data as MemoryRow;
@@ -134,6 +155,7 @@ export async function appendToMemory(p: {
 
 export async function searchMemories(p: {
   userId: string;
+  workforceWorkspaceId?: string;
   query: string;
   limit?: number;
   type?: string;
@@ -154,11 +176,10 @@ export async function searchMemories(p: {
     if (!error && data?.length) return data as MemoryRow[];
   }
 
-  let q = supabase
-    .from('memories')
-    .select('*')
-    .eq('user_id', p.userId)
-    .ilike('content', `%${p.query}%`)
+  let q = applyTenantToQuery(supabase.from('memories').select('*'), {
+    userId: p.userId,
+    workforceWorkspaceId: p.workforceWorkspaceId,
+  }).ilike('content', `%${p.query}%`)
     .order('importance', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -172,6 +193,7 @@ export async function searchMemories(p: {
 
 export async function listMemories(p: {
   userId: string;
+  workforceWorkspaceId?: string;
   limit?: number;
   type?: string;
   collection?: string | null;
@@ -183,10 +205,10 @@ export async function listMemories(p: {
     type: p.type,
   };
 
-  let q = supabase
-    .from('memories')
-    .select('*')
-    .eq('user_id', p.userId)
+  let q = applyTenantToQuery(supabase.from('memories').select('*'), {
+    userId: p.userId,
+    workforceWorkspaceId: p.workforceWorkspaceId,
+  })
     .order('created_at', { ascending: false })
     .limit(p.limit ?? 10);
 
@@ -224,22 +246,29 @@ export async function listCollections(userId: string): Promise<
   return mergeCollectionLists(registered ?? [], slugs);
 }
 
-export async function deleteMemory(p: { userId: string; memoryId: string }): Promise<void> {
-  const { error } = await supabase
-    .from('memories')
-    .delete()
-    .eq('id', p.memoryId)
-    .eq('user_id', p.userId);
+export async function deleteMemory(p: {
+  userId: string;
+  workforceWorkspaceId?: string;
+  memoryId: string;
+}): Promise<void> {
+  let q = supabase.from('memories').delete().eq('id', p.memoryId);
+  q = applyTenantToQuery(q, {
+    userId: p.userId,
+    workforceWorkspaceId: p.workforceWorkspaceId,
+  });
+  const { error } = await q;
   if (error) throw new Error(`deleteMemory: ${error.message}`);
 }
 
 export async function getStats(
-  userId: string
+  userId: string,
+  workforceWorkspaceId?: string
 ): Promise<{ total: number; byType: Record<string, number>; byCollection: Record<string, number> }> {
-  const { data, error } = await supabase
-    .from('memories')
-    .select('memory_type, collection')
-    .eq('user_id', userId);
+  let q = applyTenantToQuery(supabase.from('memories').select('memory_type, collection'), {
+    userId,
+    workforceWorkspaceId,
+  });
+  const { data, error } = await q;
   if (error) throw new Error(`getStats: ${error.message}`);
   const rows = data ?? [];
   const byType: Record<string, number> = {};

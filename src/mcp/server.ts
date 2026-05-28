@@ -27,6 +27,7 @@ import { estimateTokens } from '../lib/estimate-tokens.js';
 export interface McpContext {
   userId: string;
   apiKeyId?: string;
+  workforceWorkspaceId?: string;
 }
 
 const memoryTypeEnum = z.enum(['general', 'preference', 'fact', 'instruction', 'conversation']);
@@ -158,7 +159,7 @@ function formatMemoryLine(m: {
 }
 
 export function createMCPServer(ctx: McpContext): Server {
-  const { userId, apiKeyId } = ctx;
+  const { userId, apiKeyId, workforceWorkspaceId } = ctx;
   const server = new Server(
     { name: 'aimemory-remote', version: '1.0.0' },
     { capabilities: { tools: {}, resources: {} } }
@@ -207,6 +208,7 @@ export function createMCPServer(ctx: McpContext): Server {
             .parse(a);
           const m = await saveMemory({
             userId,
+            workforceWorkspaceId,
             content: input.content,
             type: input.type,
             tags: input.tags,
@@ -236,6 +238,7 @@ export function createMCPServer(ctx: McpContext): Server {
             .parse(a);
           const ms = await searchMemories({
             userId,
+            workforceWorkspaceId,
             query: input.query,
             limit: input.limit,
             type: input.type,
@@ -263,6 +266,7 @@ export function createMCPServer(ctx: McpContext): Server {
             .parse(a);
           const ms = await searchMemories({
             userId,
+            workforceWorkspaceId,
             query: input.topic,
             limit: input.max_memories,
             type: input.type,
@@ -303,6 +307,7 @@ export function createMCPServer(ctx: McpContext): Server {
             .parse(a);
           const ms = await listMemories({
             userId,
+            workforceWorkspaceId,
             limit: input.limit,
             type: input.type,
             collection: input.collection,
@@ -354,14 +359,14 @@ export function createMCPServer(ctx: McpContext): Server {
           const input = z
             .object({ memory_id: z.string().uuid('memory_id must be a valid UUID') })
             .parse(a);
-          await deleteMemory({ userId, memoryId: input.memory_id });
+          await deleteMemory({ userId, workforceWorkspaceId, memoryId: input.memory_id });
           result = {
             content: [{ type: 'text', text: `Memory ${input.memory_id} deleted.` }],
           };
           break;
         }
         case 'memory_stats': {
-          const s = await getStats(userId);
+          const s = await getStats(userId, workforceWorkspaceId);
           const typeBreakdown = Object.entries(s.byType)
             .map(([t, c]) => `  ${t}: ${c}`)
             .join('\n');

@@ -5,6 +5,7 @@ import { hashApiKey } from './api-key.js';
 export interface AuthedRequest extends Request {
   userId?: string;
   apiKeyId?: string;
+  workforceWorkspaceId?: string;
 }
 
 export async function bearerAuth(
@@ -23,7 +24,7 @@ export async function bearerAuth(
 
   const { data, error } = await supabase
     .from('api_keys')
-    .select('id, user_id, is_active')
+    .select('id, user_id, is_active, metadata')
     .eq('key_hash', keyHash)
     .single();
 
@@ -34,6 +35,11 @@ export async function bearerAuth(
 
   req.userId = data.user_id;
   req.apiKeyId = data.id;
+
+  const metadata = (data.metadata ?? {}) as Record<string, unknown>;
+  if (typeof metadata.workforce_workspace_id === 'string') {
+    req.workforceWorkspaceId = metadata.workforce_workspace_id;
+  }
 
   void supabase
     .from('api_keys')

@@ -26,8 +26,10 @@ export interface PlanDefinition {
   features: string[];
   limits: {
     apiKeys: number; // -1 = unlimited
-    requestsPerDay: number;
-    memories: number;
+    requestsPerDay: number; // -1 = unlimited
+    memories: number; // -1 = unlimited
+    listResultsMax: number; // per GET /memories; -1 = server absolute ceiling
+    searchResultsMax: number; // per POST /memories/search; -1 = server absolute ceiling
   };
   popular?: boolean;
   polarProductIdEnv: string;
@@ -48,7 +50,13 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       '7-day memory retention',
       'Community support',
     ],
-    limits: { apiKeys: 1, requestsPerDay: 100, memories: 500 },
+    limits: {
+      apiKeys: 1,
+      requestsPerDay: 100,
+      memories: 500,
+      listResultsMax: 25,
+      searchResultsMax: 10,
+    },
     polarProductIdEnv: '',
   },
   pro: {
@@ -67,7 +75,13 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       'Priority email support',
       'API access',
     ],
-    limits: { apiKeys: 5, requestsPerDay: 10_000, memories: 5_000 },
+    limits: {
+      apiKeys: 5,
+      requestsPerDay: 10_000,
+      memories: 5_000,
+      listResultsMax: 50,
+      searchResultsMax: 20,
+    },
     popular: true,
     polarProductIdEnv: 'NEXT_PUBLIC_POLAR_PRODUCT_PRO',
   },
@@ -87,7 +101,13 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       'Role-based access control',
       'Dedicated support',
     ],
-    limits: { apiKeys: -1, requestsPerDay: -1, memories: 25_000 },
+    limits: {
+      apiKeys: -1,
+      requestsPerDay: -1,
+      memories: 25_000,
+      listResultsMax: 100,
+      searchResultsMax: 50,
+    },
     polarProductIdEnv: 'NEXT_PUBLIC_POLAR_PRODUCT_TEAM',
   },
   enterprise: {
@@ -107,7 +127,13 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       'Custom integrations',
       'Dedicated support manager',
     ],
-    limits: { apiKeys: -1, requestsPerDay: -1, memories: -1 },
+    limits: {
+      apiKeys: -1,
+      requestsPerDay: -1,
+      memories: -1,
+      listResultsMax: 200,
+      searchResultsMax: 100,
+    },
     polarProductIdEnv: 'NEXT_PUBLIC_POLAR_PRODUCT_ENTERPRISE',
   },
   'ext-starter': {
@@ -118,7 +144,13 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     priceLabel: '$3',
     description: 'Browser memory, getting started',
     features: ['Single browser', '500 memories', 'Local sync'],
-    limits: { apiKeys: 0, requestsPerDay: 500, memories: 500 },
+    limits: {
+      apiKeys: 0,
+      requestsPerDay: 500,
+      memories: 500,
+      listResultsMax: 25,
+      searchResultsMax: 10,
+    },
     polarProductIdEnv: 'NEXT_PUBLIC_POLAR_PRODUCT_EXT_STARTER',
   },
   'ext-plus': {
@@ -129,7 +161,13 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     priceLabel: '$9',
     description: 'Daily AI workflows',
     features: ['All browsers', '5,000 memories', 'Cloud sync'],
-    limits: { apiKeys: 0, requestsPerDay: 5_000, memories: 5_000 },
+    limits: {
+      apiKeys: 0,
+      requestsPerDay: 5_000,
+      memories: 5_000,
+      listResultsMax: 50,
+      searchResultsMax: 20,
+    },
     polarProductIdEnv: 'NEXT_PUBLIC_POLAR_PRODUCT_EXT_PLUS',
   },
   'ext-premium': {
@@ -140,7 +178,13 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     priceLabel: '$29',
     description: 'Heavy AI usage',
     features: ['All browsers', '50,000 memories', 'Priority recall'],
-    limits: { apiKeys: 0, requestsPerDay: 50_000, memories: 50_000 },
+    limits: {
+      apiKeys: 0,
+      requestsPerDay: 50_000,
+      memories: 50_000,
+      listResultsMax: 100,
+      searchResultsMax: 50,
+    },
     polarProductIdEnv: 'NEXT_PUBLIC_POLAR_PRODUCT_EXT_PREMIUM',
   },
 };

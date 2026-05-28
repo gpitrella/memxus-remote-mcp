@@ -66,6 +66,7 @@ export interface ConsumedCode {
   codeChallenge: string;
   codeChallengeMethod: string;
   scope: string;
+  metadata?: Record<string, unknown>;
 }
 
 export async function consumeCode(rawCode: string): Promise<ConsumedCode | null> {
@@ -80,7 +81,7 @@ export async function consumeCode(rawCode: string): Promise<ConsumedCode | null>
     .not('user_id', 'is', null)
     .gt('expires_at', now)
     .select(
-      'id, user_id, client_id, redirect_uri, code_challenge, code_challenge_method, scope'
+      'id, user_id, client_id, redirect_uri, code_challenge, code_challenge_method, scope, metadata'
     )
     .maybeSingle();
 
@@ -93,6 +94,7 @@ export async function consumeCode(rawCode: string): Promise<ConsumedCode | null>
     codeChallenge: data.code_challenge,
     codeChallengeMethod: data.code_challenge_method,
     scope: data.scope,
+    metadata: (data.metadata ?? {}) as Record<string, unknown>,
   };
 }
 
