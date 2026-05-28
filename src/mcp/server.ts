@@ -16,11 +16,15 @@ import {
   getStats,
 } from './tools.js';
 import { RESOURCES, readResource } from './resources.js';
+import { getPlan } from '../lib/plans.js';
 import {
   assertWithinPlanLimits,
   formatPlanLimitToolError,
   logUsage,
   PlanLimitError,
+  resolveListLimit,
+  resolveSearchLimit,
+  type UserPlanContext,
 } from '../lib/plan-enforcement.js';
 import { estimateTokens } from '../lib/estimate-tokens.js';
 
@@ -77,7 +81,11 @@ const TOOLS: Tool[] = [
       type: 'object',
       properties: {
         query: { type: 'string' },
-        limit: { type: 'number', default: 5, minimum: 1, maximum: 20 },
+        limit: {
+          type: 'number',
+          description:
+            'Max results. Omit for server default (10). Capped per your plan on the server.',
+        },
         type: {
           type: 'string',
           enum: ['general', 'preference', 'fact', 'instruction', 'conversation'],
@@ -95,7 +103,11 @@ const TOOLS: Tool[] = [
       type: 'object',
       properties: {
         topic: { type: 'string' },
-        max_memories: { type: 'number', default: 5, minimum: 1, maximum: 10 },
+        max_memories: {
+          type: 'number',
+          description:
+            'Max memories in context block. Omit for server default (10). Capped per your plan.',
+        },
         type: {
           type: 'string',
           enum: ['general', 'preference', 'fact', 'instruction', 'conversation'],
@@ -111,7 +123,11 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        limit: { type: 'number', default: 10, minimum: 1, maximum: 50 },
+        limit: {
+          type: 'number',
+          description:
+            'How many memories to return. Omit for server default (20). Capped per your plan.',
+        },
         type: {
           type: 'string',
           enum: ['general', 'preference', 'fact', 'instruction', 'conversation'],
@@ -182,8 +198,9 @@ export function createMCPServer(ctx: McpContext): Server {
     const started = Date.now();
 
     try {
+      let planCtx: UserPlanContext | null = null;
       if (!isForget) {
-        await assertWithinPlanLimits({
+        planCtx = await assertWithinPlanLimits({
           userId,
           toolOrEndpoint: endpoint,
           isForget: false,
@@ -191,6 +208,7 @@ export function createMCPServer(ctx: McpContext): Server {
         });
       }
 
+      const limits = planCtx?.limits ?? getPlan('free').limits;
       const a = (req.params.arguments ?? {}) as Record<string, unknown>;
       let result: { content: Array<{ type: 'text'; text: string }>; isError?: boolean };
 
@@ -230,17 +248,19 @@ export function createMCPServer(ctx: McpContext): Server {
           const input = z
             .object({
               query: z.string().min(1),
-              limit: z.number().int().min(1).max(20).default(5),
+              limit: z.number().int().optional(),
               type: memoryTypeEnum.optional(),
               collection: z.string().optional().nullable(),
               tags: z.array(z.string()).optional(),
             })
             .parse(a);
+          const searchLimit = resolveSearchLimit(limits, input.limit);
           const ms = await searchMemories({
             userId,
             workforceWorkspaceId,
             query: input.query,
-            limit: input.limit,
+            limit: searchLimit,
+            planLimits: limits,
             type: input.type,
             collection: input.collection,
             tags: input.tags,
@@ -258,17 +278,19 @@ export function createMCPServer(ctx: McpContext): Server {
           const input = z
             .object({
               topic: z.string().min(1),
-              max_memories: z.number().int().min(1).max(10).default(5),
+              max_memories: z.number().int().optional(),
               type: memoryTypeEnum.optional(),
               collection: z.string().optional().nullable(),
               tags: z.array(z.string()).optional(),
             })
             .parse(a);
+          const contextLimit = resolveSearchLimit(limits, input.max_memories);
           const ms = await searchMemories({
             userId,
             workforceWorkspaceId,
             query: input.topic,
-            limit: input.max_memories,
+            limit: contextLimit,
+            planLimits: limits,
             type: input.type,
             collection: input.collection,
             tags: input.tags,
@@ -299,16 +321,18 @@ export function createMCPServer(ctx: McpContext): Server {
         case 'list_memories': {
           const input = z
             .object({
-              limit: z.number().int().min(1).max(50).default(10),
+              limit: z.number().int().optional(),
               type: memoryTypeEnum.optional(),
               collection: z.string().optional().nullable(),
               tags: z.array(z.string()).optional(),
             })
             .parse(a);
+          const listLimit = resolveListLimit(limits, input.limit);
           const ms = await listMemories({
             userId,
             workforceWorkspaceId,
-            limit: input.limit,
+            limit: listLimit,
+            planLimits: limits,
             type: input.type,
             collection: input.collection,
             tags: input.tags,

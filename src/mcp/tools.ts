@@ -1,5 +1,7 @@
 import { supabase } from '../lib/supabase.js';
 import { config } from '../config.js';
+import { getPlan, type PlanDefinition } from '../lib/plans.js';
+import { resolveListLimit, resolveSearchLimit } from '../lib/plan-enforcement.js';
 import {
   applyScopeToQuery,
   buildVectorRpcParams,
@@ -153,16 +155,21 @@ export async function appendToMemory(p: {
   return data as MemoryRow;
 }
 
+function resolveLimits(planLimits?: PlanDefinition['limits']): PlanDefinition['limits'] {
+  return planLimits ?? getPlan('free').limits;
+}
+
 export async function searchMemories(p: {
   userId: string;
   workforceWorkspaceId?: string;
   query: string;
   limit?: number;
+  planLimits?: PlanDefinition['limits'];
   type?: string;
   collection?: string | null;
   tags?: string[];
 }): Promise<MemoryRow[]> {
-  const limit = p.limit ?? 5;
+  const limit = resolveSearchLimit(resolveLimits(p.planLimits), p.limit);
   const scope: MemoryScopeFilters = {
     collection: normalizeCollectionSlug(p.collection ?? undefined) ?? undefined,
     tags: p.tags?.length ? normalizeTags(p.tags) : undefined,
@@ -195,10 +202,12 @@ export async function listMemories(p: {
   userId: string;
   workforceWorkspaceId?: string;
   limit?: number;
+  planLimits?: PlanDefinition['limits'];
   type?: string;
   collection?: string | null;
   tags?: string[];
 }): Promise<MemoryRow[]> {
+  const listLimit = resolveListLimit(resolveLimits(p.planLimits), p.limit);
   const scope: MemoryScopeFilters = {
     collection: normalizeCollectionSlug(p.collection ?? undefined) ?? undefined,
     tags: p.tags?.length ? normalizeTags(p.tags) : undefined,
@@ -210,7 +219,7 @@ export async function listMemories(p: {
     workforceWorkspaceId: p.workforceWorkspaceId,
   })
     .order('created_at', { ascending: false })
-    .limit(p.limit ?? 10);
+    .limit(listLimit);
 
   q = applyScopeToQuery(q, scope);
 

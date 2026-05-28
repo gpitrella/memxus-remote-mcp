@@ -9,12 +9,14 @@ export const BILLING_UPGRADE_URL =
 
 export class PlanLimitError extends Error {
   readonly code: PlanLimitCode;
+  readonly status: number;
   readonly upgradeUrl: string;
 
   constructor(code: PlanLimitCode, message: string) {
     super(message);
     this.name = 'PlanLimitError';
     this.code = code;
+    this.status = code === 'PLAN_LIMIT_DAILY' ? 429 : 403;
     this.upgradeUrl = BILLING_UPGRADE_URL;
   }
 }
@@ -25,6 +27,79 @@ export interface UserPlanContext {
   subscriptionStatus: string | null;
   plan: PlanDefinition;
   limits: PlanDefinition['limits'];
+  dailyUsage?: number;
+  memoryCount?: number;
+}
+
+export const ABSOLUTE_RESULT_CEILING = 200;
+export const DEFAULT_LIST_RESULTS = 20;
+export const DEFAULT_SEARCH_RESULTS = 10;
+
+export interface DailyRateLimitState {
+  limit: number;
+  remaining: number;
+  resetUnix: number;
+}
+
+export function endOfDayUtcUnix(): number {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return Math.floor(d.getTime() / 1000);
+}
+
+export function clampResultLimit(
+  requested: unknown,
+  planMax: number,
+  defaultWhenOmitted: number,
+  absoluteCeiling = ABSOLUTE_RESULT_CEILING
+): number {
+  const cap = planMax < 0 ? absoluteCeiling : planMax;
+  if (requested === undefined || requested === null || requested === '') {
+    return Math.min(defaultWhenOmitted, cap);
+  }
+  const n = Number(requested);
+  if (!Number.isFinite(n)) {
+    return Math.min(defaultWhenOmitted, cap);
+  }
+  return Math.min(Math.max(1, Math.floor(n)), cap);
+}
+
+export function resolveListLimit(
+  limits: PlanDefinition['limits'],
+  requested?: unknown
+): number {
+  return clampResultLimit(requested, limits.listResultsMax, DEFAULT_LIST_RESULTS);
+}
+
+export function resolveSearchLimit(
+  limits: PlanDefinition['limits'],
+  requested?: unknown
+): number {
+  return clampResultLimit(requested, limits.searchResultsMax, DEFAULT_SEARCH_RESULTS);
+}
+
+export function buildDailyRateLimitState(
+  limits: PlanDefinition['limits'],
+  dailyUsage: number
+): DailyRateLimitState {
+  const limit = limits.requestsPerDay;
+  const resetUnix = endOfDayUtcUnix();
+  if (limit === -1) {
+    return { limit: -1, remaining: -1, resetUnix };
+  }
+  return {
+    limit,
+    remaining: Math.max(0, limit - dailyUsage),
+    resetUnix,
+  };
+}
+
+export async function getDailyRateLimitState(userId: string): Promise<DailyRateLimitState | null> {
+  const ctx = await loadUserPlan(userId);
+  if (!ctx) return null;
+  const dailyUsage = await getDailyUsageCount(userId);
+  return buildDailyRateLimitState(ctx.limits, dailyUsage);
 }
 
 const PAID_PLANS = new Set<PlanId>(['pro', 'team', 'enterprise']);
@@ -113,12 +188,15 @@ export async function assertWithinPlanLimits(opts: AssertPlanLimitsOptions): Pro
   if (!isPlanLimitsEnabled()) {
     const ctx = await loadUserPlan(opts.userId);
     if (!ctx) throw new Error('User plan context unavailable');
+    ctx.dailyUsage = await getDailyUsageCount(opts.userId);
     return ctx;
   }
 
   if (opts.isForget) {
     const ctx = await loadUserPlan(opts.userId);
     if (!ctx) throw new Error('User plan context unavailable');
+    const dailyUsage = await getDailyUsageCount(opts.userId);
+    ctx.dailyUsage = dailyUsage;
     return ctx;
   }
 
@@ -136,6 +214,9 @@ export async function assertWithinPlanLimits(opts: AssertPlanLimitsOptions): Pro
       `Daily API limit reached (${ctx.limits.requestsPerDay} requests/day on ${ctx.plan.name}). Upgrade at ${BILLING_UPGRADE_URL}`
     );
   }
+
+  ctx.dailyUsage = dailyUsage;
+  ctx.memoryCount = memoryCount;
 
   if (opts.isWriteMemory && isOverMemoryLimit(memoryCount, ctx.limits)) {
     throw new PlanLimitError(
@@ -155,7 +236,7 @@ export async function assertWithinPlanLimits(opts: AssertPlanLimitsOptions): Pro
 }
 
 export function formatPlanLimitToolError(err: PlanLimitError): string {
-  return `${err.message}`;
+  return err.message;
 }
 
 export interface LogUsageInput {

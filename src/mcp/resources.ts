@@ -1,3 +1,5 @@
+import { loadUserPlan } from '../lib/plan-enforcement.js';
+import { getPlan } from '../lib/plans.js';
 import { listMemories } from './tools.js';
 
 export interface ResourceListItem {
@@ -11,7 +13,7 @@ export const RESOURCES: ResourceListItem[] = [
   {
     uri: 'memory://recent',
     name: 'Recent Memories',
-    description: 'Your 10 most recent memories',
+    description: 'Your most recent memories (count capped per plan)',
     mimeType: 'text/html',
   },
 ];
@@ -26,7 +28,9 @@ function escapeHtml(s: string): string {
 
 export async function readResource(uri: string, userId: string): Promise<string> {
   if (uri !== 'memory://recent') throw new Error(`Unknown resource: ${uri}`);
-  const memories = await listMemories({ userId, limit: 10 });
+  const planCtx = await loadUserPlan(userId);
+  const limits = planCtx?.limits ?? getPlan('free').limits;
+  const memories = await listMemories({ userId, planLimits: limits });
   const items = memories
     .map(
       (m) =>
