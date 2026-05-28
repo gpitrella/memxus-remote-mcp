@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { config } from '../config.js';
 import { createPendingCode } from './codes.js';
+import { supabase } from '../lib/supabase.js';
 
 export async function authorize(req: Request, res: Response): Promise<void> {
   const {
@@ -17,11 +18,26 @@ export async function authorize(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: 'unsupported_response_type' });
     return;
   }
-  if (!client_id || client_id !== config.OAUTH_CLIENT_ID) {
+  if (!client_id) {
     res.status(400).json({ error: 'invalid_client' });
     return;
   }
-  if (!redirect_uri || !config.ALLOWED_REDIRECT_URIS.includes(redirect_uri)) {
+  if (!redirect_uri) {
+    res.status(400).json({ error: 'invalid_redirect_uri' });
+    return;
+  }
+
+  const { data: client, error: clientError } = await supabase
+    .from('oauth_clients')
+    .select('client_id, redirect_uris')
+    .eq('client_id', client_id)
+    .maybeSingle();
+
+  if (clientError || !client) {
+    res.status(400).json({ error: 'invalid_client' });
+    return;
+  }
+  if (!Array.isArray(client.redirect_uris) || !client.redirect_uris.includes(redirect_uri)) {
     res.status(400).json({ error: 'invalid_redirect_uri' });
     return;
   }

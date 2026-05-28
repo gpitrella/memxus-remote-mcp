@@ -21,8 +21,18 @@ export async function token(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: 'invalid_request' });
     return;
   }
-  if (client_id !== config.OAUTH_CLIENT_ID) {
+
+  const { data: client, error: clientError } = await supabase
+    .from('oauth_clients')
+    .select('client_id, redirect_uris')
+    .eq('client_id', client_id)
+    .maybeSingle();
+  if (clientError || !client) {
     res.status(400).json({ error: 'invalid_client' });
+    return;
+  }
+  if (!Array.isArray(client.redirect_uris) || !client.redirect_uris.includes(redirect_uri)) {
+    res.status(400).json({ error: 'invalid_grant', error_description: 'redirect_uri mismatch' });
     return;
   }
 

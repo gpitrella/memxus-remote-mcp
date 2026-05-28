@@ -49,7 +49,12 @@ export function normalizeTags(tags: unknown, max = 20): string[] {
     .slice(0, max);
 }
 
-export function applyScopeToQuery<T extends { eq: Function; contains: Function }>(
+export function applyScopeToQuery<
+  T extends {
+    eq: (column: string, value: unknown) => unknown;
+    contains: (column: string, value: unknown) => unknown;
+  },
+>(
   query: T,
   filters: MemoryScopeFilters
 ): T {

@@ -264,7 +264,7 @@ export async function getStats(
   userId: string,
   workforceWorkspaceId?: string
 ): Promise<{ total: number; byType: Record<string, number>; byCollection: Record<string, number> }> {
-  let q = applyTenantToQuery(supabase.from('memories').select('memory_type, collection'), {
+  const q = applyTenantToQuery(supabase.from('memories').select('memory_type, collection'), {
     userId,
     workforceWorkspaceId,
   });

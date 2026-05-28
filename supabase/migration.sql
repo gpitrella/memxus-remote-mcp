@@ -19,6 +19,14 @@ CREATE TABLE IF NOT EXISTS public.oauth_codes (
 CREATE INDEX IF NOT EXISTS idx_oauth_codes_user ON public.oauth_codes(user_id);
 CREATE INDEX IF NOT EXISTS idx_oauth_codes_expires ON public.oauth_codes(expires_at);
 
+CREATE TABLE IF NOT EXISTS public.oauth_clients (
+  client_id TEXT PRIMARY KEY,
+  client_name TEXT,
+  redirect_uris TEXT[] NOT NULL DEFAULT ARRAY[]::text[],
+  token_endpoint_auth_method TEXT NOT NULL DEFAULT 'none',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
 ALTER TABLE public.api_keys
   ADD COLUMN IF NOT EXISTS oauth_client_id TEXT,
   ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;

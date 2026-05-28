@@ -59,6 +59,7 @@ Crea:
 
 - Tabla `public.oauth_codes` (tickets temporales del flujo OAuth)
 - Índices `idx_oauth_codes_user`, `idx_oauth_codes_expires`
+- Tabla `public.oauth_clients` (clientes OAuth registrados vía Dynamic Client Registration)
 - Columnas `api_keys.oauth_client_id` y `api_keys.metadata` (para distinguir keys emitidas por OAuth vs. creadas manualmente en el dashboard)
 
 ### 2.3 Verificar
@@ -108,11 +109,8 @@ SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...service-role
 # Opcional: habilita búsqueda semántica (si no, cae a ILIKE)
 OPENAI_API_KEY=
 
-# Cliente OAuth pre-registrado (no usar DCR todavía)
-OAUTH_CLIENT_ID=26228572556-3kqushtjoe1s4rfdtd84f2ivbjckp19l.apps.googleusercontent.com
-
-# Allow-list de redirect_uri que clientes pueden usar
-ALLOWED_REDIRECT_URIS=https://claude.ai/api/mcp/auth_callback,https://claude.com/api/mcp/auth_callback,http://localhost:3334/callback
+# OAuth clients se registran vía Dynamic Client Registration (DCR) en /oauth/register.
+# No hace falta setear un OAUTH_CLIENT_ID fijo para Claude.
 
 # Origenes CORS permitidos
 CORS_ORIGINS=https://claude.ai,https://claude.com,https://api.anthropic.com
@@ -143,6 +141,11 @@ curl -s http://localhost:3002/.well-known/oauth-authorization-server
 
 curl -s http://localhost:3002/.well-known/oauth-protected-resource
 # Debe listar resource, authorization_servers y scopes_supported
+
+curl -s -X POST http://localhost:3002/oauth/register \
+  -H "Content-Type: application/json" \
+  -d '{"redirect_uris":["https://claude.ai/api/mcp/auth_callback"],"client_name":"Claude (dev)","token_endpoint_auth_method":"none"}'
+# Debe responder 201 con client_id + redirect_uris
 ```
 
 **Formatear JSON (opcional)** — en Git Bash / Windows suele faltar `jq`. Si ves `jq: command not found` o `curl: (23) Failed writing body`, el servidor igual respondió; usá una de estas alternativas:
@@ -230,8 +233,14 @@ Con los tres servicios corriendo (`:3002` Remote MCP, `:3000` Dashboard, `:3001`
 ### 5.1 Simular el flujo con curl (sin Claude todavía)
 
 ```bash
+# Paso 0 (una vez): registrar client (DCR)
+CLIENT_ID=$(curl -s -X POST http://localhost:3002/oauth/register \
+  -H "Content-Type: application/json" \
+  -d '{"redirect_uris":["http://localhost:3334/callback"],"client_name":"curl-test","token_endpoint_auth_method":"none"}' \
+  | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>console.log(JSON.parse(s).client_id))")
+
 # Paso 1: cliente abre /oauth/authorize
-open "http://localhost:3002/oauth/authorize?response_type=code&client_id=aimemory-claude&redirect_uri=http%3A%2F%2Flocalhost%3A3334%2Fcallback&code_challenge=DUMMY_CHALLENGE_FOR_TEST&code_challenge_method=S256&state=test123"
+open "http://localhost:3002/oauth/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=http%3A%2F%2Flocalhost%3A3334%2Fcallback&code_challenge=DUMMY_CHALLENGE_FOR_TEST&code_challenge_method=S256&state=test123"
 ```
 
 Si **NO** estás logueado en el dashboard, te redirige a `/login`. Logueate con Google, después seguís el flujo.
@@ -336,8 +345,8 @@ Settings → Variables. Mínimo:
 | `SUPABASE_URL`              | mismo que API y Dashboard                                                                 |
 | `SUPABASE_SERVICE_ROLE_KEY` | mismo que API y Dashboard                                                                 |
 | `OPENAI_API_KEY`            | opcional, mejora el recall                                                                |
-| `OAUTH_CLIENT_ID`           | `aimemory-claude`                                                                         |
-| `ALLOWED_REDIRECT_URIS`     | `https://claude.ai/api/mcp/auth_callback,https://claude.com/api/mcp/auth_callback`        |
+| `OAUTH_CLIENT_ID`           | (opcional/legacy)                                                                         |
+| `ALLOWED_REDIRECT_URIS`     | (opcional/legacy)                                                                         |
 | `CORS_ORIGINS`              | `https://claude.ai,https://claude.com,https://api.anthropic.com`                          |
 
 
@@ -376,7 +385,7 @@ Verificar que `/api/oauth/mcp/authorize?ticket=xxx` exista (debe responder 400 s
 
 Mismo procedimiento, mismo nombre de variable. Redeploy.
 
-Verificar `https://memxus.com/install` — el botón debe llevar a `claude://mcp/install?...` con la URL correcta.
+Verificar `https://memxus.com/install` — el botón debe abrir `claude.ai/customize/connectors?...` con el modal pre-llenado.
 
 ---
 
@@ -386,12 +395,12 @@ Verificar `https://memxus.com/install` — el botón debe llevar a `claude://mcp
 
 1. Usuario abre `https://memxus.com/install`.
 2. Hace clic en **Connect with One Click**.
-3. El browser abre `claude://mcp/install?name=AI%20Memory&url=https://TU-SERVICIO.up.railway.app/mcp`.
-4. Claude Desktop pide confirmación → confirma.
+3. Se abre `claude.ai/customize/connectors` con el modal de **Add custom connector** pre-llenado (nombre + URL).
+4. El usuario hace **Add** y luego **Connect**.
 5. Claude redirige al dashboard → login con Google si hace falta → autoriza.
 6. Claude recibe el token y queda conectado.
 
-Si la versión de Claude no soporta el deep link, usar el fallback de la misma página `/install`: copiar la URL del MCP, ir a Claude → Settings → Connectors → Add Custom Connector → pegar.
+Si preferís no usar el link pre-llenado, usar el fallback de la misma página `/install`: copiar la URL del MCP, ir a Claude → Customize → Connectors → + Add custom connector → pegar.
 
 ### 8.2 Cursor (HTTP MCP, manual con Bearer)
 
@@ -454,8 +463,8 @@ Camino separado: usar el [Custom GPT existente](../AIMemory/packages/custom-gpt/
 | `EADDRINUSE :::3002`                           | Puerto ocupado por otra instancia                             | `netstat -ano \| findstr :3002` y `taskkill /PID <pid> /F` (Windows) o cerrar el `npm run dev` anterior |
 | `jq: command not found` / `curl: (23)`         | `jq` no instalado; el JSON sí llegó                           | Usar `curl -s` sin pipe, `python -m json.tool`, o instalar `jq` (ver §3.4)                              |
 | `/.well-known/oauth-authorization-server` 404  | Server vieja sin estos endpoints                              | `npm run build` y restart                                                                              |
-| OAuth: `invalid_redirect_uri`                  | URI no está en `ALLOWED_REDIRECT_URIS`                        | Agregarlo (coma-separado, sin espacios) y restart                                                      |
-| OAuth: `invalid_client`                        | `client_id` no coincide con `OAUTH_CLIENT_ID`                 | Usar `aimemory-claude` o el que pusiste en env                                                         |
+| OAuth: `invalid_redirect_uri`                  | URI no está en `oauth_clients.redirect_uris`                  | Reintentar conectar desde Claude (DCR) o registrar el client via `/oauth/register`                     |
+| OAuth: `invalid_client`                        | `client_id` no existe en `oauth_clients`                      | Reintentar conectar desde Claude o registrar vía `/oauth/register`                                      |
 | OAuth: `invalid_grant` en /token               | code expirado (>10min), ya usado, o redirect_uri distinto     | Reiniciar flujo desde `/oauth/authorize`                                                               |
 | OAuth: `PKCE verification failed`              | `code_challenge` de la URL ≠ hash del `code_verifier` (común en Windows: `tr -d '=+/'` en el doc viejo) | Regenerar par con §5.2 (comando `openssl base64 -A \| tr` o script `node`), **nuevo** 5.1 y **nuevo** `code` |
 | `/mcp` → `invalid_token`                       | API key no existe en `api_keys` o `is_active=false`           | Revisar tabla; regenerar key desde dashboard                                                           |
@@ -486,7 +495,7 @@ Antes de mandar usuarios reales:
 - Remote MCP deployado en Railway, `/health` 200
 - `MCP_PUBLIC_URL` correcto en Railway
 - `NEXT_PUBLIC_MCP_PUBLIC_URL` correcto en Vercel (Dashboard y Landing) → redeploy
-- `ALLOWED_REDIRECT_URIS` incluye los callbacks de Claude
+- El servidor responde 201 en `/oauth/register` (DCR)
 - Login con Google en Dashboard auto-provisiona key (verificado en `api_keys`)
 - `/install` muestra la URL de prod
 - Flujo OAuth completo testeado con un user real desde Claude Desktop o claude.ai
