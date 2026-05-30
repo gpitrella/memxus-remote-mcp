@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS public.workforce_workspaces (
   seats_purchased INTEGER NOT NULL DEFAULT 10,
   seats_used INTEGER NOT NULL DEFAULT 1,
   owner_user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE RESTRICT,
+  subscription_status TEXT NOT NULL DEFAULT 'pending',
+  polar_customer_id TEXT,
   polar_subscription_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -92,6 +94,15 @@ CREATE INDEX IF NOT EXISTS idx_workforce_audit_workspace
   ON public.workforce_audit_logs(workspace_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_workforce_invites_token
   ON public.workforce_workspace_invites(token);
+
+ALTER TABLE public.workforce_workspaces
+  ADD COLUMN IF NOT EXISTS subscription_status TEXT NOT NULL DEFAULT 'pending',
+  ADD COLUMN IF NOT EXISTS polar_customer_id TEXT;
+
+UPDATE public.workforce_workspaces
+SET subscription_status = 'active'
+WHERE subscription_status = 'pending'
+  AND polar_subscription_id IS NOT NULL;
 
 -- =============================================================================
 -- Memories: workforce scope (personal unchanged by default)
