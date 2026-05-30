@@ -1,0 +1,7 @@
+# Smithery metadata for Memxus Remote MCP (hosted — no local start command)
+name: memxus
+description: Persistent memory across AI conversations and clients.
+
+startCommand:
+  type: http
+  url: https://mcp.memxus.com/mcp

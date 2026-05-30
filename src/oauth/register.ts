@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
 import { supabase } from '../lib/supabase.js';
+import { validateRedirectUris } from '../lib/redirect-allowlist.js';
 
 const registerSchema = z
   .object({
@@ -28,6 +29,16 @@ export async function register(req: Request, res: Response): Promise<void> {
   }
 
   const { redirect_uris, token_endpoint_auth_method, client_name } = parsed.data;
+
+  const redirectError = validateRedirectUris(redirect_uris);
+  if (redirectError) {
+    res.status(400).json({
+      error: 'invalid_redirect_uri',
+      error_description: redirectError,
+    });
+    return;
+  }
+
   if (token_endpoint_auth_method !== 'none') {
     res.status(400).json({
       error: 'invalid_client_metadata',
@@ -45,7 +56,7 @@ export async function register(req: Request, res: Response): Promise<void> {
     token_endpoint_auth_method,
   });
   if (error) {
-    res.status(500).json({ error: 'server_error', error_description: error.message });
+    res.status(500).json({ error: 'server_error' });
     return;
   }
 

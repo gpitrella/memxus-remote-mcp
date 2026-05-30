@@ -4,6 +4,10 @@ import { getPlan, type PlanDefinition } from '../lib/plans.js';
 import { resolveListLimit, resolveSearchLimit } from '../lib/plan-enforcement.js';
 import { toPublicMemories } from '../lib/memory-public.js';
 import {
+  applyTextSearchOr,
+  resolveVectorThreshold,
+} from '../lib/memory-search.js';
+import {
   applyScopeToQuery,
   buildVectorRpcParams,
   hasScopedSearch,
@@ -177,9 +181,10 @@ export async function searchMemories(p: {
     type: p.type,
   };
 
+  const threshold = resolveVectorThreshold(scope);
   const embedding = await generateEmbedding(p.query);
   if (embedding) {
-    const rpcParams = buildVectorRpcParams(p.userId, embedding, limit, 0.6, scope);
+    const rpcParams = buildVectorRpcParams(p.userId, embedding, limit, threshold, scope);
     const { data, error } = await supabase.rpc('search_memories_vector', rpcParams);
     if (!error && data?.length) {
       return toPublicMemories(data) as unknown as MemoryRow[];
@@ -189,16 +194,33 @@ export async function searchMemories(p: {
   let q = applyTenantToQuery(supabase.from('memories').select('*'), {
     userId: p.userId,
     workforceWorkspaceId: p.workforceWorkspaceId,
-  }).ilike('content', `%${p.query}%`)
+  })
     .order('importance', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(limit);
 
   q = applyScopeToQuery(q, scope);
+  q = applyTextSearchOr(q, p.query);
 
   const { data, error } = await q;
   if (error) throw new Error(`searchMemories: ${error.message}`);
   return toPublicMemories(data ?? []) as unknown as MemoryRow[];
+}
+
+export async function getMemoryById(p: {
+  userId: string;
+  workforceWorkspaceId?: string;
+  memoryId: string;
+}): Promise<MemoryRow> {
+  let q = supabase.from('memories').select('*').eq('id', p.memoryId);
+  q = applyTenantToQuery(q, {
+    userId: p.userId,
+    workforceWorkspaceId: p.workforceWorkspaceId,
+  });
+  const { data, error } = await q.single();
+  if (error || !data) throw new Error('Memory not found');
+  const rows = toPublicMemories([data]);
+  return rows[0] as unknown as MemoryRow;
 }
 
 export async function listMemories(p: {
@@ -276,11 +298,19 @@ export async function getStats(
   userId: string,
   workforceWorkspaceId?: string
 ): Promise<{ total: number; byType: Record<string, number>; byCollection: Record<string, number> }> {
-  const q = applyTenantToQuery(supabase.from('memories').select('memory_type, collection'), {
-    userId,
-    workforceWorkspaceId,
-  });
-  const { data, error } = await q;
+  const tenant = { userId, workforceWorkspaceId };
+  const countQ = applyTenantToQuery(
+    supabase.from('memories').select('*', { count: 'exact', head: true }),
+    tenant
+  );
+  const { count, error: countError } = await countQ;
+  if (countError) throw new Error(`getStats: ${countError.message}`);
+
+  const rowsQ = applyTenantToQuery(
+    supabase.from('memories').select('memory_type, collection'),
+    tenant
+  );
+  const { data, error } = await rowsQ;
   if (error) throw new Error(`getStats: ${error.message}`);
   const rows = data ?? [];
   const byType: Record<string, number> = {};
@@ -290,7 +320,7 @@ export async function getStats(
     const coll = row.collection || '(uncategorized)';
     byCollection[coll] = (byCollection[coll] ?? 0) + 1;
   }
-  return { total: rows.length, byType, byCollection };
+  return { total: count ?? rows.length, byType, byCollection };
 }
 
 async function generateEmbedding(text: string): Promise<number[] | null> {

@@ -13,6 +13,7 @@ import {
   listMemories,
   listCollections,
   deleteMemory,
+  getMemoryById,
   getStats,
 } from './tools.js';
 import { RESOURCES, readResource } from './resources.js';
@@ -27,6 +28,7 @@ import {
   type UserPlanContext,
 } from '../lib/plan-enforcement.js';
 import { estimateTokens } from '../lib/estimate-tokens.js';
+import { sanitizeToolError } from '../lib/tool-errors.js';
 
 export interface McpContext {
   userId: string;
@@ -49,9 +51,25 @@ const scopeFields = {
   },
 };
 
-const TOOLS: Tool[] = [
+function toolMeta(
+  title: string,
+  hints: { readOnly?: boolean; destructive?: boolean; openWorld?: boolean }
+): Pick<Tool, 'title' | 'annotations'> {
+  return {
+    title,
+    annotations: {
+      title,
+      readOnlyHint: hints.readOnly ?? false,
+      destructiveHint: hints.destructive ?? false,
+      openWorldHint: hints.openWorld ?? false,
+    },
+  };
+}
+
+export const MCP_TOOLS: Tool[] = [
   {
     name: 'remember',
+    ...toolMeta('Remember', { openWorld: true }),
     description:
       'Save important information to long-term memory. Always set collection when the topic is clear: project work → project:<slug>, personal tastes → personal:preferences. Use append_to to extend an existing memory instead of creating duplicates.',
     inputSchema: {
@@ -75,6 +93,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'recall',
+    ...toolMeta('Recall', { readOnly: true, openWorld: true }),
     description:
       'Search long-term memory. Pass collection (and/or tags, type) to search only that scope — e.g. collection=project:henry-memory for project questions, collection=personal:preferences for tastes.',
     inputSchema: {
@@ -97,6 +116,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'get_context',
+    ...toolMeta('Get context', { readOnly: true, openWorld: true }),
     description:
       'Build a formatted context block for the current topic. Use collection to limit results to one domain (project, preferences, etc.).',
     inputSchema: {
@@ -119,6 +139,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'list_memories',
+    ...toolMeta('List memories', { readOnly: true }),
     description: 'List recent memories. Filter by collection, tags, or type to browse one group.',
     inputSchema: {
       type: 'object',
@@ -127,6 +148,11 @@ const TOOLS: Tool[] = [
           type: 'number',
           description:
             'How many memories to return. Omit for server default (20). Capped per your plan.',
+        },
+        full_content: {
+          type: 'boolean',
+          description: 'When true, return full memory text instead of a 120-character preview.',
+          default: false,
         },
         type: {
           type: 'string',
@@ -137,13 +163,27 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: 'get_memory',
+    ...toolMeta('Get memory', { readOnly: true }),
+    description: 'Get the full content of a single memory by its UUID (from list_memories or recall).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        memory_id: { type: 'string', description: 'UUID of the memory to retrieve.' },
+      },
+      required: ['memory_id'],
+    },
+  },
+  {
     name: 'list_collections',
+    ...toolMeta('List collections', { readOnly: true }),
     description:
       'List memory collections (folders/scopes) for this user. Use slugs in remember/recall/get_context.',
     inputSchema: { type: 'object', properties: {} },
   },
   {
     name: 'forget',
+    ...toolMeta('Forget memory', { destructive: true }),
     description: 'Delete a specific memory by ID.',
     inputSchema: {
       type: 'object',
@@ -153,6 +193,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'memory_stats',
+    ...toolMeta('Memory stats', { readOnly: true }),
     description: 'Show statistics about stored memories (by type and collection).',
     inputSchema: { type: 'object', properties: {} },
   },
@@ -181,7 +222,7 @@ export function createMCPServer(ctx: McpContext): Server {
     { capabilities: { tools: {}, resources: {} } }
   );
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: MCP_TOOLS }));
 
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: RESOURCES }));
 
@@ -322,6 +363,7 @@ export function createMCPServer(ctx: McpContext): Server {
           const input = z
             .object({
               limit: z.number().int().optional(),
+              full_content: z.boolean().default(false),
               type: memoryTypeEnum.optional(),
               collection: z.string().optional().nullable(),
               tags: z.array(z.string()).optional(),
@@ -347,13 +389,42 @@ export function createMCPServer(ctx: McpContext): Server {
               ],
             };
           } else {
-            const formatted = ms.map((m, i) => formatMemoryLine(m, i, false)).join('\n\n');
+            const verbose = input.full_content;
+            const formatted = ms.map((m, i) => formatMemoryLine(m, i, verbose)).join('\n\n');
             result = {
               content: [
                 { type: 'text', text: `Your ${ms.length} most recent memories:\n\n${formatted}` },
               ],
             };
           }
+          break;
+        }
+        case 'get_memory': {
+          const input = z
+            .object({ memory_id: z.string().uuid('memory_id must be a valid UUID') })
+            .parse(a);
+          const m = await getMemoryById({
+            userId,
+            workforceWorkspaceId,
+            memoryId: input.memory_id,
+          });
+          result = {
+            content: [
+              {
+                type: 'text',
+                text: [
+                  `ID: ${m.id}`,
+                  `Type: ${m.memory_type}`,
+                  `Collection: ${m.collection || 'none'}`,
+                  `Tags: ${m.tags.join(', ') || 'none'}`,
+                  `Importance: ${m.importance}`,
+                  `Saved: ${new Date(m.created_at).toISOString()}`,
+                  '',
+                  m.content,
+                ].join('\n'),
+              },
+            ],
+          };
           break;
         }
         case 'list_collections': {
@@ -439,7 +510,6 @@ export function createMCPServer(ctx: McpContext): Server {
           isError: true,
         };
       }
-      const message = err instanceof Error ? err.message : 'Unknown error';
       logUsage({
         userId,
         apiKeyId,
@@ -448,7 +518,7 @@ export function createMCPServer(ctx: McpContext): Server {
         latencyMs: Date.now() - started,
         tokensUsed: 0,
       });
-      return { content: [{ type: 'text', text: `Error: ${message}` }], isError: true };
+      return { content: [{ type: 'text', text: sanitizeToolError(err, toolName) }], isError: true };
     }
   });
 

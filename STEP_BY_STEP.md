@@ -365,6 +365,13 @@ curl https://TU-SERVICIO.up.railway.app/.well-known/oauth-authorization-server
 
 Railway → Settings → Networking → Custom Domain → `mcp.memxus.com`. Te da un `CNAME` para apuntar en tu DNS (Cloudflare/Vercel DNS). Después actualizá `MCP_PUBLIC_URL` en Railway → redeploy → actualizá `NEXT_PUBLIC_MCP_PUBLIC_URL` en Vercel (Dashboard y Landing).
 
+### 6.6 MCP sessions y Cursor tras deploy
+
+- El transport MCP guarda sesiones **en memoria** en cada instancia. Usá **1 réplica** en Railway hasta tener almacenamiento compartido (Redis).
+- Variables opcionales: `MCP_SESSION_TTL_MS=3600000` (idle), `MCP_STATELESS=true` (probar si Cursor reconecta mejor).
+- Después de cada deploy: pedir a los usuarios **reiniciar el servidor Memxus en Cursor** (Settings → MCP).
+- Smoke post-deploy: `MEMXUS_API_KEY=aimem_... npm run test:smoke` desde este repo.
+
 ---
 
 ## 7. Actualizar Vercel (Dashboard + Landing)

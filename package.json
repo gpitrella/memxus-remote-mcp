@@ -12,6 +12,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "node --import tsx --test src/**/*.test.ts",
+    "test:smoke": "node scripts/smoke-mcp.mjs",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit"
   },

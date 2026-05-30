@@ -1,0 +1,17 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
+  "name": "com.memxus/memxus",
+  "title": "Memxus",
+  "description": "Persistent memory across AI conversations and clients. Save once, recall in Claude, ChatGPT, Cursor, and more.",
+  "version": "1.0.0",
+  "repository": {
+    "url": "https://github.com/memxus/RemoteMCP-AIMemory",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.memxus.com/mcp"
+    }
+  ]
+}
