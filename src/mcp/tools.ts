@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase.js';
 import { config } from '../config.js';
 import { getPlan, type PlanDefinition } from '../lib/plans.js';
 import { resolveListLimit, resolveSearchLimit } from '../lib/plan-enforcement.js';
+import { toPublicMemories } from '../lib/memory-public.js';
 import {
   applyScopeToQuery,
   buildVectorRpcParams,
@@ -180,7 +181,9 @@ export async function searchMemories(p: {
   if (embedding) {
     const rpcParams = buildVectorRpcParams(p.userId, embedding, limit, 0.6, scope);
     const { data, error } = await supabase.rpc('search_memories_vector', rpcParams);
-    if (!error && data?.length) return data as MemoryRow[];
+    if (!error && data?.length) {
+      return toPublicMemories(data) as unknown as MemoryRow[];
+    }
   }
 
   let q = applyTenantToQuery(supabase.from('memories').select('*'), {
@@ -195,7 +198,7 @@ export async function searchMemories(p: {
 
   const { data, error } = await q;
   if (error) throw new Error(`searchMemories: ${error.message}`);
-  return (data ?? []) as MemoryRow[];
+  return toPublicMemories(data ?? []) as unknown as MemoryRow[];
 }
 
 export async function listMemories(p: {
@@ -225,7 +228,7 @@ export async function listMemories(p: {
 
   const { data, error } = await q;
   if (error) throw new Error(`listMemories: ${error.message}`);
-  return (data ?? []) as MemoryRow[];
+  return toPublicMemories(data ?? []) as unknown as MemoryRow[];
 }
 
 export async function listCollections(userId: string): Promise<
