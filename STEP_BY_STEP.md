@@ -128,6 +128,14 @@ Salida esperada:
 [RemoteMCP] up on :3002  public=http://localhost:3002  dashboard=http://localhost:3000
 ```
 
+### 3.3.1 Tests unitarios
+
+```bash
+npm test
+```
+
+`npm test` **no requiere** `.env` — el runner carga defaults de prueba vía `src/test/setup-env.ts`. `npm run dev` y deploy en Railway **sí** requieren `.env` / variables reales.
+
 ### 3.4 Smoke tests (curl)
 
 En otra terminal (con `npm run dev` corriendo):

@@ -25,6 +25,11 @@ jobs:
       - run: npm run typecheck
 
       - run: npm test
+        env:
+          MCP_PUBLIC_URL: http://localhost:3002
+          DASHBOARD_URL: http://localhost:3000
+          SUPABASE_URL: https://example.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: test-service-role-key-for-ci-only
 
       - run: npm run build
 
