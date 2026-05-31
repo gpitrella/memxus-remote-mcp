@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { createMCPServer } from './server.js';
