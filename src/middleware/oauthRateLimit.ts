@@ -38,9 +38,10 @@ export function oauthRateLimit(req: Request, res: Response, next: NextFunction):
   next();
 }
 
-setInterval(() => {
+const cleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [key, record] of store.entries()) {
     if (record.resetAt < now) store.delete(key);
   }
 }, WINDOW_MS);
+cleanupTimer.unref();

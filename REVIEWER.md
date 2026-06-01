@@ -64,6 +64,8 @@ After a Railway deploy or long idle period, Cursor may log:
 
 Maintainers: `npm run test:smoke` in RemoteMCP-AIMemory (requires `MEMXUS_API_KEY`).
 
+**Production deploy:** keep **one Railway replica** for `mcp.memxus.com` until shared MCP session storage exists. Set `ALLOWED_REDIRECT_URIS` (required when `NODE_ENV=production`).
+
 ## Tool smoke tests
 
 | Tool | Test prompt / args | Expected |

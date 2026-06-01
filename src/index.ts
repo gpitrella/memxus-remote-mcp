@@ -12,6 +12,7 @@ import { token } from './oauth/token.js';
 import { register } from './oauth/register.js';
 import { bearerAuth } from './lib/auth.js';
 import { oauthRateLimit } from './middleware/oauthRateLimit.js';
+import { mcpRateLimit } from './middleware/mcpRateLimit.js';
 import { handleMcp, handleMcpGet, handleMcpDelete } from './mcp/transport.js';
 
 const app = express();
@@ -38,9 +39,9 @@ app.get('/oauth/authorize', oauthRateLimit, authorize);
 app.post('/oauth/token', oauthRateLimit, token);
 app.post('/oauth/register', register);
 
-app.post('/mcp', bearerAuth, handleMcp);
-app.get('/mcp', bearerAuth, handleMcpGet);
-app.delete('/mcp', bearerAuth, handleMcpDelete);
+app.post('/mcp', bearerAuth, mcpRateLimit, handleMcp);
+app.get('/mcp', bearerAuth, mcpRateLimit, handleMcpGet);
+app.delete('/mcp', bearerAuth, mcpRateLimit, handleMcpDelete);
 
 app.use((_req, res) => res.status(404).json({ error: 'not_found' }));
 

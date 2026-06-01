@@ -43,6 +43,14 @@ const schema = z.object({
 
 const parsed = schema.parse(process.env);
 
+if (process.env.NODE_ENV === 'production' && parsed.ALLOWED_REDIRECT_URIS.length === 0) {
+  // eslint-disable-next-line no-console
+  console.error(
+    '[startup] ALLOWED_REDIRECT_URIS must be set in production (comma-separated OAuth redirect URIs)'
+  );
+  process.exit(1);
+}
+
 export const config = {
   ...parsed,
   MCP_PUBLIC_URL: stripTrailingSlash(parsed.MCP_PUBLIC_URL),
