@@ -5,7 +5,7 @@
   "description": "Persistent memory across AI conversations and clients. Save once, recall in Claude, ChatGPT, Cursor, and more.",
   "version": "1.0.0",
   "repository": {
-    "url": "https://github.com/memxus/RemoteMCP-AIMemory",
+    "url": "https://github.com/gpitrella/memxus-remote-mcp",
     "source": "github"
   },
   "remotes": [
