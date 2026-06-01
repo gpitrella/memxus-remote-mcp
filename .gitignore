@@ -4,3 +4,8 @@ dist/
 .env.local
 *.log
 .DS_Store
+
+# MCP Registry DNS signing key (never commit)
+mcp-registry-key.pem
+key.pem
+*.pem
