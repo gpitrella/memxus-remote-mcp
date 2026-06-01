@@ -51,8 +51,23 @@ npx skills add railwayapp/railway-skills --skill environment
 4. `POST /oauth/token` with PKCE → issues `aimem_*` bearer token (stored in `api_keys`)
 5. `POST /mcp` with `Authorization: Bearer aimem_...`
 
-`/oauth/register` returns 501 (pre-registered client only).
+`POST /oauth/register` implements Dynamic Client Registration (returns 201 with `client_id`).
+
+## Releases
+
+1. Add entries under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md).
+2. Bump `version` in `package.json`, [server.json](server.json), and `src/mcp/server.ts` when needed.
+3. Move the changelog section to `## [X.Y.Z] - YYYY-MM-DD`, commit, tag, and push:
+
+```bash
+git tag -a vX.Y.Z -m "Memxus MCP vX.Y.Z"
+git push origin vX.Y.Z
+```
+
+Pushing a `v*` tag runs [.github/workflows/release.yml](.github/workflows/release.yml) (quality gate + GitHub Release with `server.json` attached).
+
+Production endpoint: https://mcp.memxus.com/mcp — see [REVIEWER.md](REVIEWER.md) for OAuth and Bearer setup.
 
 ## Deferred
 
-npm publish, MCP Registry, Connectors Directory listing, refresh tokens, DCR, multi-client OAuth.
+npm publish, MCP Registry submit, Connectors Directory listing, refresh tokens, multi-client OAuth UX.

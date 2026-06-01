@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run typecheck
+
+      - run: npm test
+        env:
+          MCP_PUBLIC_URL: http://localhost:3002
+          DASHBOARD_URL: http://localhost:3000
+          SUPABASE_URL: https://example.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: test-service-role-key-for-ci-only
+
+      - run: npm run build
+
+      - name: MCP smoke (production)
+        env:
+          MEMXUS_API_KEY: ${{ secrets.MEMXUS_API_KEY }}
+          MCP_SMOKE_URL: https://mcp.memxus.com/mcp
+        run: |
+          if [ -z "$MEMXUS_API_KEY" ]; then
+            echo "MEMXUS_API_KEY not set — skipping live smoke"
+            exit 0
+          fi
+          npm run test:smoke
+
+      - name: Extract version from tag
+        id: ver
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+
+      - name: Extract release notes from CHANGELOG
+        id: notes
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          PREFIX="## [${VERSION}]"
+          awk -v prefix="$PREFIX" '
+            index($0, prefix) == 1 { found=1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "No CHANGELOG section for version ${VERSION}"
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: v${{ steps.ver.outputs.version }} — Memxus Remote MCP
+          body_path: release-notes.md
+          files: server.json
+          generate_release_notes: false

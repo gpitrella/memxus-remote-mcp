@@ -551,7 +551,7 @@ Limits are enforced in **Remote MCP**, **API**, and **Dashboard** (default ON; s
 | npm publish `@aimemory/mcp-remote`                                          | 30 min                              | Alto — habilita citas oficiales                                  |
 | Submit a Claude Connectors Directory                                        | 1h llenar form + 2-4 semanas review | Alto — distribución masiva                                       |
 | Submit a MCP Registry oficial                                               | 1h                                  | Medio — agregadores auto-sync                                    |
-| Dynamic Client Registration (`/oauth/register` real)                        | 4h                                  | Alto si querés que clientes nuevos no requieran whitelist manual |
+| ~~Dynamic Client Registration (`/oauth/register`)~~                         | done in v1.0.0                      | —                                                                |
 | Refresh tokens                                                              | 3h                                  | Bajo (tokens son de 1 año)                                       |
 | Selector de cliente en `/install` (Claude/Cursor/VS Code en un mismo flujo) | 2h                                  | Alto para UX                                                     |
 | Rate limiting en `/oauth/token`                                             | 1h                                  | Medio (anti-abuse)                                               |
