@@ -2,6 +2,11 @@ import { Request, Response } from 'express';
 import { config } from '../config.js';
 import { createPendingCode } from './codes.js';
 import { supabase } from '../lib/supabase.js';
+import {
+  isChatGptOAuthClient,
+  isChatGptRedirectUri,
+  resolveAuthorizePkce,
+} from './chatgpt-client.js';
 
 export async function authorize(req: Request, res: Response): Promise<void> {
   const {
@@ -27,6 +32,12 @@ export async function authorize(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  const pkce = resolveAuthorizePkce(client_id, code_challenge, code_challenge_method);
+  if (!pkce.ok) {
+    res.status(400).json({ error: pkce.error, error_description: pkce.error_description });
+    return;
+  }
+
   const { data: client, error: clientError } = await supabase
     .from('oauth_clients')
     .select('client_id, redirect_uris')
@@ -41,20 +52,17 @@ export async function authorize(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: 'invalid_redirect_uri' });
     return;
   }
-  if (!code_challenge) {
-    res.status(400).json({ error: 'invalid_request', error_description: 'code_challenge required (PKCE)' });
-    return;
-  }
-  if (code_challenge_method !== 'S256') {
-    res.status(400).json({ error: 'invalid_request', error_description: 'only S256 supported' });
+
+  if (isChatGptOAuthClient(client_id) && !isChatGptRedirectUri(redirect_uri)) {
+    res.status(400).json({ error: 'invalid_redirect_uri' });
     return;
   }
 
   const ticket = await createPendingCode({
     clientId: client_id,
     redirectUri: redirect_uri,
-    codeChallenge: code_challenge,
-    codeChallengeMethod: code_challenge_method,
+    codeChallenge: pkce.codeChallenge,
+    codeChallengeMethod: pkce.codeChallengeMethod,
     scope,
     state: state ?? null,
   });

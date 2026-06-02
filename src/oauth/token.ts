@@ -4,6 +4,11 @@ import { verifyChallenge } from '../lib/pkce.js';
 import { generateApiKey, hashApiKey, getApiKeyPrefix } from '../lib/api-key.js';
 import { supabase } from '../lib/supabase.js';
 import { config } from '../config.js';
+import {
+  apiKeyNameForOAuthClient,
+  isChatGptPkceBypass,
+  resolveTokenRequirements,
+} from './chatgpt-client.js';
 
 export async function token(req: Request, res: Response): Promise<void> {
   const body = (req.body ?? {}) as Record<string, string | undefined>;
@@ -12,13 +17,26 @@ export async function token(req: Request, res: Response): Promise<void> {
   const code_verifier = body.code_verifier;
   const client_id = body.client_id;
   const redirect_uri = body.redirect_uri;
+  const client_secret = body.client_secret;
 
   if (grant_type !== 'authorization_code') {
     res.status(400).json({ error: 'unsupported_grant_type' });
     return;
   }
-  if (!code || !code_verifier || !client_id || !redirect_uri) {
+  if (!code || !client_id || !redirect_uri) {
     res.status(400).json({ error: 'invalid_request' });
+    return;
+  }
+
+  const requirements = resolveTokenRequirements(client_id, code_verifier, client_secret);
+  if (!requirements.ok) {
+    const status = requirements.error === 'invalid_client' ? 401 : 400;
+    res.status(status).json({
+      error: requirements.error,
+      ...(requirements.error_description
+        ? { error_description: requirements.error_description }
+        : {}),
+    });
     return;
   }
 
@@ -45,7 +63,16 @@ export async function token(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: 'invalid_grant', error_description: 'redirect_uri mismatch' });
     return;
   }
-  if (!verifyChallenge(code_verifier, consumed.codeChallenge, consumed.codeChallengeMethod)) {
+
+  if (requirements.requiresPkceVerifier) {
+    if (
+      !code_verifier ||
+      !verifyChallenge(code_verifier, consumed.codeChallenge, consumed.codeChallengeMethod)
+    ) {
+      res.status(400).json({ error: 'invalid_grant', error_description: 'PKCE verification failed' });
+      return;
+    }
+  } else if (!isChatGptPkceBypass(consumed.codeChallenge, consumed.codeChallengeMethod)) {
     res.status(400).json({ error: 'invalid_grant', error_description: 'PKCE verification failed' });
     return;
   }
@@ -77,9 +104,7 @@ export async function token(req: Request, res: Response): Promise<void> {
     user_id: consumed.userId,
     key_hash: hashApiKey(apiKey),
     key_prefix: getApiKeyPrefix(apiKey),
-    name: workforceWorkspaceId
-      ? `Claude Workforce (${consumed.clientId})`
-      : `Claude (${consumed.clientId})`,
+    name: apiKeyNameForOAuthClient(consumed.clientId, workforceWorkspaceId),
     is_active: true,
     oauth_client_id: consumed.clientId,
     metadata: keyMetadata,

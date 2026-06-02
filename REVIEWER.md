@@ -66,6 +66,17 @@ Maintainers: `npm run test:smoke` in RemoteMCP-AIMemory (requires `MEMXUS_API_KE
 
 **Production deploy:** keep **one Railway replica** for `mcp.memxus.com` until shared MCP session storage exists. Set `ALLOWED_REDIRECT_URIS` (required when `NODE_ENV=production`).
 
+## ChatGPT Custom GPT (Actions — not MCP)
+
+Uses REST at `https://api.memxus.com/api/v1` with OpenAPI from https://www.memxus.com/docs/custom-gpt/schema.
+
+| Visibility | Auth | Expected |
+|------------|------|----------|
+| Private | API Key / Bearer (`aimem_*`) | Same user’s memories only |
+| Public | OAuth → `mcp.memxus.com/oauth/authorize` + `token` (client `memxus-chatgpt`) | Each end user signs in with Google; separate memories |
+
+After OAuth connect in ChatGPT preview, call `createMemory` / `searchMemories` and confirm dashboard shows a **ChatGPT (memxus-chatgpt)** API key for that Google user.
+
 ## Tool smoke tests
 
 | Tool | Test prompt / args | Expected |

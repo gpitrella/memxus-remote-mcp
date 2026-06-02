@@ -462,7 +462,21 @@ Ubicación: `.vscode/mcp.json` (workspace) o User Settings global.
 
 ### 8.4 ChatGPT (NO usa MCP — Custom GPT Actions)
 
-Camino separado: usar el [Custom GPT existente](../AIMemory/packages/custom-gpt/README.md) con el `openapi-schema.json` apuntando a la REST API en Railway (no a este Remote MCP). Misma key `aimem_*` sirve.
+Camino separado: OpenAPI apunta a la REST API (`https://api.memxus.com/api/v1`), no a `/mcp`.
+
+| Modo | Auth en GPT editor | Quién usa la memoria |
+|------|-------------------|----------------------|
+| Privado | API Key / Bearer + tu `aimem_*` | Solo tu cuenta |
+| **Público** | **OAuth** → `mcp.memxus.com/oauth/*` | Cada usuario tras login Google |
+
+**OAuth ChatGPT (prod):** env en Railway:
+
+- `CHATGPT_OAUTH_CLIENT_ID=memxus-chatgpt`
+- `CHATGPT_OAUTH_CLIENT_SECRET=` (generar, ≥16 chars)
+- `CHATGPT_OAUTH_REDIRECT_URI=` Callback exacta del editor (`https://chatgpt.com/aip/g-…/oauth/callback`)
+- Añadir la misma URI a `ALLOWED_REDIRECT_URIS` (sin quitar Claude/Smithery)
+
+Luego: `node scripts/provision-chatgpt-oauth-client.mjs` y configurar OAuth en el GPT (mismo Client ID/Secret). Claude/Cursor MCP siguen usando PKCE; solo el client `memxus-chatgpt` omite PKCE.
 
 ---
 
