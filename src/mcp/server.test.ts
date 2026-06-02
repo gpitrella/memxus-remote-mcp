@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MCP_TOOLS } from '../mcp/server.js';
+import { MCP_TOOLS } from './tool-schemas.js';
 
 const TOOL_NAMES = [
   'remember',
@@ -13,13 +13,70 @@ const TOOL_NAMES = [
   'memory_stats',
 ] as const;
 
+const LEGACY_INPUT_KEYS: Record<string, string[]> = {
+  remember: ['content', 'type', 'collection', 'tags', 'importance', 'append_to'],
+  recall: ['query', 'limit', 'type', 'collection', 'tags'],
+  get_context: ['topic', 'max_memories', 'type', 'collection', 'tags'],
+  list_memories: ['limit', 'full_content', 'type', 'collection', 'tags'],
+  get_memory: ['memory_id'],
+  list_collections: [],
+  forget: ['memory_id'],
+  memory_stats: [],
+};
+
+const LEGACY_REQUIRED: Record<string, string[]> = {
+  remember: ['content'],
+  recall: ['query'],
+  get_context: ['topic'],
+  list_memories: [],
+  get_memory: ['memory_id'],
+  list_collections: [],
+  forget: ['memory_id'],
+  memory_stats: [],
+};
+
+function inputProps(tool: (typeof MCP_TOOLS)[number]): Record<string, unknown> {
+  const schema = tool.inputSchema as { properties?: Record<string, unknown> };
+  return schema.properties ?? {};
+}
+
 test('MCP_TOOLS exposes 8 tools with marketplace annotations', () => {
   assert.equal(MCP_TOOLS.length, 8);
   const names = MCP_TOOLS.map((t) => t.name);
   assert.deepEqual(names, [...TOOL_NAMES]);
 });
 
-test('read-only tools have readOnlyHint true', () => {
+test('every tool has outputSchema with object type', () => {
+  for (const tool of MCP_TOOLS) {
+    const out = tool.outputSchema as { type?: string; properties?: Record<string, unknown> };
+    assert.equal(out?.type, 'object', `${tool.name} outputSchema.type`);
+    assert.ok(out?.properties && Object.keys(out.properties).length > 0, `${tool.name} outputSchema.properties`);
+  }
+});
+
+test('every input property has description', () => {
+  for (const tool of MCP_TOOLS) {
+    const props = inputProps(tool);
+    for (const [key, prop] of Object.entries(props)) {
+      const desc = (prop as { description?: string }).description;
+      assert.ok(desc && desc.length > 0, `${tool.name}.${key} missing description`);
+    }
+  }
+});
+
+test('inputSchema preserves legacy property keys and required fields', () => {
+  for (const tool of MCP_TOOLS) {
+    const props = Object.keys(inputProps(tool)).sort();
+    const expected = [...(LEGACY_INPUT_KEYS[tool.name] ?? [])].sort();
+    assert.deepEqual(props, expected, `${tool.name} property keys`);
+    const schema = tool.inputSchema as { required?: string[] };
+    const required = [...(schema.required ?? [])].sort();
+    const expectedReq = [...(LEGACY_REQUIRED[tool.name] ?? [])].sort();
+    assert.deepEqual(required, expectedReq, `${tool.name} required`);
+  }
+});
+
+test('read-only tools have readOnlyHint true and idempotentHint true', () => {
   const readOnly = new Set([
     'recall',
     'get_context',
@@ -32,28 +89,30 @@ test('read-only tools have readOnlyHint true', () => {
     if (!readOnly.has(tool.name)) continue;
     assert.equal(tool.annotations?.readOnlyHint, true, `${tool.name} should be readOnly`);
     assert.equal(tool.annotations?.destructiveHint, false, `${tool.name} should not be destructive`);
+    assert.equal(tool.annotations?.idempotentHint, true, `${tool.name} should be idempotent`);
     assert.ok(tool.title, `${tool.name} should have title`);
   }
 });
 
-test('forget has destructiveHint true', () => {
+test('forget has destructiveHint true and idempotentHint false', () => {
   const forget = MCP_TOOLS.find((t) => t.name === 'forget');
   assert.ok(forget);
   assert.equal(forget!.annotations?.destructiveHint, true);
   assert.equal(forget!.annotations?.readOnlyHint, false);
+  assert.equal(forget!.annotations?.idempotentHint, false);
 });
 
-test('remember has openWorldHint true', () => {
+test('remember has openWorldHint true and idempotentHint false', () => {
   const remember = MCP_TOOLS.find((t) => t.name === 'remember');
   assert.ok(remember);
   assert.equal(remember!.annotations?.openWorldHint, true);
+  assert.equal(remember!.annotations?.idempotentHint, false);
 });
 
 test('list_memories exposes full_content parameter', () => {
   const list = MCP_TOOLS.find((t) => t.name === 'list_memories');
   assert.ok(list);
-  const props = list!.inputSchema as { properties?: Record<string, unknown> };
-  assert.ok(props.properties?.full_content);
+  assert.ok(inputProps(list!).full_content);
 });
 
 test('get_memory requires memory_id', () => {

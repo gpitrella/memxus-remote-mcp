@@ -4,7 +4,6 @@ import {
   ListToolsRequestSchema,
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
-  Tool,
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import {
@@ -29,6 +28,17 @@ import {
 } from '../lib/plan-enforcement.js';
 import { estimateTokens } from '../lib/estimate-tokens.js';
 import { sanitizeToolError } from '../lib/tool-errors.js';
+import { MCP_TOOLS } from './tool-schemas.js';
+import {
+  formatMemoryLine,
+  formatRememberText,
+  formatGetMemoryText,
+  formatContextBlock,
+  formatMemoryStatsText,
+} from './format-memory.js';
+import { toolSuccess, toStructuredMemory, toStructuredMemories, type ToolSuccessResult } from './tool-results.js';
+
+export { MCP_TOOLS } from './tool-schemas.js';
 
 export interface McpContext {
   userId: string;
@@ -37,183 +47,6 @@ export interface McpContext {
 }
 
 const memoryTypeEnum = z.enum(['general', 'preference', 'fact', 'instruction', 'conversation']);
-
-const scopeFields = {
-  collection: {
-    type: 'string',
-    description:
-      'Scope slug for this memory (e.g. project:henry-memory, personal:preferences, work:client-x). Use the same collection in recall/get_context when the user asks about that topic.',
-  },
-  tags: {
-    type: 'array',
-    items: { type: 'string' },
-    description: 'Optional tags. A tag like project:my-app also sets collection automatically.',
-  },
-};
-
-function toolMeta(
-  title: string,
-  hints: { readOnly?: boolean; destructive?: boolean; openWorld?: boolean }
-): Pick<Tool, 'title' | 'annotations'> {
-  return {
-    title,
-    annotations: {
-      title,
-      readOnlyHint: hints.readOnly ?? false,
-      destructiveHint: hints.destructive ?? false,
-      openWorldHint: hints.openWorld ?? false,
-    },
-  };
-}
-
-export const MCP_TOOLS: Tool[] = [
-  {
-    name: 'remember',
-    ...toolMeta('Remember', { openWorld: true }),
-    description:
-      'Save important information to long-term memory. Always set collection when the topic is clear: project work → project:<slug>, personal tastes → personal:preferences. Use append_to to extend an existing memory instead of creating duplicates.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        content: { type: 'string', description: 'The information to remember.' },
-        type: {
-          type: 'string',
-          enum: ['general', 'preference', 'fact', 'instruction', 'conversation'],
-          default: 'general',
-        },
-        ...scopeFields,
-        importance: { type: 'number', minimum: 0, maximum: 1, default: 0.5 },
-        append_to: {
-          type: 'string',
-          description: 'UUID of an existing memory to append to (same user). Keeps revision history.',
-        },
-      },
-      required: ['content'],
-    },
-  },
-  {
-    name: 'recall',
-    ...toolMeta('Recall', { readOnly: true, openWorld: true }),
-    description:
-      'Search long-term memory. Pass collection (and/or tags, type) to search only that scope — e.g. collection=project:henry-memory for project questions, collection=personal:preferences for tastes.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        query: { type: 'string' },
-        limit: {
-          type: 'number',
-          description:
-            'Max results. Omit for server default (10). Capped per your plan on the server.',
-        },
-        type: {
-          type: 'string',
-          enum: ['general', 'preference', 'fact', 'instruction', 'conversation'],
-        },
-        ...scopeFields,
-      },
-      required: ['query'],
-    },
-  },
-  {
-    name: 'get_context',
-    ...toolMeta('Get context', { readOnly: true, openWorld: true }),
-    description:
-      'Build a formatted context block for the current topic. Use collection to limit results to one domain (project, preferences, etc.).',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        topic: { type: 'string' },
-        max_memories: {
-          type: 'number',
-          description:
-            'Max memories in context block. Omit for server default (10). Capped per your plan.',
-        },
-        type: {
-          type: 'string',
-          enum: ['general', 'preference', 'fact', 'instruction', 'conversation'],
-        },
-        ...scopeFields,
-      },
-      required: ['topic'],
-    },
-  },
-  {
-    name: 'list_memories',
-    ...toolMeta('List memories', { readOnly: true }),
-    description: 'List recent memories. Filter by collection, tags, or type to browse one group.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        limit: {
-          type: 'number',
-          description:
-            'How many memories to return. Omit for server default (20). Capped per your plan.',
-        },
-        full_content: {
-          type: 'boolean',
-          description: 'When true, return full memory text instead of a 120-character preview.',
-          default: false,
-        },
-        type: {
-          type: 'string',
-          enum: ['general', 'preference', 'fact', 'instruction', 'conversation'],
-        },
-        ...scopeFields,
-      },
-    },
-  },
-  {
-    name: 'get_memory',
-    ...toolMeta('Get memory', { readOnly: true }),
-    description: 'Get the full content of a single memory by its UUID (from list_memories or recall).',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        memory_id: { type: 'string', description: 'UUID of the memory to retrieve.' },
-      },
-      required: ['memory_id'],
-    },
-  },
-  {
-    name: 'list_collections',
-    ...toolMeta('List collections', { readOnly: true }),
-    description:
-      'List memory collections (folders/scopes) for this user. Use slugs in remember/recall/get_context.',
-    inputSchema: { type: 'object', properties: {} },
-  },
-  {
-    name: 'forget',
-    ...toolMeta('Forget memory', { destructive: true }),
-    description: 'Delete a specific memory by ID.',
-    inputSchema: {
-      type: 'object',
-      properties: { memory_id: { type: 'string' } },
-      required: ['memory_id'],
-    },
-  },
-  {
-    name: 'memory_stats',
-    ...toolMeta('Memory stats', { readOnly: true }),
-    description: 'Show statistics about stored memories (by type and collection).',
-    inputSchema: { type: 'object', properties: {} },
-  },
-];
-
-function formatMemoryLine(m: {
-  id: string;
-  memory_type: string;
-  importance: number;
-  tags: string[];
-  collection: string | null;
-  content: string;
-  created_at: string;
-}, i: number, verbose = true): string {
-  const coll = m.collection ? ` | Collection: ${m.collection}` : '';
-  if (!verbose) {
-    return `[${i + 1}] ID: ${m.id}\n[${m.memory_type}] ${m.content.slice(0, 120)}${m.content.length > 120 ? '...' : ''}\nTags: ${m.tags.join(', ') || 'none'}${coll} | ${new Date(m.created_at).toLocaleDateString()}`;
-  }
-  return `[${i + 1}] ID: ${m.id}\nType: ${m.memory_type} | Importance: ${m.importance}\nTags: ${m.tags.join(', ') || 'none'}${coll}\n${m.content}\nSaved: ${new Date(m.created_at).toLocaleDateString()}`;
-}
 
 export function createMCPServer(ctx: McpContext): Server {
   const { userId, apiKeyId, workforceWorkspaceId } = ctx;
@@ -251,7 +84,7 @@ export function createMCPServer(ctx: McpContext): Server {
 
       const limits = planCtx?.limits ?? getPlan('free').limits;
       const a = (req.params.arguments ?? {}) as Record<string, unknown>;
-      let result: { content: Array<{ type: 'text'; text: string }>; isError?: boolean };
+      let result: ToolSuccessResult | { content: Array<{ type: 'text'; text: string }>; isError?: boolean };
 
       switch (toolName) {
         case 'remember': {
@@ -275,14 +108,15 @@ export function createMCPServer(ctx: McpContext): Server {
             importance: input.importance,
             append_to: input.append_to,
           });
-          result = {
-            content: [
-              {
-                type: 'text',
-                text: `Remembered (ID: ${m.id})\nType: ${m.memory_type}\nCollection: ${m.collection || 'none'}\nTags: ${m.tags.join(', ') || 'none'}\nImportance: ${m.importance}`,
-              },
-            ],
-          };
+          const text = formatRememberText(m);
+          result = toolSuccess(text, {
+            memory_id: m.id,
+            memory_type: m.memory_type,
+            collection: m.collection ?? '',
+            tags: m.tags,
+            importance: m.importance,
+            message: text,
+          });
           break;
         }
         case 'recall': {
@@ -308,10 +142,20 @@ export function createMCPServer(ctx: McpContext): Server {
           });
           if (ms.length === 0) {
             const scope = input.collection ? ` in collection "${input.collection}"` : '';
-            result = { content: [{ type: 'text', text: `No memories found for that query${scope}.` }] };
+            const text = `No memories found for that query${scope}.`;
+            result = toolSuccess(text, {
+              count: 0,
+              memories: [],
+              message: text,
+            });
           } else {
             const formatted = ms.map((m, i) => formatMemoryLine(m, i)).join('\n\n---\n\n');
-            result = { content: [{ type: 'text', text: `Found ${ms.length}:\n\n${formatted}` }] };
+            const text = `Found ${ms.length}:\n\n${formatted}`;
+            result = toolSuccess(text, {
+              count: ms.length,
+              memories: toStructuredMemories(ms),
+              message: text,
+            });
           }
           break;
         }
@@ -338,24 +182,23 @@ export function createMCPServer(ctx: McpContext): Server {
           });
           if (ms.length === 0) {
             const scope = input.collection ? ` (collection: ${input.collection})` : '';
-            result = {
-              content: [{ type: 'text', text: `No relevant memories found for this topic${scope}.` }],
-            };
+            const text = `No relevant memories found for this topic${scope}.`;
+            result = toolSuccess(text, {
+              topic: input.topic,
+              count: 0,
+              context_block: text,
+              memories: [],
+              message: text,
+            });
           } else {
-            const collLine = input.collection ? `Collection: ${input.collection}\n` : '';
-            const block = [
-              '=== AI Memory Context ===',
-              `Topic: ${input.topic}`,
-              collLine + `Memories retrieved: ${ms.length}`,
-              '',
-              ...ms.map((m, i) => {
-                const coll = m.collection ? ` [${m.collection}]` : '';
-                return `[${i + 1}] [${m.memory_type.toUpperCase()}]${coll} ${m.content}`;
-              }),
-              '',
-              '=== End of Memory Context ===',
-            ].join('\n');
-            result = { content: [{ type: 'text', text: block }] };
+            const block = formatContextBlock(input.topic, input.collection, ms);
+            result = toolSuccess(block, {
+              topic: input.topic,
+              count: ms.length,
+              context_block: block,
+              memories: toStructuredMemories(ms),
+              message: block,
+            });
           }
           break;
         }
@@ -380,22 +223,17 @@ export function createMCPServer(ctx: McpContext): Server {
             tags: input.tags,
           });
           if (ms.length === 0) {
-            result = {
-              content: [
-                {
-                  type: 'text',
-                  text: 'No memories stored yet. Use the `remember` tool to save information.',
-                },
-              ],
-            };
+            const text = 'No memories stored yet. Use the `remember` tool to save information.';
+            result = toolSuccess(text, { count: 0, memories: [], message: text });
           } else {
             const verbose = input.full_content;
             const formatted = ms.map((m, i) => formatMemoryLine(m, i, verbose)).join('\n\n');
-            result = {
-              content: [
-                { type: 'text', text: `Your ${ms.length} most recent memories:\n\n${formatted}` },
-              ],
-            };
+            const text = `Your ${ms.length} most recent memories:\n\n${formatted}`;
+            result = toolSuccess(text, {
+              count: ms.length,
+              memories: toStructuredMemories(ms),
+              message: text,
+            });
           }
           break;
         }
@@ -408,45 +246,34 @@ export function createMCPServer(ctx: McpContext): Server {
             workforceWorkspaceId,
             memoryId: input.memory_id,
           });
-          result = {
-            content: [
-              {
-                type: 'text',
-                text: [
-                  `ID: ${m.id}`,
-                  `Type: ${m.memory_type}`,
-                  `Collection: ${m.collection || 'none'}`,
-                  `Tags: ${m.tags.join(', ') || 'none'}`,
-                  `Importance: ${m.importance}`,
-                  `Saved: ${new Date(m.created_at).toISOString()}`,
-                  '',
-                  m.content,
-                ].join('\n'),
-              },
-            ],
-          };
+          const text = formatGetMemoryText(m);
+          result = toolSuccess(text, {
+            ...toStructuredMemory(m),
+            message: text,
+          });
           break;
         }
         case 'list_collections': {
           const cols = await listCollections(userId);
           if (cols.length === 0) {
-            result = {
-              content: [
-                {
-                  type: 'text',
-                  text:
-                    'No collections yet. Use remember with collection=project:<name> or personal:preferences.',
-                },
-              ],
-            };
+            const text =
+              'No collections yet. Use remember with collection=project:<name> or personal:preferences.';
+            result = toolSuccess(text, { count: 0, collections: [], message: text });
           } else {
             const lines = cols.map(
               (c, i) =>
                 `[${i + 1}] ${c.slug}${c.name !== c.slug ? ` (${c.name})` : ''}${c.description ? `\n    ${c.description}` : ''}`
             );
-            result = {
-              content: [{ type: 'text', text: `Collections (${cols.length}):\n\n${lines.join('\n')}` }],
-            };
+            const text = `Collections (${cols.length}):\n\n${lines.join('\n')}`;
+            result = toolSuccess(text, {
+              count: cols.length,
+              collections: cols.map((c) => ({
+                slug: c.slug,
+                name: c.name,
+                description: c.description ?? '',
+              })),
+              message: text,
+            });
           }
           break;
         }
@@ -455,27 +282,23 @@ export function createMCPServer(ctx: McpContext): Server {
             .object({ memory_id: z.string().uuid('memory_id must be a valid UUID') })
             .parse(a);
           await deleteMemory({ userId, workforceWorkspaceId, memoryId: input.memory_id });
-          result = {
-            content: [{ type: 'text', text: `Memory ${input.memory_id} deleted.` }],
-          };
+          const text = `Memory ${input.memory_id} deleted.`;
+          result = toolSuccess(text, {
+            memory_id: input.memory_id,
+            deleted: true,
+            message: text,
+          });
           break;
         }
         case 'memory_stats': {
           const s = await getStats(userId, workforceWorkspaceId);
-          const typeBreakdown = Object.entries(s.byType)
-            .map(([t, c]) => `  ${t}: ${c}`)
-            .join('\n');
-          const collBreakdown = Object.entries(s.byCollection)
-            .map(([t, c]) => `  ${t}: ${c}`)
-            .join('\n');
-          result = {
-            content: [
-              {
-                type: 'text',
-                text: `Memory Statistics\n\nTotal: ${s.total}\n\nBy type:\n${typeBreakdown || '  (none)'}\n\nBy collection:\n${collBreakdown || '  (none)'}`,
-              },
-            ],
-          };
+          const text = formatMemoryStatsText(s);
+          result = toolSuccess(text, {
+            total: s.total,
+            by_type: s.byType,
+            by_collection: s.byCollection,
+            message: text,
+          });
           break;
         }
         default:
