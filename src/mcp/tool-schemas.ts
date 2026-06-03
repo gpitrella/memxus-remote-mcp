@@ -19,7 +19,7 @@ const SCOPE_FIELDS = {
   collection: {
     type: 'string',
     description:
-      'Scope slug for this memory (e.g. project:henry-memory, personal:preferences, work:client-x). Use the same collection in recall/get_context when the user asks about that topic.',
+      'Scope slug (e.g. project:henry-memory, personal:preferences). Partial names work — the server resolves similar slugs. Call list_collections first when unsure.',
   },
   tags: {
     type: 'array',
@@ -134,7 +134,7 @@ export const MCP_TOOLS: Tool[] = [
     name: 'recall',
     ...toolMeta('Recall memories', { readOnly: true, openWorld: true, idempotent: true }),
     description:
-      'Search long-term memory. Pass collection (and/or tags, type) to search only that scope — e.g. collection=project:henry-memory for project questions, collection=personal:preferences for tastes.',
+      'Search long-term memory. Call list_collections first when the scope is unclear. Partial collection names are OK — the server resolves similar slugs. Put topic keywords in query.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -171,7 +171,7 @@ export const MCP_TOOLS: Tool[] = [
     name: 'get_context',
     ...toolMeta('Get context', { readOnly: true, openWorld: true, idempotent: true }),
     description:
-      'Build a formatted context block for the current topic. Use collection to limit results to one domain (project, preferences, etc.).',
+      'Build a formatted context block for the current topic. Call list_collections when unsure of the exact slug. Partial collection names are resolved server-side.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -268,7 +268,7 @@ export const MCP_TOOLS: Tool[] = [
     name: 'list_collections',
     ...toolMeta('List collections', { readOnly: true, idempotent: true }),
     description:
-      'List memory collections (folders/scopes) for this user. Use slugs in remember/recall/get_context.',
+      'List memory collections (folders/scopes) for this user. Call before scoped recall/get_context when the user mentions a project or approximate folder name.',
     inputSchema: { type: 'object', properties: {} },
     outputSchema: {
       type: 'object',

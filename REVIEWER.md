@@ -101,6 +101,16 @@ curl -s https://mcp.memxus.com/.well-known/oauth-protected-resource
 
 Both should return JSON with authorization/token endpoints under `https://mcp.memxus.com`.
 
+## Glama connector claim
+
+Maintainers verify ownership via `/.well-known/glama.json` on the MCP host. Set `GLAMA_MAINTAINER_EMAIL` on Railway to the email on your Glama account (default: `gabriel98_@hotmail.com`).
+
+```bash
+curl -s https://mcp.memxus.com/.well-known/glama.json
+```
+
+Expected: JSON with `$schema` `https://glama.ai/mcp/schemas/connector.json` and `maintainers[].email`. Then use **Claim ownership** on the Memxus listing at [glama.ai](https://glama.ai) (detection may take a few minutes).
+
 ## Support
 
 - Docs: https://www.memxus.com/docs/troubleshooting

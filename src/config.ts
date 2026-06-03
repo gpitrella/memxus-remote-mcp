@@ -42,6 +42,7 @@ const schema = z.object({
   CHATGPT_OAUTH_CLIENT_ID: z.string().default('memxus-chatgpt'),
   CHATGPT_OAUTH_CLIENT_SECRET: z.string().min(16).optional(),
   CHATGPT_OAUTH_REDIRECT_URI: z.preprocess(normalizeEnvUrl, z.string().url()).optional(),
+  GLAMA_MAINTAINER_EMAIL: z.string().email().default('gabriel98_@hotmail.com'),
 });
 
 const parsed = schema.parse(process.env);

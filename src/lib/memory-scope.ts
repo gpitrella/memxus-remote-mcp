@@ -111,6 +111,133 @@ export function deriveCollectionName(slug: string): string {
   return capitalizeSegment(slug);
 }
 
+const COLLECTION_HINT_MIN_SCORE = 0.35;
+
+function tokenizeCollectionHint(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s:._-]/gu, ' ')
+    .split(/[\s:._-]+/)
+    .filter((t) => t.length >= 2);
+}
+
+/** Score how well a collection hint matches a slug/name (0–1). */
+export function scoreCollectionMatch(hint: string, item: CollectionListItem): number {
+  const raw = hint.trim().toLowerCase();
+  if (!raw) return 0;
+
+  const exact = normalizeCollectionSlug(hint);
+  if (exact && exact === item.slug) return 1;
+
+  const hyphenated = raw.replace(/\s+/g, '-');
+  if (item.slug === hyphenated) return 0.95;
+  if (item.slug.includes(hyphenated) || hyphenated.includes(item.slug)) return 0.85;
+  if (item.slug.includes(raw) || raw.includes(item.slug)) return 0.8;
+
+  const nameLower = item.name.toLowerCase();
+  if (nameLower.includes(raw) || raw.includes(nameLower)) return 0.75;
+
+  const hintTokens = tokenizeCollectionHint(raw);
+  if (hintTokens.length === 0) return 0;
+
+  const targetTokens = new Set([
+    ...tokenizeCollectionHint(item.slug.replace(':', ' ')),
+    ...tokenizeCollectionHint(item.name),
+  ]);
+
+  let overlap = 0;
+  for (const token of hintTokens) {
+    if (targetTokens.has(token)) {
+      overlap += 1;
+      continue;
+    }
+    for (const target of targetTokens) {
+      if (target.includes(token) || token.includes(target)) {
+        overlap += 0.5;
+        break;
+      }
+    }
+  }
+
+  const ratio = overlap / hintTokens.length;
+  return ratio >= 0.5 ? 0.5 + ratio * 0.3 : ratio * 0.45;
+}
+
+/** Pick the best matching collection slug for a partial or approximate hint. */
+export function resolveCollectionHint(
+  hint: string | null | undefined,
+  collections: CollectionListItem[]
+): string | null {
+  if (!hint?.trim() || collections.length === 0) return null;
+
+  const exact = normalizeCollectionSlug(hint);
+  if (exact && collections.some((c) => c.slug === exact)) return exact;
+
+  let best: { slug: string; score: number } | null = null;
+  for (const item of collections) {
+    const score = scoreCollectionMatch(hint, item);
+    if (score >= COLLECTION_HINT_MIN_SCORE && (!best || score > best.score)) {
+      best = { slug: item.slug, score };
+    }
+  }
+  return best?.slug ?? null;
+}
+
+/** Resolve collection from raw hint: exact slug first, then fuzzy match. */
+export function resolveScopeCollection(
+  raw: string | null | undefined,
+  collections: CollectionListItem[]
+): string | undefined {
+  if (!raw?.trim()) return undefined;
+
+  const exact = normalizeCollectionSlug(raw);
+  if (exact && collections.some((c) => c.slug === exact)) return exact;
+
+  const hinted = resolveCollectionHint(raw, collections);
+  if (hinted) return hinted;
+
+  if (exact) return exact;
+
+  return undefined;
+}
+
+/** Ordered scope attempts: fuzzy collection, exact scope, then unscoped retry. */
+export function buildSearchScopeAttempts(
+  baseScope: MemoryScopeFilters,
+  rawCollection: string | null | undefined,
+  collections: CollectionListItem[]
+): MemoryScopeFilters[] {
+  const attempts: MemoryScopeFilters[] = [];
+  const seen = new Set<string>();
+
+  const push = (scope: MemoryScopeFilters) => {
+    const key = `${scope.collection ?? ''}|${scope.type ?? ''}|${(scope.tags ?? []).join(',')}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    attempts.push(scope);
+  };
+
+  const hint = rawCollection?.trim();
+  if (hint) {
+    const resolved = resolveScopeCollection(hint, collections);
+    if (resolved) push({ ...baseScope, collection: resolved });
+  }
+
+  if (baseScope.collection) {
+    push(baseScope);
+  }
+
+  if (!hint && !baseScope.collection) {
+    push(baseScope);
+  }
+
+  if (hint || baseScope.collection) {
+    push({ ...baseScope, collection: undefined });
+  }
+
+  return attempts.length > 0 ? attempts : [baseScope];
+}
+
 export function mergeCollectionLists(
   registered: CollectionListItem[],
   memorySlugs: Iterable<string>

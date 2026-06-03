@@ -91,6 +91,15 @@ export function applyTextSearchOr<T extends TextSearchQuery>(query: T, searchTex
   if (patterns.size === 0) {
     return query;
   }
-  const parts = [...patterns].map((p) => `content.ilike.${p}`);
+  const parts: string[] = [];
+  for (const p of patterns) {
+    parts.push(`content.ilike.${p}`);
+    parts.push(`collection.ilike.${p}`);
+  }
+  for (const token of tokens) {
+    if (token.length >= 3) {
+      parts.push(`tags.cs.{${token}}`);
+    }
+  }
   return query.or(parts.join(',')) as T;
 }

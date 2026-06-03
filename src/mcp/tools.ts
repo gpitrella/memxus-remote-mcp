@@ -7,6 +7,7 @@ import {
   applyTextSearchOr,
   resolveVectorThreshold,
 } from '../lib/memory-search.js';
+import { searchMemoriesWithScopeRetry } from '../lib/memory-search-run.js';
 import {
   applyScopeToQuery,
   buildVectorRpcParams,
@@ -109,7 +110,20 @@ export async function saveMemory(p: {
     .select()
     .single();
   if (error) throw new Error(`saveMemory: ${error.message}`);
-  return data as MemoryRow;
+
+  const row = data as MemoryRow;
+  const embedding = await generateEmbedding(p.content);
+  if (embedding) {
+    let updateQ = supabase.from('memories').update({ embedding }).eq('id', row.id);
+    updateQ = applyTenantToQuery(updateQ, {
+      userId: p.userId,
+      workforceWorkspaceId: p.workforceWorkspaceId,
+    });
+    const { data: updated, error: embedError } = await updateQ.select().single();
+    if (!embedError && updated) return updated as MemoryRow;
+  }
+
+  return row;
 }
 
 export async function appendToMemory(p: {
@@ -175,36 +189,53 @@ export async function searchMemories(p: {
   tags?: string[];
 }): Promise<MemoryRow[]> {
   const limit = resolveSearchLimit(resolveLimits(p.planLimits), p.limit);
-  const scope: MemoryScopeFilters = {
+  const baseScope: MemoryScopeFilters = {
     collection: normalizeCollectionSlug(p.collection ?? undefined) ?? undefined,
     tags: p.tags?.length ? normalizeTags(p.tags) : undefined,
     type: p.type,
   };
+  const rawCollection = p.collection ?? null;
 
-  const threshold = resolveVectorThreshold(scope);
-  const embedding = await generateEmbedding(p.query);
-  if (embedding) {
-    const rpcParams = buildVectorRpcParams(p.userId, embedding, limit, threshold, scope);
-    const { data, error } = await supabase.rpc('search_memories_vector', rpcParams);
-    if (!error && data?.length) {
-      return toPublicMemories(data) as unknown as MemoryRow[];
-    }
+  let collections: Awaited<ReturnType<typeof listCollections>> = [];
+  try {
+    collections = await listCollections(p.userId);
+  } catch {
+    // continue without fuzzy collection resolution
   }
 
-  let q = applyTenantToQuery(supabase.from('memories').select('*'), {
-    userId: p.userId,
-    workforceWorkspaceId: p.workforceWorkspaceId,
-  })
-    .order('importance', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  const embedding = await generateEmbedding(p.query);
+  const tenant = { userId: p.userId, workforceWorkspaceId: p.workforceWorkspaceId };
 
-  q = applyScopeToQuery(q, scope);
-  q = applyTextSearchOr(q, p.query);
+  const results = await searchMemoriesWithScopeRetry<Record<string, unknown>>({
+    query: p.query,
+    baseScope,
+    rawCollection,
+    collections,
+    generateEmbedding: async () => embedding,
+    vectorSearch: async (queryEmbedding, scope) => {
+      if (!queryEmbedding) return [];
+      const threshold = resolveVectorThreshold(scope);
+      const rpcParams = buildVectorRpcParams(p.userId, queryEmbedding, limit, threshold, scope);
+      const { data, error } = await supabase.rpc('search_memories_vector', rpcParams);
+      if (error || !data?.length) return [];
+      return data as Record<string, unknown>[];
+    },
+    textSearch: async (scope) => {
+      let q = applyTenantToQuery(supabase.from('memories').select('*'), tenant)
+        .order('importance', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(limit);
 
-  const { data, error } = await q;
-  if (error) throw new Error(`searchMemories: ${error.message}`);
-  return toPublicMemories(data ?? []) as unknown as MemoryRow[];
+      q = applyScopeToQuery(q, scope);
+      q = applyTextSearchOr(q, p.query);
+
+      const { data, error } = await q;
+      if (error) throw new Error(`searchMemories: ${error.message}`);
+      return (data ?? []) as Record<string, unknown>[];
+    },
+  });
+
+  return toPublicMemories(results) as unknown as MemoryRow[];
 }
 
 export async function getMemoryById(p: {
