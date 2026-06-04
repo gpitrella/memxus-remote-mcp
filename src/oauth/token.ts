@@ -4,11 +4,9 @@ import { verifyChallenge } from '../lib/pkce.js';
 import { generateApiKey, hashApiKey, getApiKeyPrefix } from '../lib/api-key.js';
 import { supabase } from '../lib/supabase.js';
 import { config } from '../config.js';
-import {
-  apiKeyNameForOAuthClient,
-  isChatGptPkceBypass,
-  resolveTokenRequirements,
-} from './chatgpt-client.js';
+import { apiKeyNameForOAuthClient } from './client-routes.js';
+import { isChatGptPkceBypass, resolveTokenRequirements } from './chatgpt-client.js';
+import { validateOptionalResource } from './resource.js';
 
 export async function token(req: Request, res: Response): Promise<void> {
   const body = (req.body ?? {}) as Record<string, string | undefined>;
@@ -18,6 +16,7 @@ export async function token(req: Request, res: Response): Promise<void> {
   const client_id = body.client_id;
   const redirect_uri = body.redirect_uri;
   const client_secret = body.client_secret;
+  const resource = body.resource;
 
   if (grant_type !== 'authorization_code') {
     res.status(400).json({ error: 'unsupported_grant_type' });
@@ -25,6 +24,15 @@ export async function token(req: Request, res: Response): Promise<void> {
   }
   if (!code || !client_id || !redirect_uri) {
     res.status(400).json({ error: 'invalid_request' });
+    return;
+  }
+
+  const resourceCheck = validateOptionalResource(resource);
+  if (!resourceCheck.ok) {
+    res.status(400).json({
+      error: resourceCheck.error,
+      error_description: resourceCheck.error_description,
+    });
     return;
   }
 
@@ -104,7 +112,11 @@ export async function token(req: Request, res: Response): Promise<void> {
     user_id: consumed.userId,
     key_hash: hashApiKey(apiKey),
     key_prefix: getApiKeyPrefix(apiKey),
-    name: apiKeyNameForOAuthClient(consumed.clientId, workforceWorkspaceId),
+    name: apiKeyNameForOAuthClient(
+      consumed.clientId,
+      consumed.redirectUri,
+      workforceWorkspaceId
+    ),
     is_active: true,
     oauth_client_id: consumed.clientId,
     metadata: keyMetadata,

@@ -5,6 +5,7 @@ import {
   buildProtectedResourceDocument,
   getMcpResourceUrl,
   getProtectedResourceMetadataUrl,
+  validateOptionalResource,
 } from './resource.js';
 import { config } from '../config.js';
 
@@ -25,6 +26,23 @@ test('buildProtectedResourceDocument uses MCP resource URL', () => {
   assert.equal(doc.resource, getMcpResourceUrl());
   assert.deepEqual(doc.authorization_servers, [config.MCP_PUBLIC_URL]);
   assert.ok(Array.isArray(doc.scopes_supported));
+});
+
+test('validateOptionalResource allows absent resource', () => {
+  assert.deepEqual(validateOptionalResource(undefined), { ok: true });
+  assert.deepEqual(validateOptionalResource(''), { ok: true });
+});
+
+test('validateOptionalResource accepts MCP resource URL', () => {
+  const res = validateOptionalResource(getMcpResourceUrl());
+  assert.equal(res.ok, true);
+  if (res.ok) assert.equal(res.resource, getMcpResourceUrl());
+});
+
+test('validateOptionalResource rejects wrong resource', () => {
+  const res = validateOptionalResource('https://evil.example/mcp');
+  assert.equal(res.ok, false);
+  if (!res.ok) assert.equal(res.error, 'invalid_target');
 });
 
 test('buildMcpWwwAuthenticate includes resource_metadata', () => {

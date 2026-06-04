@@ -119,9 +119,3 @@ export function resolveTokenRequirements(
   }
   return { ok: true, requiresPkceVerifier: true, requiresClientSecret: false };
 }
-
-export function apiKeyNameForOAuthClient(clientId: string, workforceWorkspaceId?: string): string {
-  if (workforceWorkspaceId) return `Claude Workforce (${clientId})`;
-  if (isChatGptOAuthClient(clientId)) return `ChatGPT (${clientId})`;
-  return `Claude (${clientId})`;
-}

@@ -72,6 +72,21 @@ curl -s -X POST https://mcp.memxus.com/oauth/register \
 
 Listing: [smithery.ai/servers/memxus/memxus](https://smithery.ai/servers/memxus/memxus)
 
+## Glama (OAuth)
+
+Full guide: [docs/GLAMA.md](docs/GLAMA.md)
+
+1. Add MCP URL `https://mcp.memxus.com/mcp` in Glama.
+2. OAuth with Google via dashboard redirect (same account as dashboard.memxus.com).
+3. Do **not** use browser extensions that rewrite OAuth to `http://127.0.0.1:.../callback`.
+4. Expected: **8 tools**; API key name **Glama (...)** in dashboard after connect.
+
+Smoke:
+
+```bash
+curl -s https://mcp.memxus.com/.well-known/oauth-authorization-server/mcp
+```
+
 ## Cursor / VS Code (Bearer token — fallback)
 
 1. Settings → MCP → Add server.
@@ -137,6 +152,7 @@ After OAuth connect in ChatGPT preview, call `createMemory` / `searchMemories` a
 
 ```bash
 curl -s https://mcp.memxus.com/.well-known/oauth-authorization-server
+curl -s https://mcp.memxus.com/.well-known/oauth-authorization-server/mcp
 curl -s https://mcp.memxus.com/.well-known/oauth-protected-resource/mcp
 # resource must be https://mcp.memxus.com/mcp
 

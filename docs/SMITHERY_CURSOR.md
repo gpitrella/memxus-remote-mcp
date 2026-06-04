@@ -48,6 +48,7 @@ curl -sI -X POST https://mcp.memxus.com/mcp -H "Content-Type: application/json" 
 # Expect WWW-Authenticate with resource_metadata=.../oauth-protected-resource/mcp
 
 curl -s https://mcp.memxus.com/.well-known/oauth-authorization-server
+curl -s https://mcp.memxus.com/.well-known/oauth-authorization-server/mcp
 curl -s https://mcp.memxus.com/health
 
 curl -s -X POST https://mcp.memxus.com/oauth/register \
@@ -61,7 +62,7 @@ curl -s -X POST https://mcp.memxus.com/oauth/register \
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
 | `auth_required` / Needs authentication | OAuth not finished | Complete setup URL; restart Cursor |
-| `upstream_auth_failed` on smithery.ai/connect | MCP OAuth discovery mismatch (fixed in RemoteMCP: resource `/mcp`, path well-known, `WWW-Authenticate`) | Redeploy RemoteMCP, then retry setup |
+| `upstream_auth_failed` on smithery.ai/connect | Smithery Connect may not open browser to `authorization_endpoint` (dashboard Google sign-in) | Redeploy RemoteMCP; complete [setup URL](https://smithery.run/memxus/memxus/setup) in incognito; escalate to Smithery if DCR 201 but Connect still fails |
 | `Connection failed` on smithery.ai/connect | Extension redirect or stale deploy | Incognito; confirm deploy includes RFC 9728 fix |
 | `couldn't authenticate with upstream server` | Token not issued or dashboard login failed | Same Google account as dashboard; user must exist in DB |
 | Duplicate MCP entries | Manual Bearer + Smithery | Keep only Smithery `memxus` in `~/.cursor/mcp.json` |

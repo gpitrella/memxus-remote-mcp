@@ -24,3 +24,23 @@ export function buildMcpWwwAuthenticate(error = 'invalid_token'): string {
   const metadataUrl = getProtectedResourceMetadataUrl();
   return `Bearer resource_metadata="${metadataUrl}", error="${error}"`;
 }
+
+export type ResourceValidationResult =
+  | { ok: true; resource?: string }
+  | { ok: false; error: string; error_description: string };
+
+/** RFC 8707: validate resource when client sends it; omit = allowed for legacy clients. */
+export function validateOptionalResource(resource: string | undefined): ResourceValidationResult {
+  if (resource === undefined || resource.trim() === '') {
+    return { ok: true };
+  }
+  const expected = getMcpResourceUrl();
+  if (resource === expected) {
+    return { ok: true, resource: expected };
+  }
+  return {
+    ok: false,
+    error: 'invalid_target',
+    error_description: `resource must be ${expected}`,
+  };
+}

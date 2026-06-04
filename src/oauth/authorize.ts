@@ -7,6 +7,13 @@ import {
   isChatGptRedirectUri,
   resolveAuthorizePkce,
 } from './chatgpt-client.js';
+import { shouldServeAuthorizeHtmlLanding } from './client-routes.js';
+
+export function buildDashboardAuthorizeUrl(ticket: string): string {
+  const url = new URL(`${config.DASHBOARD_URL}/api/oauth/mcp/authorize`);
+  url.searchParams.set('ticket', ticket);
+  return url.toString();
+}
 
 export async function authorize(req: Request, res: Response): Promise<void> {
   const {
@@ -67,7 +74,18 @@ export async function authorize(req: Request, res: Response): Promise<void> {
     state: state ?? null,
   });
 
-  const url = new URL(`${config.DASHBOARD_URL}/api/oauth/mcp/authorize`);
-  url.searchParams.set('ticket', ticket);
-  res.redirect(302, url.toString());
+  const dashboardUrl = buildDashboardAuthorizeUrl(ticket);
+
+  // Option A: 302 for Claude, Smithery, Glama, and ChatGPT (dashboard handles Google sign-in).
+  if (
+    shouldServeAuthorizeHtmlLanding(
+      typeof req.headers.accept === 'string' ? req.headers.accept : undefined,
+      redirect_uri
+    )
+  ) {
+    res.status(501).json({ error: 'html_authorize_not_enabled' });
+    return;
+  }
+
+  res.redirect(302, dashboardUrl);
 }
