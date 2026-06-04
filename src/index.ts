@@ -14,9 +14,11 @@ import { register } from './oauth/register.js';
 import { bearerAuth } from './lib/auth.js';
 import { oauthRateLimit } from './middleware/oauthRateLimit.js';
 import { mcpRateLimit } from './middleware/mcpRateLimit.js';
+import { mcpOriginValidation } from './middleware/origin-validation.js';
 import { handleMcp, handleMcpGet, handleMcpDelete } from './mcp/transport.js';
 
 const app = express();
+const mcpRouter = express.Router();
 
 app.use(helmet({ contentSecurityPolicy: false }));
 
@@ -43,9 +45,11 @@ app.get('/oauth/authorize', oauthRateLimit, authorize);
 app.post('/oauth/token', oauthRateLimit, token);
 app.post('/oauth/register', register);
 
-app.post('/mcp', bearerAuth, mcpRateLimit, handleMcp);
-app.get('/mcp', bearerAuth, mcpRateLimit, handleMcpGet);
-app.delete('/mcp', bearerAuth, mcpRateLimit, handleMcpDelete);
+mcpRouter.use(mcpOriginValidation);
+mcpRouter.post('/', bearerAuth, mcpRateLimit, handleMcp);
+mcpRouter.get('/', bearerAuth, mcpRateLimit, handleMcpGet);
+mcpRouter.delete('/', bearerAuth, mcpRateLimit, handleMcpDelete);
+app.use('/mcp', mcpRouter);
 
 app.use((_req, res) => res.status(404).json({ error: 'not_found' }));
 

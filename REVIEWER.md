@@ -158,9 +158,22 @@ curl -s https://mcp.memxus.com/.well-known/oauth-protected-resource/mcp
 
 curl -s -D - -o /dev/null -X POST https://mcp.memxus.com/mcp -H "Content-Type: application/json" -d "{}"
 # Expect WWW-Authenticate: Bearer resource_metadata=".../oauth-protected-resource/mcp"
+
+curl -s https://mcp.memxus.com/.well-known/oauth-protected-resource | jq -r .resource
+# must be https://mcp.memxus.com/mcp
+
+curl -s -D - -o /dev/null -X POST https://mcp.memxus.com/mcp \
+  -H "Origin: https://claude.ai" -H "Content-Type: application/json" -d "{}"
+# Expect 401 (not 403 origin_not_allowed) + WWW-Authenticate
+
+curl -s -D - -o /dev/null -X POST https://mcp.memxus.com/mcp \
+  -H "Origin: https://evil.example" -H "Content-Type: application/json" -d "{}"
+# Expect 403 {"error":"origin_not_allowed"}
 ```
 
 Both metadata endpoints should return JSON with authorization/token endpoints under `https://mcp.memxus.com`.
+
+**Origin validation:** `POST/GET/DELETE /mcp` with a present but non-allowlisted `Origin` returns 403. Requests **without** `Origin` (Smithery, Cursor, smoke scripts) are unchanged. Optional Railway env: `MCP_ORIGIN_ALLOWLIST` (comma-separated); when empty, built-in Anthropic defaults apply.
 
 ## Glama connector claim
 

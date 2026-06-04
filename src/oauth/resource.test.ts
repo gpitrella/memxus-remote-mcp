@@ -26,6 +26,7 @@ test('buildProtectedResourceDocument uses MCP resource URL', () => {
   assert.equal(doc.resource, getMcpResourceUrl());
   assert.deepEqual(doc.authorization_servers, [config.MCP_PUBLIC_URL]);
   assert.ok(Array.isArray(doc.scopes_supported));
+  assert.equal(doc.resource_documentation, 'https://www.memxus.com/docs/mcp');
 });
 
 test('validateOptionalResource allows absent resource', () => {

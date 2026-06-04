@@ -39,6 +39,16 @@ const schema = z.object({
         .map((x) => x.trim())
         .filter(Boolean)
     ),
+  /** Browser Origin allowlist for POST/GET/DELETE /mcp only (empty = built-in Anthropic defaults). */
+  MCP_ORIGIN_ALLOWLIST: z
+    .string()
+    .default('')
+    .transform((s) =>
+      s
+        .split(',')
+        .map((x) => x.trim())
+        .filter(Boolean)
+    ),
   CHATGPT_OAUTH_CLIENT_ID: z.string().default('memxus-chatgpt'),
   CHATGPT_OAUTH_CLIENT_SECRET: z.string().min(16).optional(),
   CHATGPT_OAUTH_REDIRECT_URI: z.preprocess(normalizeEnvUrl, z.string().url()).optional(),

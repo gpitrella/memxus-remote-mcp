@@ -16,6 +16,7 @@ export function buildProtectedResourceDocument(): Record<string, unknown> {
     authorization_servers: [config.MCP_PUBLIC_URL],
     scopes_supported: [...config.SUPPORTED_SCOPES],
     bearer_methods_supported: ['header'],
+    resource_documentation: 'https://www.memxus.com/docs/mcp',
   };
 }
 
