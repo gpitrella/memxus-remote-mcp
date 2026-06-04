@@ -36,6 +36,7 @@ app.get('/health', health);
 
 app.get('/.well-known/oauth-authorization-server', authorizationServerMetadata);
 app.get('/.well-known/oauth-protected-resource', protectedResourceMetadata);
+app.get('/.well-known/oauth-protected-resource/mcp', protectedResourceMetadata);
 app.get('/.well-known/glama.json', glamaWellKnown);
 app.get('/oauth/authorize', oauthRateLimit, authorize);
 app.post('/oauth/token', oauthRateLimit, token);

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { config } from '../config.js';
 import { chatgptOAuthEnabled } from './chatgpt-client.js';
+import { buildProtectedResourceDocument } from './resource.js';
 
 export function authorizationServerMetadata(_req: Request, res: Response): void {
   const tokenAuthMethods: string[] = ['none'];
@@ -22,10 +23,5 @@ export function authorizationServerMetadata(_req: Request, res: Response): void 
 }
 
 export function protectedResourceMetadata(_req: Request, res: Response): void {
-  res.json({
-    resource: config.MCP_PUBLIC_URL,
-    authorization_servers: [config.MCP_PUBLIC_URL],
-    scopes_supported: [...config.SUPPORTED_SCOPES],
-    bearer_methods_supported: ['header'],
-  });
+  res.json(buildProtectedResourceDocument());
 }

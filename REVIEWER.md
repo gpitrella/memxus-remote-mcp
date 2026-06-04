@@ -31,12 +31,53 @@ Use this document when testing Memxus for marketplace review (Claude Connectors,
 4. In Claude, ask: *"What do you remember about my reviewer demo preferences?"*
 5. Expected: Claude calls `recall` or `get_context` and returns seeded content.
 
-## Cursor / VS Code (Bearer token)
+## Cursor (Smithery — recommended for maintainers)
+
+One **global** install covers API-IAMemory, Dash-AIMemory, Landing-IAMemory, and RemoteMCP-AIMemory (no per-repo `mcp.json`).
+
+Full guide: [docs/SMITHERY_CURSOR.md](docs/SMITHERY_CURSOR.md)
+
+```bash
+npx -y smithery mcp add memxus/memxus --client cursor --force
+```
+
+1. Complete OAuth in a **clean browser** (incognito): [smithery.run/memxus/memxus/setup](https://smithery.run/memxus/memxus/setup)
+2. Use the **same Google account** as [dashboard.memxus.com](https://dashboard.memxus.com).
+3. Restart Cursor.
+4. Keep a **single** `memxus` entry in `~/.cursor/mcp.json` (Smithery URL only). Remove `memxus-local` stdio and manual `https://mcp.memxus.com/mcp` + Bearer duplicates.
+5. Expected: **8 tools** — remember, recall, get_context, list_memories, get_memory, list_collections, forget, memory_stats.
+
+Verify:
+
+```bash
+npx -y smithery mcp list
+npx -y smithery tool list memxus
+```
+
+Production prerequisites: `MCP_PUBLIC_URL=https://mcp.memxus.com`, `DASHBOARD_URL=https://dashboard.memxus.com`, and `https://smithery.run/oauth/callback` in `ALLOWED_REDIRECT_URIS`. DCR smoke:
+
+```bash
+curl -s -X POST https://mcp.memxus.com/oauth/register \
+  -H "Content-Type: application/json" \
+  -d '{"redirect_uris":["https://smithery.run/oauth/callback"],"client_name":"smithery-smoke","token_endpoint_auth_method":"none"}'
+```
+
+### Smithery troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| `Needs authentication` / `auth_required` | Finish setup URL; Connect in Cursor; restart Cursor |
+| `Connection failed` / upstream auth | Incognito without OAuth redirect extensions; retry setup |
+| DCR 201 but setup still fails | Escalate to Smithery — see [docs/SMITHERY_CURSOR.md](docs/SMITHERY_CURSOR.md) § Smithery support escalation |
+
+Listing: [smithery.ai/servers/memxus/memxus](https://smithery.ai/servers/memxus/memxus)
+
+## Cursor / VS Code (Bearer token — fallback)
 
 1. Settings → MCP → Add server.
 2. URL: `https://mcp.memxus.com/mcp`
 3. Header: `Authorization: Bearer aimem_YOUR_KEY`
-4. Expected: **8 tools** — remember, recall, get_context, list_memories, get_memory, list_collections, forget, memory_stats.
+4. Expected: same **8 tools** as above.
 
 Example JSON (Cursor):
 
@@ -96,10 +137,14 @@ After OAuth connect in ChatGPT preview, call `createMemory` / `searchMemories` a
 
 ```bash
 curl -s https://mcp.memxus.com/.well-known/oauth-authorization-server
-curl -s https://mcp.memxus.com/.well-known/oauth-protected-resource
+curl -s https://mcp.memxus.com/.well-known/oauth-protected-resource/mcp
+# resource must be https://mcp.memxus.com/mcp
+
+curl -s -D - -o /dev/null -X POST https://mcp.memxus.com/mcp -H "Content-Type: application/json" -d "{}"
+# Expect WWW-Authenticate: Bearer resource_metadata=".../oauth-protected-resource/mcp"
 ```
 
-Both should return JSON with authorization/token endpoints under `https://mcp.memxus.com`.
+Both metadata endpoints should return JSON with authorization/token endpoints under `https://mcp.memxus.com`.
 
 ## Glama connector claim
 

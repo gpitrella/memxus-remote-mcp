@@ -4,6 +4,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { createMCPServer } from './server.js';
 import { AuthedRequest } from '../lib/auth.js';
+import { sendMcpUnauthorized } from '../oauth/unauthorized.js';
 
 interface Session {
   transport: StreamableHTTPServerTransport;
@@ -41,7 +42,7 @@ function touchSession(session: Session): void {
 
 export async function handleMcp(req: AuthedRequest, res: Response): Promise<void> {
   if (!req.userId) {
-    res.status(401).json({ error: 'invalid_token' });
+    sendMcpUnauthorized(res);
     return;
   }
 
@@ -100,7 +101,7 @@ export async function handleMcp(req: AuthedRequest, res: Response): Promise<void
 
 export async function handleMcpGet(req: AuthedRequest, res: Response): Promise<void> {
   if (!req.userId) {
-    res.status(401).json({ error: 'invalid_token' });
+    sendMcpUnauthorized(res);
     return;
   }
 
@@ -119,7 +120,7 @@ export async function handleMcpGet(req: AuthedRequest, res: Response): Promise<v
 
 export async function handleMcpDelete(req: AuthedRequest, res: Response): Promise<void> {
   if (!req.userId) {
-    res.status(401).json({ error: 'invalid_token' });
+    sendMcpUnauthorized(res);
     return;
   }
 

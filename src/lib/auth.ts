@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { sendMcpUnauthorized } from '../oauth/unauthorized.js';
 import { supabase } from './supabase.js';
 import { hashApiKey } from './api-key.js';
 
@@ -15,7 +16,10 @@ export async function bearerAuth(
 ): Promise<void> {
   const auth = req.headers.authorization;
   if (!auth || !auth.startsWith('Bearer ')) {
-    res.status(401).json({ error: 'invalid_token', error_description: 'Missing bearer token' });
+    sendMcpUnauthorized(res, {
+      error: 'invalid_token',
+      error_description: 'Missing bearer token',
+    });
     return;
   }
 
@@ -29,7 +33,7 @@ export async function bearerAuth(
     .single();
 
   if (error || !data || data.is_active === false) {
-    res.status(401).json({ error: 'invalid_token' });
+    sendMcpUnauthorized(res);
     return;
   }
 
