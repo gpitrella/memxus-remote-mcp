@@ -1,7 +1,76 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isRedirectUriAllowed, validateRedirectUris } from './redirect-allowlist.js';
+import {
+  filterAllowedRedirectUris,
+  isLoopbackMcpCallback,
+  isRedirectUriAllowed,
+  isRedirectUriRegistered,
+  loopbackRedirectUrisMatch,
+  redirectUrisMatch,
+  validateRedirectUris,
+} from './redirect-allowlist.js';
 import { config } from '../config.js';
+
+test('isLoopbackMcpCallback accepts localhost and 127.0.0.1 with /callback', () => {
+  assert.equal(isLoopbackMcpCallback('http://127.0.0.1:54321/callback'), true);
+  assert.equal(isLoopbackMcpCallback('http://localhost/callback'), true);
+  assert.equal(isLoopbackMcpCallback('https://claude.ai/api/mcp/auth_callback'), false);
+  assert.equal(isLoopbackMcpCallback('http://127.0.0.1:54321/other'), false);
+});
+
+test('loopbackRedirectUrisMatch ignores port', () => {
+  assert.equal(
+    loopbackRedirectUrisMatch('http://127.0.0.1:54321/callback', 'http://127.0.0.1/callback'),
+    true
+  );
+  assert.equal(
+    loopbackRedirectUrisMatch('http://localhost:8080/callback', 'http://localhost/callback'),
+    true
+  );
+  assert.equal(
+    loopbackRedirectUrisMatch('http://127.0.0.1/callback', 'http://localhost/callback'),
+    false
+  );
+});
+
+test('redirectUrisMatch exact and loopback', () => {
+  assert.equal(
+    redirectUrisMatch('https://claude.ai/api/mcp/auth_callback', 'https://claude.ai/api/mcp/auth_callback'),
+    true
+  );
+  assert.equal(
+    redirectUrisMatch('http://127.0.0.1:9999/callback', 'http://127.0.0.1/callback'),
+    true
+  );
+});
+
+test('isRedirectUriRegistered matches loopback with different ports', () => {
+  const registered = ['https://claude.ai/api/mcp/auth_callback', 'http://127.0.0.1/callback'];
+  assert.equal(isRedirectUriRegistered('http://127.0.0.1:61789/callback', registered), true);
+  assert.equal(isRedirectUriRegistered('https://claude.ai/api/mcp/auth_callback', registered), true);
+  assert.equal(isRedirectUriRegistered('https://evil.example/callback', registered), false);
+});
+
+test('filterAllowedRedirectUris keeps Claude and loopback, drops unknown', () => {
+  const claude = 'https://claude.ai/api/mcp/auth_callback';
+  const { allowed, rejected } = filterAllowedRedirectUris([
+    claude,
+    'http://127.0.0.1:54321/callback',
+    'https://evil.example/callback',
+  ]);
+  if (config.ALLOWED_REDIRECT_URIS.length === 0) {
+    assert.deepEqual(allowed, [
+      claude,
+      'http://127.0.0.1:54321/callback',
+      'https://evil.example/callback',
+    ]);
+    assert.equal(rejected.length, 0);
+    return;
+  }
+  assert.ok(allowed.includes(claude));
+  assert.ok(allowed.includes('http://127.0.0.1:54321/callback'));
+  assert.ok(rejected.includes('https://evil.example/callback'));
+});
 
 test('validateRedirectUris allows Claude callbacks when configured', () => {
   const claude = 'https://claude.ai/api/mcp/auth_callback';
@@ -9,12 +78,12 @@ test('validateRedirectUris allows Claude callbacks when configured', () => {
     assert.equal(validateRedirectUris([claude]), null);
     return;
   }
-  if (config.ALLOWED_REDIRECT_URIS.includes(claude)) {
+  if (config.ALLOWED_REDIRECT_URIS.includes(claude) || isRedirectUriAllowed(claude)) {
     assert.equal(validateRedirectUris([claude]), null);
   }
 });
 
-test('validateRedirectUris rejects unknown URIs when allowlist is set', () => {
+test('validateRedirectUris rejects when no URIs are allowed', () => {
   if (config.ALLOWED_REDIRECT_URIS.length === 0) {
     assert.equal(isRedirectUriAllowed('https://evil.example/callback'), true);
     return;
@@ -22,4 +91,14 @@ test('validateRedirectUris rejects unknown URIs when allowlist is set', () => {
   const err = validateRedirectUris(['https://evil.example/callback']);
   assert.ok(err);
   assert.match(err!, /not allowed/);
+});
+
+test('validateRedirectUris passes when at least one URI is allowed', () => {
+  if (config.ALLOWED_REDIRECT_URIS.length === 0) return;
+  const claude = 'https://claude.ai/api/mcp/auth_callback';
+  if (!isRedirectUriAllowed(claude)) return;
+  assert.equal(
+    validateRedirectUris([claude, 'https://evil.example/callback']),
+    null
+  );
 });

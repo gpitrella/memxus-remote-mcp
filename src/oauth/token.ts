@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase.js';
 import { config } from '../config.js';
 import { apiKeyNameForOAuthClient } from './client-routes.js';
 import { isChatGptPkceBypass, resolveTokenRequirements } from './chatgpt-client.js';
+import { isRedirectUriRegistered, redirectUrisMatch } from '../lib/redirect-allowlist.js';
 import { validateOptionalResource } from './resource.js';
 
 export async function token(req: Request, res: Response): Promise<void> {
@@ -57,7 +58,10 @@ export async function token(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: 'invalid_client' });
     return;
   }
-  if (!Array.isArray(client.redirect_uris) || !client.redirect_uris.includes(redirect_uri)) {
+  if (
+    !Array.isArray(client.redirect_uris) ||
+    !isRedirectUriRegistered(redirect_uri, client.redirect_uris)
+  ) {
     res.status(400).json({ error: 'invalid_grant', error_description: 'redirect_uri mismatch' });
     return;
   }
@@ -67,7 +71,7 @@ export async function token(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: 'invalid_grant' });
     return;
   }
-  if (consumed.redirectUri !== redirect_uri) {
+  if (!redirectUrisMatch(consumed.redirectUri, redirect_uri)) {
     res.status(400).json({ error: 'invalid_grant', error_description: 'redirect_uri mismatch' });
     return;
   }

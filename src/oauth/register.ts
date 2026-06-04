@@ -2,13 +2,15 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
 import { supabase } from '../lib/supabase.js';
-import { validateRedirectUris } from '../lib/redirect-allowlist.js';
+import { filterAllowedRedirectUris } from '../lib/redirect-allowlist.js';
 
 const registerSchema = z
   .object({
     redirect_uris: z.array(z.string().url()).min(1),
     token_endpoint_auth_method: z.string().optional().default('none'),
     client_name: z.string().optional(),
+    grant_types: z.array(z.string()).optional(),
+    response_types: z.array(z.string()).optional(),
   })
   .passthrough();
 
@@ -19,6 +21,7 @@ function newClientId(): string {
 export const _test = {
   registerSchema,
   newClientId,
+  filterAllowedRedirectUris,
 };
 
 export async function register(req: Request, res: Response): Promise<void> {
@@ -29,14 +32,22 @@ export async function register(req: Request, res: Response): Promise<void> {
   }
 
   const { redirect_uris, token_endpoint_auth_method, client_name } = parsed.data;
+  const { allowed, rejected } = filterAllowedRedirectUris(redirect_uris);
 
-  const redirectError = validateRedirectUris(redirect_uris);
-  if (redirectError) {
+  if (allowed.length === 0) {
     res.status(400).json({
       error: 'invalid_redirect_uri',
-      error_description: redirectError,
+      error_description: `redirect_uri not allowed: ${rejected[0] ?? 'unknown'}`,
     });
     return;
+  }
+
+  if (rejected.length > 0 && process.env.NODE_ENV === 'production') {
+    // eslint-disable-next-line no-console
+    console.info('[oauth/register] filtered redirect_uris', {
+      kept: allowed.length,
+      rejected: rejected.length,
+    });
   }
 
   if (token_endpoint_auth_method !== 'none') {
@@ -52,7 +63,7 @@ export async function register(req: Request, res: Response): Promise<void> {
   const { error } = await supabase.from('oauth_clients').insert({
     client_id,
     client_name: client_name ?? null,
-    redirect_uris,
+    redirect_uris: allowed,
     token_endpoint_auth_method,
   });
   if (error) {
@@ -63,7 +74,7 @@ export async function register(req: Request, res: Response): Promise<void> {
   res.status(201).json({
     client_id,
     client_name: client_name ?? undefined,
-    redirect_uris,
+    redirect_uris: allowed,
     token_endpoint_auth_method,
   });
 }

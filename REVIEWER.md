@@ -120,7 +120,23 @@ After a Railway deploy or long idle period, Cursor may log:
 
 Maintainers: `npm run test:smoke` in RemoteMCP-AIMemory (requires `MEMXUS_API_KEY`).
 
-**Production deploy:** keep **one Railway replica** for `mcp.memxus.com` until shared MCP session storage exists. Set `ALLOWED_REDIRECT_URIS` (required when `NODE_ENV=production`).
+**Production deploy:** keep **one Railway replica** for `mcp.memxus.com` until shared MCP session storage exists. Set `ALLOWED_REDIRECT_URIS` (required when `NODE_ENV=production`). Set **`MCP_STATELESS=true`** so `remember`/`recall` survive redeploys without stale `mcp-session-id`.
+
+### Claude troubleshooting (DCR / reconnect)
+
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| `Couldn't register with sign-in service` | DCR rejected loopback `redirect_uris` from Anthropic | Deploy current RemoteMCP (filters URIs; allows `127.0.0.1`/`localhost` `/callback`) |
+| `remember` fails after deploy while connector shows connected | Stale MCP session | `MCP_STATELESS=true` on Railway; reconnect if needed |
+
+DCR smoke (Claude-like payload):
+
+```bash
+curl -s -w "\n%{http_code}\n" -X POST https://mcp.memxus.com/oauth/register \
+  -H "Content-Type: application/json" \
+  -d '{"redirect_uris":["https://claude.ai/api/mcp/auth_callback","http://127.0.0.1:54321/callback"],"grant_types":["authorization_code"],"response_types":["code"],"token_endpoint_auth_method":"none"}'
+# Expect 201
+```
 
 ## ChatGPT Custom GPT (Actions — not MCP)
 

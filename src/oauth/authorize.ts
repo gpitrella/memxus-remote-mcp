@@ -7,6 +7,7 @@ import {
   isChatGptRedirectUri,
   resolveAuthorizePkce,
 } from './chatgpt-client.js';
+import { isRedirectUriRegistered } from '../lib/redirect-allowlist.js';
 import { shouldServeAuthorizeHtmlLanding } from './client-routes.js';
 
 export function buildDashboardAuthorizeUrl(ticket: string): string {
@@ -55,7 +56,10 @@ export async function authorize(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: 'invalid_client' });
     return;
   }
-  if (!Array.isArray(client.redirect_uris) || !client.redirect_uris.includes(redirect_uri)) {
+  if (
+    !Array.isArray(client.redirect_uris) ||
+    !isRedirectUriRegistered(redirect_uri, client.redirect_uris)
+  ) {
     res.status(400).json({ error: 'invalid_redirect_uri' });
     return;
   }
