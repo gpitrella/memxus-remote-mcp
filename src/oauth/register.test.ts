@@ -17,14 +17,25 @@ test('DCR register schema defaults token_endpoint_auth_method to none', () => {
   assert.equal(res.data.token_endpoint_auth_method, 'none');
 });
 
-test('DCR rejects non-none token_endpoint_auth_method', () => {
+test('dcrPersistedAuthMethod always returns none', () => {
+  assert.equal(_test.dcrPersistedAuthMethod(undefined), 'none');
+  assert.equal(_test.dcrPersistedAuthMethod('none'), 'none');
+  assert.equal(_test.dcrPersistedAuthMethod('client_secret_post'), 'none');
+  assert.equal(_test.dcrPersistedAuthMethod('client_secret_basic'), 'none');
+});
+
+test('DCR schema accepts Anthropic broker payload with client_secret_post', () => {
   const res = _test.registerSchema.safeParse({
+    client_name: 'claudeai',
+    grant_types: ['authorization_code', 'refresh_token'],
+    response_types: ['code'],
+    token_endpoint_auth_method: 'client_secret_post',
+    scope: 'claudeai',
     redirect_uris: ['https://claude.ai/api/mcp/auth_callback'],
-    token_endpoint_auth_method: 'client_secret_basic',
   });
   assert.equal(res.success, true);
   if (!res.success) return;
-  assert.equal(res.data.token_endpoint_auth_method, 'client_secret_basic');
+  assert.equal(_test.dcrPersistedAuthMethod(res.data.token_endpoint_auth_method), 'none');
 });
 
 test('newClientId uses aimem_ prefix', () => {

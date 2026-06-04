@@ -126,7 +126,7 @@ Maintainers: `npm run test:smoke` in RemoteMCP-AIMemory (requires `MEMXUS_API_KE
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| `Couldn't register with sign-in service` | DCR rejected loopback `redirect_uris` from Anthropic | Deploy current RemoteMCP (filters URIs; allows `127.0.0.1`/`localhost` `/callback`) |
+| `Couldn't register with sign-in service` | DCR rejected `client_secret_post` from Anthropic broker (metadata advertised ChatGPT auth) | Deploy current RemoteMCP: DCR always persists `none`; metadata lists only `none` |
 | `remember` fails after deploy while connector shows connected | Stale MCP session | `MCP_STATELESS=true` on Railway; reconnect if needed |
 
 DCR smoke (Claude-like payload):
@@ -136,6 +136,11 @@ curl -s -w "\n%{http_code}\n" -X POST https://mcp.memxus.com/oauth/register \
   -H "Content-Type: application/json" \
   -d '{"redirect_uris":["https://claude.ai/api/mcp/auth_callback","http://127.0.0.1:54321/callback"],"grant_types":["authorization_code"],"response_types":["code"],"token_endpoint_auth_method":"none"}'
 # Expect 201
+
+curl -s -w "\n%{http_code}\n" -X POST https://mcp.memxus.com/oauth/register \
+  -H "Content-Type: application/json" \
+  -d '{"client_name":"claudeai","grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"client_secret_post","scope":"claudeai","redirect_uris":["https://claude.ai/api/mcp/auth_callback"]}'
+# Expect 201 with token_endpoint_auth_method "none" in response
 ```
 
 ## ChatGPT Custom GPT (Actions — not MCP)

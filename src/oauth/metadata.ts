@@ -1,14 +1,8 @@
 import { Request, Response } from 'express';
 import { config } from '../config.js';
-import { chatgptOAuthEnabled } from './chatgpt-client.js';
 import { buildProtectedResourceDocument } from './resource.js';
 
 export function authorizationServerMetadata(_req: Request, res: Response): void {
-  const tokenAuthMethods: string[] = ['none'];
-  if (chatgptOAuthEnabled()) {
-    tokenAuthMethods.push('client_secret_post');
-  }
-
   res.json({
     issuer: config.MCP_PUBLIC_URL,
     authorization_endpoint: `${config.MCP_PUBLIC_URL}/oauth/authorize`,
@@ -17,7 +11,8 @@ export function authorizationServerMetadata(_req: Request, res: Response): void 
     response_types_supported: ['code'],
     grant_types_supported: ['authorization_code'],
     code_challenge_methods_supported: ['S256'],
-    token_endpoint_auth_methods_supported: tokenAuthMethods,
+    // DCR is for public MCP clients (Claude, Smithery, Glama). ChatGPT uses pre-provisioned client + secret at /token.
+    token_endpoint_auth_methods_supported: ['none'],
     scopes_supported: [...config.SUPPORTED_SCOPES],
   });
 }

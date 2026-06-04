@@ -18,10 +18,22 @@ function newClientId(): string {
   return `aimem_${randomBytes(16).toString('hex')}`;
 }
 
+/** DCR registers public MCP clients only (PKCE, no client_secret). */
+export function dcrPersistedAuthMethod(requested: string | undefined): 'none' {
+  if (requested !== undefined && requested !== 'none' && process.env.NODE_ENV === 'production') {
+    // eslint-disable-next-line no-console
+    console.info('[oauth/register] coerced token_endpoint_auth_method to none', {
+      requested,
+    });
+  }
+  return 'none';
+}
+
 export const _test = {
   registerSchema,
   newClientId,
   filterAllowedRedirectUris,
+  dcrPersistedAuthMethod,
 };
 
 export async function register(req: Request, res: Response): Promise<void> {
@@ -50,21 +62,14 @@ export async function register(req: Request, res: Response): Promise<void> {
     });
   }
 
-  if (token_endpoint_auth_method !== 'none') {
-    res.status(400).json({
-      error: 'invalid_client_metadata',
-      error_description: 'Only token_endpoint_auth_method="none" is supported',
-    });
-    return;
-  }
-
+  const persistedAuthMethod = dcrPersistedAuthMethod(token_endpoint_auth_method);
   const client_id = newClientId();
 
   const { error } = await supabase.from('oauth_clients').insert({
     client_id,
     client_name: client_name ?? null,
     redirect_uris: allowed,
-    token_endpoint_auth_method,
+    token_endpoint_auth_method: persistedAuthMethod,
   });
   if (error) {
     res.status(500).json({ error: 'server_error' });
@@ -75,6 +80,6 @@ export async function register(req: Request, res: Response): Promise<void> {
     client_id,
     client_name: client_name ?? undefined,
     redirect_uris: allowed,
-    token_endpoint_auth_method,
+    token_endpoint_auth_method: persistedAuthMethod,
   });
 }
