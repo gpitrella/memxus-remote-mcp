@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import {
   CLAUDE_REDIRECT_URIS,
   GLAMA_APP_REDIRECT_URI,
+  GLAMA_INSPECTOR_REDIRECT_URI,
   SMITHERY_REDIRECT_URI,
   SMITHERY_REDIRECT_URIS,
   acceptsHtmlResponse,
   apiKeyNameForOAuthClient,
   isClaudeRedirectUri,
   isGlamaAppRedirectUri,
+  isGlamaInspectorRedirectUri,
   isMarketplaceBrowserRedirectUri,
   isSmitheryRedirectUri,
   shouldServeAuthorizeHtmlLanding,
@@ -21,6 +23,8 @@ test('redirect URI classifiers', () => {
   assert.equal(isSmitheryRedirectUri(SMITHERY_REDIRECT_URI), true);
   assert.equal(isSmitheryRedirectUri(CLAUDE_REDIRECT_URIS[0]), false);
   assert.equal(isGlamaAppRedirectUri(GLAMA_APP_REDIRECT_URI), true);
+  assert.equal(isGlamaInspectorRedirectUri(GLAMA_INSPECTOR_REDIRECT_URI), true);
+  assert.equal(isGlamaInspectorRedirectUri(GLAMA_APP_REDIRECT_URI), false);
   assert.equal(isClaudeRedirectUri(CLAUDE_REDIRECT_URIS[0]), true);
   assert.equal(isClaudeRedirectUri(SMITHERY_REDIRECT_URI), false);
 });
@@ -53,6 +57,10 @@ test('apiKeyNameForOAuthClient labels by redirect', () => {
     /^Smithery /
   );
   assert.match(apiKeyNameForOAuthClient('aimem_abcd', GLAMA_APP_REDIRECT_URI), /^Glama /);
+  assert.match(
+    apiKeyNameForOAuthClient('aimem_abcd', GLAMA_INSPECTOR_REDIRECT_URI),
+    /^Glama /
+  );
   assert.match(
     apiKeyNameForOAuthClient('aimem_abcd', CLAUDE_REDIRECT_URIS[0]),
     /^Claude /
