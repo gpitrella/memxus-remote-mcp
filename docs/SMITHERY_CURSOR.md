@@ -55,6 +55,11 @@ curl -s -X POST https://mcp.memxus.com/oauth/register \
   -H "Content-Type: application/json" \
   -d '{"redirect_uris":["https://smithery.run/oauth/callback"],"client_name":"smithery-check","token_endpoint_auth_method":"none"}'
 # Expect 201 with client_id
+
+curl -s -w "\n%{http_code}\n" -X POST https://mcp.memxus.com/oauth/register \
+  -H "Content-Type: application/json" \
+  -d '{"redirect_uris":["https://auth.smithery.ai/connect"],"token_endpoint_auth_method":"none"}'
+# Expect 201 (Smithery Connect upstream DCR)
 ```
 
 ## Troubleshooting

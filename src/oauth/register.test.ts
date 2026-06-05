@@ -60,9 +60,13 @@ test('DCR schema accepts Claude-like RFC7591 payload', () => {
 });
 
 test('filterAllowedRedirectUris keeps Smithery Connect callbacks', () => {
-  const smitheryAi = 'https://smithery.ai/oauth/callback';
-  const { allowed } = _test.filterAllowedRedirectUris([smitheryAi]);
-  assert.ok(allowed.includes(smitheryAi));
+  for (const uri of [
+    'https://smithery.ai/oauth/callback',
+    'https://auth.smithery.ai/connect',
+  ]) {
+    const { allowed } = _test.filterAllowedRedirectUris([uri]);
+    assert.ok(allowed.includes(uri), uri);
+  }
 });
 
 test('firstZodIssueMessage describes missing redirect_uris', () => {

@@ -5,6 +5,8 @@ export const SMITHERY_REDIRECT_URIS = [
   'https://smithery.run/oauth/callback',
   'https://smithery.ai/oauth/callback',
   'https://smithery.ai/connect/callback',
+  /** Smithery Connect upstream DCR (txBytes 113 when rejected). */
+  'https://auth.smithery.ai/connect',
 ] as const;
 
 export const SMITHERY_REDIRECT_URI = SMITHERY_REDIRECT_URIS[0];

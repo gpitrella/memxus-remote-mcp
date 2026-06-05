@@ -56,6 +56,7 @@ test('isKnownMcpRedirectUri includes Smithery run and Connect callbacks', () => 
   assert.equal(isKnownMcpRedirectUri('https://smithery.run/oauth/callback'), true);
   assert.equal(isKnownMcpRedirectUri('https://smithery.ai/oauth/callback'), true);
   assert.equal(isKnownMcpRedirectUri('https://smithery.ai/connect/callback'), true);
+  assert.equal(isKnownMcpRedirectUri('https://auth.smithery.ai/connect'), true);
 });
 
 test('filterAllowedRedirectUris keeps Claude and loopback, drops unknown', () => {
