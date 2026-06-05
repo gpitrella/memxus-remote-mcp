@@ -120,14 +120,15 @@ After a Railway deploy or long idle period, Cursor may log:
 
 Maintainers: `npm run test:smoke` in RemoteMCP-AIMemory (requires `MEMXUS_API_KEY`).
 
-**Production deploy:** keep **one Railway replica** for `mcp.memxus.com` until shared MCP session storage exists. Set `ALLOWED_REDIRECT_URIS` (required when `NODE_ENV=production`). Set **`MCP_STATELESS=true`** so `remember`/`recall` survive redeploys without stale `mcp-session-id`.
+**Production deploy:** keep **one Railway replica** for `mcp.memxus.com` until shared MCP session storage exists. Set `ALLOWED_REDIRECT_URIS` (required when `NODE_ENV=production`). Set **`MCP_STATELESS=false`** (or unset) — Claude web, Smithery, and Glama require **stateful** MCP (initialize → `mcp-session-id` → tools/list + GET SSE).
 
-### Claude troubleshooting (DCR / reconnect)
+### Claude troubleshooting (DCR / reconnect / tools)
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
+| Connected but tools fail to reload | `MCP_STATELESS=true` on Railway (wrapper blocked multi-request flow) | Set **`MCP_STATELESS=false`**, redeploy, disconnect/reconnect Memxus in Claude |
 | `Couldn't register with sign-in service` | DCR rejected `client_secret_post` from Anthropic broker (metadata advertised ChatGPT auth) | Deploy current RemoteMCP: DCR always persists `none`; metadata lists only `none` |
-| `remember` fails after deploy while connector shows connected | Stale MCP session | `MCP_STATELESS=true` on Railway; reconnect if needed |
+| `remember` fails after deploy while connector shows connected | Stale MCP session (in-memory, lost on redeploy) | Toggle Memxus connector off/on in Claude (stateful mode) |
 
 DCR smoke (Claude-like payload):
 

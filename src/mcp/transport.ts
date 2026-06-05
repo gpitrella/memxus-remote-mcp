@@ -16,7 +16,13 @@ interface Session {
 const sessions = new Map<string, Session>();
 
 const SESSION_TTL_MS = Number(process.env.MCP_SESSION_TTL_MS ?? 60 * 60 * 1000);
-const MCP_STATELESS = process.env.MCP_STATELESS === 'true';
+
+let mcpStatelessOverride: boolean | undefined;
+
+function isMcpStateless(): boolean {
+  if (mcpStatelessOverride !== undefined) return mcpStatelessOverride;
+  return process.env.MCP_STATELESS === 'true';
+}
 
 function pruneIdleSessions(): void {
   const now = Date.now();
@@ -36,16 +42,41 @@ function sessionJsonError(res: Response, message: string, code = -32000): void {
   });
 }
 
+function methodNotAllowed(res: Response, message: string): void {
+  res.status(405).json({
+    jsonrpc: '2.0',
+    error: { code: -32000, message },
+    id: null,
+  });
+}
+
 function touchSession(session: Session): void {
   session.lastActivityAt = Date.now();
 }
 
-export async function handleMcp(req: AuthedRequest, res: Response): Promise<void> {
-  if (!req.userId) {
-    sendMcpUnauthorized(res);
-    return;
-  }
+function createServerContext(req: AuthedRequest) {
+  return {
+    userId: req.userId!,
+    apiKeyId: req.apiKeyId,
+    workforceWorkspaceId: req.workforceWorkspaceId,
+  };
+}
 
+async function handleStatelessPost(req: AuthedRequest, res: Response): Promise<void> {
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+    enableJsonResponse: true,
+  });
+  const server = createMCPServer(createServerContext(req));
+  await server.connect(transport);
+  try {
+    await transport.handleRequest(req, res, req.body);
+  } finally {
+    await transport.close().catch(() => undefined);
+  }
+}
+
+async function handleStatefulPost(req: AuthedRequest, res: Response): Promise<void> {
   pruneIdleSessions();
 
   const sessionIdHeader = req.headers['mcp-session-id'];
@@ -62,9 +93,9 @@ export async function handleMcp(req: AuthedRequest, res: Response): Promise<void
       return;
     }
 
-    const newSessionId = MCP_STATELESS ? undefined : randomUUID();
+    const newSessionId = randomUUID();
     const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: MCP_STATELESS ? undefined : () => newSessionId!,
+      sessionIdGenerator: () => newSessionId,
       onsessioninitialized: (id) => {
         sessions.set(id, {
           transport,
@@ -77,21 +108,14 @@ export async function handleMcp(req: AuthedRequest, res: Response): Promise<void
     transport.onclose = () => {
       if (transport.sessionId) sessions.delete(transport.sessionId);
     };
-    const server = createMCPServer({
-      userId: req.userId,
-      apiKeyId: req.apiKeyId,
-      workforceWorkspaceId: req.workforceWorkspaceId,
-    });
+    const server = createMCPServer(createServerContext(req));
     await server.connect(transport);
     session = {
       transport,
-      userId: req.userId,
+      userId: req.userId!,
       apiKeyId: req.apiKeyId,
       lastActivityAt: Date.now(),
     };
-    if (MCP_STATELESS && transport.sessionId) {
-      sessions.set(transport.sessionId, session);
-    }
   } else {
     touchSession(session);
   }
@@ -99,9 +123,28 @@ export async function handleMcp(req: AuthedRequest, res: Response): Promise<void
   await session.transport.handleRequest(req, res, req.body);
 }
 
+export async function handleMcp(req: AuthedRequest, res: Response): Promise<void> {
+  if (!req.userId) {
+    sendMcpUnauthorized(res);
+    return;
+  }
+
+  if (isMcpStateless()) {
+    await handleStatelessPost(req, res);
+    return;
+  }
+
+  await handleStatefulPost(req, res);
+}
+
 export async function handleMcpGet(req: AuthedRequest, res: Response): Promise<void> {
   if (!req.userId) {
     sendMcpUnauthorized(res);
+    return;
+  }
+
+  if (isMcpStateless()) {
+    methodNotAllowed(res, 'Method Not Allowed: SSE not supported in stateless MCP mode');
     return;
   }
 
@@ -124,6 +167,11 @@ export async function handleMcpDelete(req: AuthedRequest, res: Response): Promis
     return;
   }
 
+  if (isMcpStateless()) {
+    methodNotAllowed(res, 'Method Not Allowed: session DELETE not supported in stateless MCP mode');
+    return;
+  }
+
   const sessionIdHeader = req.headers['mcp-session-id'];
   const sessionId = Array.isArray(sessionIdHeader) ? sessionIdHeader[0] : sessionIdHeader;
   const session = sessionId ? sessions.get(sessionId) : undefined;
@@ -139,3 +187,11 @@ export async function handleMcpDelete(req: AuthedRequest, res: Response): Promis
 export function _resetSessionsForTest(): void {
   sessions.clear();
 }
+
+export const _test = {
+  resetSessions: _resetSessionsForTest,
+  setStatelessMode: (value: boolean | undefined) => {
+    mcpStatelessOverride = value;
+  },
+  isStatelessMode: isMcpStateless,
+};
