@@ -1,11 +1,12 @@
 import { config } from '../config.js';
 
-/** Anthropic + local dev origins for browser MCP clients (Claude Connectors Directory). */
+/** Anthropic, Glama Inspector, and local dev origins for browser MCP clients. */
 export const DEFAULT_MCP_ORIGIN_ALLOWLIST = [
   'https://claude.ai',
   'https://claude.com',
   'https://claudedesktop.anthropic.com',
   'https://api.anthropic.com',
+  'https://glama.ai',
   'http://localhost:3000',
   'http://localhost:3002',
 ] as const;

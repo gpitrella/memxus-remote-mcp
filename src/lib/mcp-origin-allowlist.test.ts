@@ -8,6 +8,10 @@ test('isMcpOriginAllowed accepts default Anthropic origins', () => {
   }
 });
 
+test('isMcpOriginAllowed accepts Glama Inspector origin', () => {
+  assert.equal(isMcpOriginAllowed('https://glama.ai'), true);
+});
+
 test('isMcpOriginAllowed rejects unknown origin', () => {
   assert.equal(isMcpOriginAllowed('https://evil.example'), false);
 });

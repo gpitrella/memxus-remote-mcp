@@ -32,7 +32,7 @@ const schema = z.object({
     ),
   CORS_ORIGINS: z
     .string()
-    .default('https://claude.ai,https://claude.com,https://api.anthropic.com')
+    .default('https://claude.ai,https://claude.com,https://api.anthropic.com,https://glama.ai')
     .transform((s) =>
       s
         .split(',')
