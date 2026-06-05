@@ -1,6 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { MCP_TOOLS } from './tool-schemas.js';
+import { createMCPServer } from './server.js';
+
+async function withTestClient(fn: (client: Client) => Promise<void>): Promise<void> {
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const server = createMCPServer({ userId: 'test-user' });
+  const client = new Client({ name: 'memxus-server-test', version: '1.0.0' });
+  await server.connect(serverTransport);
+  await client.connect(clientTransport);
+  try {
+    await fn(client);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+}
 
 const TOOL_NAMES = [
   'remember',
@@ -120,4 +137,37 @@ test('get_memory requires memory_id', () => {
   assert.ok(getMemory);
   const schema = getMemory!.inputSchema as { required?: string[] };
   assert.deepEqual(schema.required, ['memory_id']);
+});
+
+test('listResourceTemplates returns empty array for Glama Inspector compatibility', async () => {
+  await withTestClient(async (client) => {
+    const result = await client.listResourceTemplates();
+    assert.deepEqual(result.resourceTemplates, []);
+  });
+});
+
+test('listPrompts returns empty array for Glama Inspector compatibility', async () => {
+  await withTestClient(async (client) => {
+    const result = await client.listPrompts();
+    assert.deepEqual(result.prompts, []);
+  });
+});
+
+test('listResources still exposes memory://recent', async () => {
+  await withTestClient(async (client) => {
+    const result = await client.listResources();
+    assert.equal(result.resources.length, 1);
+    assert.equal(result.resources[0]?.uri, 'memory://recent');
+  });
+});
+
+test('listTools still exposes 8 tools', async () => {
+  await withTestClient(async (client) => {
+    const result = await client.listTools();
+    assert.equal(result.tools.length, 8);
+    assert.deepEqual(
+      result.tools.map((tool) => tool.name),
+      [...TOOL_NAMES]
+    );
+  });
 });

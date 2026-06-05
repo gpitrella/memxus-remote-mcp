@@ -3,6 +3,8 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
+  ListPromptsRequestSchema,
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
@@ -52,12 +54,19 @@ export function createMCPServer(ctx: McpContext): Server {
   const { userId, apiKeyId, workforceWorkspaceId } = ctx;
   const server = new Server(
     { name: 'aimemory-remote', version: '1.0.0' },
-    { capabilities: { tools: {}, resources: {} } }
+    { capabilities: { tools: {}, resources: {}, prompts: {} } }
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: MCP_TOOLS }));
 
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: RESOURCES }));
+
+  // Glama Inspector probes optional MCP methods; empty lists avoid -32601 Method not found.
+  server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
+    resourceTemplates: [],
+  }));
+
+  server.setRequestHandler(ListPromptsRequestSchema, async () => ({ prompts: [] }));
 
   server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
     const html = await readResource(req.params.uri, userId);

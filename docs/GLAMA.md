@@ -36,6 +36,22 @@ curl -s -X POST https://mcp.memxus.com/oauth/register \
 # Expect 201
 ```
 
+## MCP Inspector tabs
+
+| Tab | Supported | Notes |
+|-----|-----------|-------|
+| Tools | Yes | 8 tools; use `memory_stats` or `list_collections` to smoke-test |
+| Resources | Yes | `memory://recent` |
+| Resource Templates | Yes (empty) | Returns `[]`; Memxus has no template resources |
+| Prompts | Yes (empty) | Returns `[]`; Memxus has no MCP prompts |
+| Tasks | No | Not implemented |
+
+## Railway logs: `GET /mcp` → 409
+
+HTTP **409 Conflict** on `GET /mcp` is expected when a proxy opens a second SSE stream for the same `mcp-session-id`. Memxus follows the Streamable HTTP spec (one SSE stream per session). This does **not** indicate OAuth failure if `tools/list` already works.
+
+Keep **one Railway replica** and `MCP_STATELESS=false` (or unset) for Glama, Claude, and Smithery.
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
@@ -43,6 +59,8 @@ curl -s -X POST https://mcp.memxus.com/oauth/register \
 | `invalid_redirect_uri` | Extension or wrong callback | Official Glama callback; incognito without redirect extensions |
 | OAuth succeeds but no tools | Stale session / wrong user | Same Google account as dashboard; reconnect MCP |
 | `invalid_target` on token | Wrong `resource` parameter | Client must send `https://mcp.memxus.com/mcp` or omit `resource` |
+| `-32601 Method not found` on Resource Templates | Old deploy without empty handlers | Redeploy current RemoteMCP-AIMemory |
+| Connection Test fails but Inspector tools work | Glama proxy SSE 409 noise | Ignore if `tools/list` and tool calls succeed |
 
 ## Regression: Claude and ChatGPT
 
