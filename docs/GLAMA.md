@@ -86,7 +86,9 @@ Keep **one Railway replica** and `MCP_STATELESS=false` (or unset) for Glama, Cla
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
 | Inspector **OAuth Required** after 302 in logs | OAuth started but not finished | Click Authenticate again; complete Google login on dashboard |
-| `invalid_redirect_uri` | Extension or wrong callback | Official Glama callback; incognito without redirect extensions |
+| `POST /oauth/token` **redirect_uri mismatch** | Token sent loopback; authorize used glama.ai callback | Redeploy `redirect-allowlist.ts` Glama cross-match; retry Authenticate |
+| `invalid_redirect_uri` with `redirect_uri=glama.ai/.../inspector/...` | Client DCR registered only app callback (Connectors vs Inspector) | Redeploy Glama cross-match fix; or disconnect/reconnect OAuth in Glama |
+| `invalid_redirect_uri` with `127.0.0.1` | OAuth redirect extension | Incognito without redirect extensions; use official Glama callback |
 | OAuth succeeds but no tools | Stale session / wrong user | Same Google account as dashboard; reconnect MCP |
 | `invalid_target` on token | Wrong `resource` parameter | Client must send `https://mcp.memxus.com/mcp` or omit `resource` |
 | `-32601 Method not found` on Resource Templates | Old deploy without empty handlers | Redeploy current RemoteMCP-AIMemory |

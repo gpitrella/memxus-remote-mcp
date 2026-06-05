@@ -25,6 +25,19 @@ export function isLoopbackMcpCallback(uri: string): boolean {
   }
 }
 
+function isGlamaOfficialRedirect(uri: string): boolean {
+  return uri === GLAMA_APP_REDIRECT_URI || uri === GLAMA_INSPECTOR_REDIRECT_URI;
+}
+
+function hasGlamaOfficialRedirect(registered: string[]): boolean {
+  return registered.some(isGlamaOfficialRedirect);
+}
+
+/** Glama Connectors and Inspector share OAuth clients but use different official callbacks. */
+function glamaOfficialCrossMatch(a: string, b: string): boolean {
+  return isGlamaOfficialRedirect(a) && isGlamaOfficialRedirect(b);
+}
+
 /** Same loopback host + path; port differences are ignored (Claude Code DCR). */
 export function loopbackRedirectUrisMatch(a: string, b: string): boolean {
   if (!isLoopbackMcpCallback(a) || !isLoopbackMcpCallback(b)) return false;
@@ -64,14 +77,18 @@ export function filterAllowedRedirectUris(uris: string[]): {
   return { allowed, rejected };
 }
 
-/** Exact match, or loopback callback with port-agnostic comparison. */
+/** Exact match, loopback port-agnostic, or Glama app/inspector cross-match. */
 export function redirectUrisMatch(requested: string, registered: string): boolean {
   if (requested === registered) return true;
-  return loopbackRedirectUrisMatch(requested, registered);
+  if (loopbackRedirectUrisMatch(requested, registered)) return true;
+  if (glamaOfficialCrossMatch(requested, registered)) return true;
+  return false;
 }
 
 export function isRedirectUriRegistered(requested: string, registered: string[]): boolean {
-  return registered.some((r) => redirectUrisMatch(requested, r));
+  if (registered.some((r) => redirectUrisMatch(requested, r))) return true;
+  if (isLoopbackMcpCallback(requested) && hasGlamaOfficialRedirect(registered)) return true;
+  return false;
 }
 
 export function validateRedirectUris(uris: string[]): string | null {

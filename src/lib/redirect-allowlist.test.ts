@@ -10,6 +10,11 @@ import {
   redirectUrisMatch,
   validateRedirectUris,
 } from './redirect-allowlist.js';
+import {
+  CLAUDE_REDIRECT_URIS,
+  GLAMA_APP_REDIRECT_URI,
+  GLAMA_INSPECTOR_REDIRECT_URI,
+} from '../oauth/client-routes.js';
 import { config } from '../config.js';
 
 test('isLoopbackMcpCallback accepts localhost and 127.0.0.1 with /callback', () => {
@@ -50,6 +55,30 @@ test('isRedirectUriRegistered matches loopback with different ports', () => {
   assert.equal(isRedirectUriRegistered('http://127.0.0.1:61789/callback', registered), true);
   assert.equal(isRedirectUriRegistered('https://claude.ai/api/mcp/auth_callback', registered), true);
   assert.equal(isRedirectUriRegistered('https://evil.example/callback', registered), false);
+});
+
+test('redirectUrisMatch cross-matches Glama app and inspector callbacks', () => {
+  assert.equal(redirectUrisMatch(GLAMA_INSPECTOR_REDIRECT_URI, GLAMA_APP_REDIRECT_URI), true);
+  assert.equal(redirectUrisMatch(GLAMA_APP_REDIRECT_URI, GLAMA_INSPECTOR_REDIRECT_URI), true);
+});
+
+test('isRedirectUriRegistered accepts Glama inspector when client registered app callback', () => {
+  assert.equal(isRedirectUriRegistered(GLAMA_INSPECTOR_REDIRECT_URI, [GLAMA_APP_REDIRECT_URI]), true);
+  assert.equal(isRedirectUriRegistered(GLAMA_APP_REDIRECT_URI, [GLAMA_INSPECTOR_REDIRECT_URI]), true);
+});
+
+test('isRedirectUriRegistered accepts Glama loopback when client has official callback', () => {
+  assert.equal(
+    isRedirectUriRegistered('http://127.0.0.1:17341/callback', [GLAMA_INSPECTOR_REDIRECT_URI]),
+    true
+  );
+});
+
+test('isRedirectUriRegistered rejects loopback for non-Glama clients', () => {
+  assert.equal(
+    isRedirectUriRegistered('http://127.0.0.1:17341/callback', [CLAUDE_REDIRECT_URIS[0]]),
+    false
+  );
 });
 
 test('isKnownMcpRedirectUri includes Smithery run and Connect callbacks', () => {
