@@ -1,6 +1,13 @@
 import { isChatGptOAuthClient } from './chatgpt-client.js';
 
-export const SMITHERY_REDIRECT_URI = 'https://smithery.run/oauth/callback';
+/** Smithery CLI/setup and Smithery Connect upstream OAuth callbacks (exact URIs only). */
+export const SMITHERY_REDIRECT_URIS = [
+  'https://smithery.run/oauth/callback',
+  'https://smithery.ai/oauth/callback',
+  'https://smithery.ai/connect/callback',
+] as const;
+
+export const SMITHERY_REDIRECT_URI = SMITHERY_REDIRECT_URIS[0];
 export const GLAMA_APP_REDIRECT_URI = 'https://glama.ai/api/app/mcp/oauth/callback';
 export const GLAMA_INSPECTOR_REDIRECT_URI = 'https://glama.ai/mcp/inspector/oauth/callback';
 
@@ -10,7 +17,7 @@ export const CLAUDE_REDIRECT_URIS = [
 ] as const;
 
 export function isSmitheryRedirectUri(uri: string): boolean {
-  return uri === SMITHERY_REDIRECT_URI;
+  return (SMITHERY_REDIRECT_URIS as readonly string[]).includes(uri);
 }
 
 export function isGlamaAppRedirectUri(uri: string): boolean {

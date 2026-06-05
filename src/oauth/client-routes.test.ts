@@ -4,6 +4,7 @@ import {
   CLAUDE_REDIRECT_URIS,
   GLAMA_APP_REDIRECT_URI,
   SMITHERY_REDIRECT_URI,
+  SMITHERY_REDIRECT_URIS,
   acceptsHtmlResponse,
   apiKeyNameForOAuthClient,
   isClaudeRedirectUri,
@@ -14,6 +15,9 @@ import {
 } from './client-routes.js';
 
 test('redirect URI classifiers', () => {
+  for (const uri of SMITHERY_REDIRECT_URIS) {
+    assert.equal(isSmitheryRedirectUri(uri), true, uri);
+  }
   assert.equal(isSmitheryRedirectUri(SMITHERY_REDIRECT_URI), true);
   assert.equal(isSmitheryRedirectUri(CLAUDE_REDIRECT_URIS[0]), false);
   assert.equal(isGlamaAppRedirectUri(GLAMA_APP_REDIRECT_URI), true);

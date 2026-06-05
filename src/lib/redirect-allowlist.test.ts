@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   filterAllowedRedirectUris,
+  isKnownMcpRedirectUri,
   isLoopbackMcpCallback,
   isRedirectUriAllowed,
   isRedirectUriRegistered,
@@ -49,6 +50,12 @@ test('isRedirectUriRegistered matches loopback with different ports', () => {
   assert.equal(isRedirectUriRegistered('http://127.0.0.1:61789/callback', registered), true);
   assert.equal(isRedirectUriRegistered('https://claude.ai/api/mcp/auth_callback', registered), true);
   assert.equal(isRedirectUriRegistered('https://evil.example/callback', registered), false);
+});
+
+test('isKnownMcpRedirectUri includes Smithery run and Connect callbacks', () => {
+  assert.equal(isKnownMcpRedirectUri('https://smithery.run/oauth/callback'), true);
+  assert.equal(isKnownMcpRedirectUri('https://smithery.ai/oauth/callback'), true);
+  assert.equal(isKnownMcpRedirectUri('https://smithery.ai/connect/callback'), true);
 });
 
 test('filterAllowedRedirectUris keeps Claude and loopback, drops unknown', () => {

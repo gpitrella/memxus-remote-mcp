@@ -18,6 +18,19 @@ function newClientId(): string {
   return `aimem_${randomBytes(16).toString('hex')}`;
 }
 
+function firstZodIssueMessage(err: z.ZodError): string {
+  const issue = err.issues[0];
+  if (!issue) return 'invalid client metadata';
+  const path = issue.path.length > 0 ? `${issue.path.join('.')}: ` : '';
+  return `${path}${issue.message}`;
+}
+
+function logDcrRejection(details: Record<string, unknown>): void {
+  if (process.env.NODE_ENV !== 'production') return;
+  // eslint-disable-next-line no-console
+  console.info('[oauth/register] rejected', details);
+}
+
 /** DCR registers public MCP clients only (PKCE, no client_secret). */
 export function dcrPersistedAuthMethod(requested: string | undefined): 'none' {
   if (requested !== undefined && requested !== 'none' && process.env.NODE_ENV === 'production') {
@@ -34,12 +47,15 @@ export const _test = {
   newClientId,
   filterAllowedRedirectUris,
   dcrPersistedAuthMethod,
+  firstZodIssueMessage,
 };
 
 export async function register(req: Request, res: Response): Promise<void> {
   const parsed = registerSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
-    res.status(400).json({ error: 'invalid_client_metadata' });
+    const error_description = firstZodIssueMessage(parsed.error);
+    logDcrRejection({ error: 'invalid_client_metadata', error_description });
+    res.status(400).json({ error: 'invalid_client_metadata', error_description });
     return;
   }
 
@@ -47,9 +63,16 @@ export async function register(req: Request, res: Response): Promise<void> {
   const { allowed, rejected } = filterAllowedRedirectUris(redirect_uris);
 
   if (allowed.length === 0) {
+    const sample = rejected[0] ?? 'unknown';
+    const error_description = `redirect_uri not allowed: ${sample}`;
+    logDcrRejection({
+      error: 'invalid_redirect_uri',
+      error_description,
+      rejected_count: rejected.length,
+    });
     res.status(400).json({
       error: 'invalid_redirect_uri',
-      error_description: `redirect_uri not allowed: ${rejected[0] ?? 'unknown'}`,
+      error_description,
     });
     return;
   }

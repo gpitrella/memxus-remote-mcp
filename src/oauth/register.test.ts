@@ -59,6 +59,20 @@ test('DCR schema accepts Claude-like RFC7591 payload', () => {
   assert.equal(res.success, true);
 });
 
+test('filterAllowedRedirectUris keeps Smithery Connect callbacks', () => {
+  const smitheryAi = 'https://smithery.ai/oauth/callback';
+  const { allowed } = _test.filterAllowedRedirectUris([smitheryAi]);
+  assert.ok(allowed.includes(smitheryAi));
+});
+
+test('firstZodIssueMessage describes missing redirect_uris', () => {
+  const res = _test.registerSchema.safeParse({});
+  assert.equal(res.success, false);
+  if (res.success) return;
+  const msg = _test.firstZodIssueMessage(res.error);
+  assert.match(msg, /redirect_uris/i);
+});
+
 test('filterAllowedRedirectUris keeps Claude and loopback from Claude DCR payload', () => {
   const { allowed, rejected } = _test.filterAllowedRedirectUris([
     'https://claude.ai/api/mcp/auth_callback',

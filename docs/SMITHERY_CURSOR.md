@@ -36,7 +36,7 @@ Railway **MCP-AIMemory** service:
 |----------|----------|
 | `MCP_PUBLIC_URL` | `https://mcp.memxus.com` (no trailing slash) |
 | `DASHBOARD_URL` | `https://dashboard.memxus.com` |
-| `ALLOWED_REDIRECT_URIS` | Must include `https://smithery.run/oauth/callback` |
+| `ALLOWED_REDIRECT_URIS` | Must include `https://smithery.run/oauth/callback` (Smithery Connect `smithery.ai` callbacks are also allowed via built-in known URIs) |
 
 Smoke checks (after deploy):
 
@@ -63,7 +63,7 @@ curl -s -X POST https://mcp.memxus.com/oauth/register \
 |---------|--------------|-----|
 | `auth_required` / Needs authentication | OAuth not finished | Complete setup URL; restart Cursor |
 | `upstream_auth_failed` on smithery.ai/connect | Smithery Connect may not open browser to `authorization_endpoint` (dashboard Google sign-in) | Redeploy RemoteMCP; complete [setup URL](https://smithery.run/memxus/memxus/setup) in incognito; escalate to Smithery if DCR 201 but Connect still fails |
-| `Connection failed` on smithery.ai/connect | Extension redirect or stale deploy | Incognito; confirm deploy includes RFC 9728 fix |
+| `Connection failed` on smithery.ai/connect | DCR rejected unknown `redirect_uri` or extension redirect | Redeploy with Smithery Connect allowlist; incognito; check Railway `[oauth/register] rejected` logs |
 | `couldn't authenticate with upstream server` | Token not issued or dashboard login failed | Same Google account as dashboard; user must exist in DB |
 | Duplicate MCP entries | Manual Bearer + Smithery | Keep only Smithery `memxus` in `~/.cursor/mcp.json` |
 | 8 tools missing after connect | Stale Cursor session | Toggle MCP off/on or restart Cursor |
