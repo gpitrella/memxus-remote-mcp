@@ -11,6 +11,18 @@ Glama uses the same OAuth authorization server as Claude (`mcp.memxus.com`). Aft
 
 Both must appear in Railway `ALLOWED_REDIRECT_URIS` (or be registered via DCR). They are also included in the built-in `KNOWN_MCP_REDIRECT_URIS` allowlist in code, so DCR works even if omitted from env.
 
+## Railway env vars (required in production)
+
+| Variable | Example value |
+|----------|---------------|
+| `ALLOWED_REDIRECT_URIS` | Include both Glama callbacks above + Claude/Smithery |
+| `CORS_ORIGINS` | `https://claude.ai,https://claude.com,https://api.anthropic.com,https://glama.ai` |
+| `MCP_ORIGIN_ALLOWLIST` | `https://claude.ai,https://claude.com,https://claudedesktop.anthropic.com,https://api.anthropic.com,https://glama.ai` |
+
+Set **`MCP_ORIGIN_ALLOWLIST`** before deploy — the service fails to start in production if it is missing.
+
+OAuth metadata advertises `refresh_token`; token responses include `refresh_token` for Glama proxy session persistence.
+
 ## Connect in Glama (Connectors)
 
 1. Add Memxus MCP in Glama with URL `https://mcp.memxus.com/mcp`.
@@ -85,6 +97,7 @@ Keep **one Railway replica** and `MCP_STATELESS=false` (or unset) for Glama, Cla
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
+| **Authentication Successful** popup but Inspector **OAuth Required** | Token exchange failed or Glama proxy did not persist token | Check Railway for `POST /oauth/token` and `[oauth/token]` logs; redeploy with refresh_token support |
 | Inspector **OAuth Required** after 302 in logs | OAuth started but not finished | Click Authenticate again; complete Google login on dashboard |
 | `POST /oauth/token` **redirect_uri mismatch** | Token sent loopback; authorize used glama.ai callback | Redeploy `redirect-allowlist.ts` Glama cross-match; retry Authenticate |
 | `invalid_redirect_uri` with `redirect_uri=glama.ai/.../inspector/...` | Client DCR registered only app callback (Connectors vs Inspector) | Redeploy Glama cross-match fix; or disconnect/reconnect OAuth in Glama |

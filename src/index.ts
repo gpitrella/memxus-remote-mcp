@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { config } from './config.js';
+import { config, getEffectiveCorsOrigins } from './config.js';
 import { health } from './routes/health.js';
 import { glamaWellKnown } from './routes/glama-well-known.js';
 import {
@@ -24,7 +24,7 @@ app.use(helmet({ contentSecurityPolicy: false }));
 
 app.use(
   cors({
-    origin: config.CORS_ORIGINS,
+    origin: getEffectiveCorsOrigins(),
     methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'mcp-session-id'],
     exposedHeaders: ['mcp-session-id'],

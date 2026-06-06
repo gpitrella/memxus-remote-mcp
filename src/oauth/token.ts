@@ -8,10 +8,63 @@ import { apiKeyNameForOAuthClient } from './client-routes.js';
 import { isChatGptPkceBypass, resolveTokenRequirements } from './chatgpt-client.js';
 import { isRedirectUriRegistered, redirectUrisMatch } from '../lib/redirect-allowlist.js';
 import { validateOptionalResource } from './resource.js';
+import { resolveRefreshTokenGrant } from './refresh-token-grant.js';
+
+function logTokenRequest(body: Record<string, string | undefined>): void {
+  if (process.env.NODE_ENV !== 'production') return;
+  // eslint-disable-next-line no-console
+  console.info('[oauth/token]', {
+    grant_type: body.grant_type,
+    client_id: body.client_id,
+    has_code: Boolean(body.code),
+    has_refresh: Boolean(body.refresh_token),
+  });
+}
+
+function sendTokenResponse(res: Response, accessToken: string, scope: string): void {
+  res.json({
+    access_token: accessToken,
+    token_type: 'Bearer',
+    expires_in: config.TOKEN_TTL_SECONDS,
+    refresh_token: accessToken,
+    scope,
+  });
+}
+
+async function handleRefreshTokenGrant(
+  res: Response,
+  body: Record<string, string | undefined>
+): Promise<void> {
+  const refresh_token = body.refresh_token;
+  const client_id = body.client_id;
+  if (!refresh_token || !client_id) {
+    res.status(400).json({ error: 'invalid_request' });
+    return;
+  }
+
+  const result = await resolveRefreshTokenGrant(refresh_token, client_id);
+  if (!result.ok) {
+    const status = result.error === 'server_error' ? 500 : 400;
+    res.status(status).json({
+      error: result.error,
+      ...(result.error_description ? { error_description: result.error_description } : {}),
+    });
+    return;
+  }
+
+  sendTokenResponse(res, result.accessToken, result.scope);
+}
 
 export async function token(req: Request, res: Response): Promise<void> {
   const body = (req.body ?? {}) as Record<string, string | undefined>;
+  logTokenRequest(body);
+
   const grant_type = body.grant_type;
+  if (grant_type === 'refresh_token') {
+    await handleRefreshTokenGrant(res, body);
+    return;
+  }
+
   const code = body.code;
   const code_verifier = body.code_verifier;
   const client_id = body.client_id;
@@ -130,10 +183,5 @@ export async function token(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  res.json({
-    access_token: apiKey,
-    token_type: 'Bearer',
-    expires_in: config.TOKEN_TTL_SECONDS,
-    scope: consumed.scope,
-  });
+  sendTokenResponse(res, apiKey, consumed.scope);
 }

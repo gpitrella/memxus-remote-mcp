@@ -9,7 +9,7 @@ export function authorizationServerMetadata(_req: Request, res: Response): void 
     token_endpoint: `${config.MCP_PUBLIC_URL}/oauth/token`,
     registration_endpoint: `${config.MCP_PUBLIC_URL}/oauth/register`,
     response_types_supported: ['code'],
-    grant_types_supported: ['authorization_code'],
+    grant_types_supported: ['authorization_code', 'refresh_token'],
     code_challenge_methods_supported: ['S256'],
     // DCR is for public MCP clients (Claude, Smithery, Glama). ChatGPT uses pre-provisioned client + secret at /token.
     token_endpoint_auth_methods_supported: ['none'],

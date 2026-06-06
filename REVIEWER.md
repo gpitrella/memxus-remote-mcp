@@ -120,7 +120,15 @@ After a Railway deploy or long idle period, Cursor may log:
 
 Maintainers: `npm run test:smoke` in RemoteMCP-AIMemory (requires `MEMXUS_API_KEY`).
 
-**Production deploy:** keep **one Railway replica** for `mcp.memxus.com` until shared MCP session storage exists. Set `ALLOWED_REDIRECT_URIS` (required when `NODE_ENV=production`). Set **`MCP_STATELESS=false`** (or unset) — Claude web, Smithery, and Glama require **stateful** MCP (initialize → `mcp-session-id` → tools/list + GET SSE).
+**Production deploy:** keep **one Railway replica** for `mcp.memxus.com` until shared MCP session storage exists. Required Railway env when `NODE_ENV=production`:
+
+| Variable | Purpose |
+|----------|---------|
+| `ALLOWED_REDIRECT_URIS` | OAuth redirect allowlist (DCR + authorize) |
+| `CORS_ORIGINS` | Browser CORS for `/oauth/*` and `/mcp` (include `https://glama.ai`) |
+| `MCP_ORIGIN_ALLOWLIST` | Origin gate for `/mcp` only (include `https://glama.ai`) |
+
+Set **`MCP_STATELESS=false`** (or unset) — Claude web, Smithery, and Glama require **stateful** MCP (initialize → `mcp-session-id` → tools/list + GET SSE).
 
 ### Claude troubleshooting (DCR / reconnect / tools)
 
@@ -189,13 +197,20 @@ curl -s -D - -o /dev/null -X POST https://mcp.memxus.com/mcp \
 # Expect 401 (not 403 origin_not_allowed) + WWW-Authenticate
 
 curl -s -D - -o /dev/null -X POST https://mcp.memxus.com/mcp \
+  -H "Origin: https://glama.ai" -H "Content-Type: application/json" -d "{}"
+# Expect 401 (not 403 origin_not_allowed) + WWW-Authenticate
+
+curl -s -D - -o /dev/null -X POST https://mcp.memxus.com/mcp \
   -H "Origin: https://evil.example" -H "Content-Type: application/json" -d "{}"
 # Expect 403 {"error":"origin_not_allowed"}
+
+curl -s https://mcp.memxus.com/.well-known/oauth-authorization-server/mcp | grep refresh_token
+# Expect refresh_token in grant_types_supported
 ```
 
 Both metadata endpoints should return JSON with authorization/token endpoints under `https://mcp.memxus.com`.
 
-**Origin validation:** `POST/GET/DELETE /mcp` with a present but non-allowlisted `Origin` returns 403. Requests **without** `Origin` (Smithery, Cursor, smoke scripts) are unchanged. Optional Railway env: `MCP_ORIGIN_ALLOWLIST` (comma-separated); when empty, built-in Anthropic defaults apply.
+**Origin validation:** `POST/GET/DELETE /mcp` with a present but non-allowlisted `Origin` returns 403. Requests **without** `Origin` (Smithery, Cursor, smoke scripts) are unchanged. **`MCP_ORIGIN_ALLOWLIST`** and **`CORS_ORIGINS`** are required in production (see table above).
 
 ## Glama connector claim
 

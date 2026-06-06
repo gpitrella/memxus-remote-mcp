@@ -13,6 +13,19 @@ function normalizeEnvUrl(raw: unknown): unknown {
 
 const envUrl = z.preprocess(normalizeEnvUrl, z.string().url());
 
+/** Canonical browser origins for MCP marketplaces (Railway / .env.example). */
+export const CANONICAL_CORS_ORIGINS = [
+  'https://claude.ai',
+  'https://claude.com',
+  'https://api.anthropic.com',
+  'https://glama.ai',
+] as const;
+
+export const CANONICAL_MCP_ORIGIN_ALLOWLIST = [
+  ...CANONICAL_CORS_ORIGINS,
+  'https://claudedesktop.anthropic.com',
+] as const;
+
 const schema = z.object({
   PORT: z.coerce.number().default(3002),
   MCP_PUBLIC_URL: envUrl,
@@ -32,14 +45,14 @@ const schema = z.object({
     ),
   CORS_ORIGINS: z
     .string()
-    .default('https://claude.ai,https://claude.com,https://api.anthropic.com,https://glama.ai')
+    .default('')
     .transform((s) =>
       s
         .split(',')
         .map((x) => x.trim())
         .filter(Boolean)
     ),
-  /** Browser Origin allowlist for POST/GET/DELETE /mcp only (empty = built-in Anthropic defaults). */
+  /** Browser Origin allowlist for POST/GET/DELETE /mcp only. Required in production. */
   MCP_ORIGIN_ALLOWLIST: z
     .string()
     .default('')
@@ -57,12 +70,24 @@ const schema = z.object({
 
 const parsed = schema.parse(process.env);
 
-if (process.env.NODE_ENV === 'production' && parsed.ALLOWED_REDIRECT_URIS.length === 0) {
-  // eslint-disable-next-line no-console
-  console.error(
-    '[startup] ALLOWED_REDIRECT_URIS must be set in production (comma-separated OAuth redirect URIs)'
-  );
-  process.exit(1);
+if (process.env.NODE_ENV === 'production') {
+  if (parsed.ALLOWED_REDIRECT_URIS.length === 0) {
+    // eslint-disable-next-line no-console
+    console.error(
+      '[startup] ALLOWED_REDIRECT_URIS must be set in production (comma-separated OAuth redirect URIs)'
+    );
+    process.exit(1);
+  }
+  if (parsed.MCP_ORIGIN_ALLOWLIST.length === 0) {
+    // eslint-disable-next-line no-console
+    console.error('[startup] MCP_ORIGIN_ALLOWLIST must be set in production');
+    process.exit(1);
+  }
+  if (parsed.CORS_ORIGINS.length === 0) {
+    // eslint-disable-next-line no-console
+    console.error('[startup] CORS_ORIGINS must be set in production');
+    process.exit(1);
+  }
 }
 
 export const config = {
@@ -75,3 +100,10 @@ export const config = {
 };
 
 export type AppConfig = typeof config;
+
+/** Production uses env only; dev/test fall back to canonical list when unset. */
+export function getEffectiveCorsOrigins(): string[] {
+  if (config.CORS_ORIGINS.length > 0) return config.CORS_ORIGINS;
+  if (process.env.NODE_ENV !== 'production') return [...CANONICAL_CORS_ORIGINS];
+  return [];
+}
