@@ -7,7 +7,7 @@
   "icons": [
     {
       "src": "https://www.memxus.com/icon.png",
-      "sizes": "512x512"
+      "sizes":  ["512x512"]
     }
   ],
   "repository": {
