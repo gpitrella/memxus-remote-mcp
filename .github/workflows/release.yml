@@ -49,6 +49,19 @@ jobs:
         id: ver
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
 
+      - name: Sync server.json version with tag
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          node -e "
+            const fs = require('fs');
+            const p = 'server.json';
+            const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+            j.version = process.env.VERSION;
+            fs.writeFileSync(p, JSON.stringify(j, null, 2) + '\n');
+          "
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+
       - name: Extract release notes from CHANGELOG
         id: notes
         run: |
@@ -71,3 +84,20 @@ jobs:
           body_path: release-notes.md
           files: server.json
           generate_release_notes: false
+
+      - name: Download MCP Publisher
+        run: |
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/v1.0.0/mcp-publisher_1.0.0_linux_amd64.tar.gz" \
+            | tar xz mcp-publisher
+          chmod +x mcp-publisher
+
+      - name: Publish to Official MCP Registry
+        env:
+          MCP_REGISTRY_PRIVATE_KEY: ${{ secrets.MCP_REGISTRY_PRIVATE_KEY }}
+        run: |
+          if [ -z "$MCP_REGISTRY_PRIVATE_KEY" ]; then
+            echo "MCP_REGISTRY_PRIVATE_KEY not set — skipping registry publish"
+            exit 0
+          fi
+          ./mcp-publisher login dns --domain memxus.com --private-key "$MCP_REGISTRY_PRIVATE_KEY"
+          ./mcp-publisher publish

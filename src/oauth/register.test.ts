@@ -77,6 +77,13 @@ test('firstZodIssueMessage describes missing redirect_uris', () => {
   assert.match(msg, /redirect_uris/i);
 });
 
+test('filterAllowedRedirectUris keeps VS Code gallery DCR callbacks', () => {
+  for (const uri of ['https://vscode.dev/redirect', 'http://127.0.0.1:33418']) {
+    const { allowed } = _test.filterAllowedRedirectUris([uri]);
+    assert.ok(allowed.includes(uri), uri);
+  }
+});
+
 test('filterAllowedRedirectUris keeps Claude and loopback from Claude DCR payload', () => {
   const { allowed, rejected } = _test.filterAllowedRedirectUris([
     'https://claude.ai/api/mcp/auth_callback',

@@ -9,11 +9,14 @@ import {
   loopbackRedirectUrisMatch,
   redirectUrisMatch,
   validateRedirectUris,
+  vsCodeLoopbackRedirectUrisMatch,
 } from './redirect-allowlist.js';
 import {
   CLAUDE_REDIRECT_URIS,
   GLAMA_APP_REDIRECT_URI,
   GLAMA_INSPECTOR_REDIRECT_URI,
+  VS_CODE_REDIRECT_URIS,
+  isVsCodeLoopbackRedirect,
 } from '../oauth/client-routes.js';
 import { config } from '../config.js';
 
@@ -79,6 +82,41 @@ test('isRedirectUriRegistered rejects loopback for non-Glama clients', () => {
     isRedirectUriRegistered('http://127.0.0.1:17341/callback', [CLAUDE_REDIRECT_URIS[0]]),
     false
   );
+});
+
+test('isVsCodeLoopbackRedirect accepts 127.0.0.1 root path only', () => {
+  assert.equal(isVsCodeLoopbackRedirect('http://127.0.0.1:33418'), true);
+  assert.equal(isVsCodeLoopbackRedirect('http://127.0.0.1:33418/'), true);
+  assert.equal(isVsCodeLoopbackRedirect('http://127.0.0.1:54321/callback'), false);
+  assert.equal(isVsCodeLoopbackRedirect('https://vscode.dev/redirect'), false);
+});
+
+test('vsCodeLoopbackRedirectUrisMatch ignores port on root path', () => {
+  assert.equal(
+    vsCodeLoopbackRedirectUrisMatch('http://127.0.0.1:33418', 'http://127.0.0.1:61789'),
+    true
+  );
+  assert.equal(
+    vsCodeLoopbackRedirectUrisMatch('http://127.0.0.1:33418', 'http://127.0.0.1:54321/callback'),
+    false
+  );
+});
+
+test('isKnownMcpRedirectUri includes VS Code gallery callbacks', () => {
+  for (const uri of VS_CODE_REDIRECT_URIS) {
+    assert.equal(isKnownMcpRedirectUri(uri), true, uri);
+  }
+});
+
+test('isRedirectUriRegistered matches VS Code loopback with different ports', () => {
+  const registered = [VS_CODE_REDIRECT_URIS[1]];
+  assert.equal(isRedirectUriRegistered('http://127.0.0.1:61789', registered), true);
+  assert.equal(isRedirectUriRegistered('https://vscode.dev/redirect', registered), false);
+});
+
+test('redirectUrisMatch cross-matches VS Code loopback ports', () => {
+  assert.equal(redirectUrisMatch('http://127.0.0.1:61789', VS_CODE_REDIRECT_URIS[1]), true);
+  assert.equal(redirectUrisMatch('https://vscode.dev/redirect', VS_CODE_REDIRECT_URIS[0]), true);
 });
 
 test('isKnownMcpRedirectUri includes Smithery run and Connect callbacks', () => {

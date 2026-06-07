@@ -87,12 +87,45 @@ Smoke:
 curl -s https://mcp.memxus.com/.well-known/oauth-authorization-server/mcp
 ```
 
+## VS Code (OAuth — recommended from MCP gallery)
+
+1. Open **Chat: Open Customizations** → **MCP Servers** (or Extensions → search `@mcp memxus`).
+2. Click **Install** on Memxus → confirm trust.
+3. Complete OAuth (Google sign-in via dashboard when prompted).
+4. Expected: **8 tools** — remember, recall, get_context, list_memories, get_memory, list_collections, forget, memory_stats.
+
+DCR smoke (after deploy with VS Code redirect allowlist):
+
+```bash
+curl -s -X POST https://mcp.memxus.com/oauth/register \
+  -H "Content-Type: application/json" \
+  -d '{"redirect_uris":["https://vscode.dev/redirect","http://127.0.0.1:33418"],"client_name":"vscode-smoke","token_endpoint_auth_method":"none"}'
+```
+
+Registry listing: `com.memxus/memxus` on [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io).
+
 ## Cursor / VS Code (Bearer token — fallback)
 
 1. Settings → MCP → Add server.
 2. URL: `https://mcp.memxus.com/mcp`
 3. Header: `Authorization: Bearer aimem_YOUR_KEY`
 4. Expected: same **8 tools** as above.
+
+Example JSON (VS Code):
+
+```json
+{
+  "servers": {
+    "memxus": {
+      "type": "http",
+      "url": "https://mcp.memxus.com/mcp",
+      "headers": {
+        "Authorization": "Bearer aimem_YOUR_KEY"
+      }
+    }
+  }
+}
+```
 
 Example JSON (Cursor):
 

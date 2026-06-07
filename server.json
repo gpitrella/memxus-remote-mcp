@@ -2,8 +2,14 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
   "name": "com.memxus/memxus",
   "title": "Memxus",
-  "description": "Multi-platform AI memory. One save, recall everywhere—Claude, ChatGPT, Cursor, and more.",
+  "description": "Multi-platform AI memory. One save, recall everywhere—Claude, ChatGPT, Cursor, VS Code, and more.",
   "version": "1.0.0",
+  "icons": [
+    {
+      "src": "https://www.memxus.com/icon.png",
+      "sizes": "512x512"
+    }
+  ],
   "repository": {
     "url": "https://github.com/gpitrella/memxus-remote-mcp",
     "source": "github"

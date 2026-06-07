@@ -65,4 +65,8 @@ test('apiKeyNameForOAuthClient labels by redirect', () => {
     apiKeyNameForOAuthClient('aimem_abcd', CLAUDE_REDIRECT_URIS[0]),
     /^Claude /
   );
+  assert.match(
+    apiKeyNameForOAuthClient('aimem_abcd', 'https://vscode.dev/redirect'),
+    /^VS Code /
+  );
 });

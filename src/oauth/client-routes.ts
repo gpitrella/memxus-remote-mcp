@@ -18,6 +18,12 @@ export const CLAUDE_REDIRECT_URIS = [
   'https://claude.com/api/mcp/auth_callback',
 ] as const;
 
+/** VS Code Copilot MCP gallery OAuth (DCR + token exchange). */
+export const VS_CODE_REDIRECT_URIS = [
+  'https://vscode.dev/redirect',
+  'http://127.0.0.1:33418',
+] as const;
+
 export function isSmitheryRedirectUri(uri: string): boolean {
   return (SMITHERY_REDIRECT_URIS as readonly string[]).includes(uri);
 }
@@ -32,6 +38,24 @@ export function isGlamaInspectorRedirectUri(uri: string): boolean {
 
 export function isClaudeRedirectUri(uri: string): boolean {
   return (CLAUDE_REDIRECT_URIS as readonly string[]).includes(uri);
+}
+
+/** VS Code loopback OAuth uses root path (not /callback). Port may vary on token exchange. */
+export function isVsCodeLoopbackRedirect(uri: string): boolean {
+  try {
+    const u = new URL(uri);
+    if (u.protocol !== 'http:') return false;
+    if (u.hostname !== '127.0.0.1' && u.hostname !== 'localhost') return false;
+    return u.pathname === '/' || u.pathname === '';
+  } catch {
+    return false;
+  }
+}
+
+export function isVsCodeRedirectUri(uri: string): boolean {
+  return (
+    (VS_CODE_REDIRECT_URIS as readonly string[]).includes(uri) || isVsCodeLoopbackRedirect(uri)
+  );
 }
 
 /** Smithery/Glama app use browser-heavy OAuth; Claude uses the same 302 path. */
@@ -67,5 +91,6 @@ export function apiKeyNameForOAuthClient(
   if (isGlamaAppRedirectUri(redirectUri) || isGlamaInspectorRedirectUri(redirectUri)) {
     return `Glama (${clientId})`;
   }
+  if (isVsCodeRedirectUri(redirectUri)) return `VS Code (${clientId})`;
   return `Claude (${clientId})`;
 }

@@ -4,11 +4,14 @@ import {
   GLAMA_APP_REDIRECT_URI,
   GLAMA_INSPECTOR_REDIRECT_URI,
   SMITHERY_REDIRECT_URIS,
+  VS_CODE_REDIRECT_URIS,
+  isVsCodeLoopbackRedirect,
 } from '../oauth/client-routes.js';
 
 const KNOWN_MCP_REDIRECT_URIS = new Set<string>([
   ...CLAUDE_REDIRECT_URIS,
   ...SMITHERY_REDIRECT_URIS,
+  ...VS_CODE_REDIRECT_URIS,
   GLAMA_APP_REDIRECT_URI,
   GLAMA_INSPECTOR_REDIRECT_URI,
 ]);
@@ -50,6 +53,18 @@ export function loopbackRedirectUrisMatch(a: string, b: string): boolean {
   }
 }
 
+/** VS Code loopback uses root path; port differences are ignored on token exchange. */
+export function vsCodeLoopbackRedirectUrisMatch(a: string, b: string): boolean {
+  if (!isVsCodeLoopbackRedirect(a) || !isVsCodeLoopbackRedirect(b)) return false;
+  try {
+    const ua = new URL(a);
+    const ub = new URL(b);
+    return ua.hostname === ub.hostname;
+  } catch {
+    return false;
+  }
+}
+
 export function isKnownMcpRedirectUri(uri: string): boolean {
   return KNOWN_MCP_REDIRECT_URIS.has(uri);
 }
@@ -61,6 +76,7 @@ export function isRedirectUriAllowed(uri: string): boolean {
   if (allowed.includes(uri)) return true;
   if (isKnownMcpRedirectUri(uri)) return true;
   if (isLoopbackMcpCallback(uri)) return true;
+  if (isVsCodeLoopbackRedirect(uri)) return true;
   return false;
 }
 
@@ -81,6 +97,7 @@ export function filterAllowedRedirectUris(uris: string[]): {
 export function redirectUrisMatch(requested: string, registered: string): boolean {
   if (requested === registered) return true;
   if (loopbackRedirectUrisMatch(requested, registered)) return true;
+  if (vsCodeLoopbackRedirectUrisMatch(requested, registered)) return true;
   if (glamaOfficialCrossMatch(requested, registered)) return true;
   return false;
 }
