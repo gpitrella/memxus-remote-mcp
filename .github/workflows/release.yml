@@ -102,8 +102,11 @@ jobs:
           if echo "$MCP_REGISTRY_PRIVATE_KEY" | grep -q "BEGIN PRIVATE KEY"; then
             printf '%s\n' "$MCP_REGISTRY_PRIVATE_KEY" > /tmp/mcp-registry-key.pem
           elif echo "$MCP_REGISTRY_PRIVATE_KEY" | grep -q "^MC4"; then
-            printf '-----BEGIN PRIVATE KEY-----\n%s\n-----END PRIVATE KEY-----\n' \
-              "$MCP_REGISTRY_PRIVATE_KEY" > /tmp/mcp-registry-key.pem
+            {
+              echo "-----BEGIN PRIVATE KEY-----"
+              echo "$MCP_REGISTRY_PRIVATE_KEY"
+              echo "-----END PRIVATE KEY-----"
+            } > /tmp/mcp-registry-key.pem
           else
             PRIV="$MCP_REGISTRY_PRIVATE_KEY"
           fi
@@ -111,9 +114,11 @@ jobs:
             PRIV=$(openssl pkey -in /tmp/mcp-registry-key.pem -noout -text \
               | grep -A3 "priv:" | tail -n +2 | tr -d ' :\n')
           fi
+          PRIV=$(echo "$PRIV" | tr -d '[:space:]')
           if [ -z "$PRIV" ]; then
             echo "Could not derive Ed25519 private key from MCP_REGISTRY_PRIVATE_KEY"
             exit 1
           fi
+          echo "Derived registry key length: ${#PRIV} (expect 64 hex chars)"
           ./mcp-publisher login dns --domain memxus.com --private-key "$PRIV"
           ./mcp-publisher publish
