@@ -69,4 +69,8 @@ test('apiKeyNameForOAuthClient labels by redirect', () => {
     apiKeyNameForOAuthClient('aimem_abcd', 'https://vscode.dev/redirect'),
     /^VS Code /
   );
+  assert.match(
+    apiKeyNameForOAuthClient('aimem_abcd', 'http://localhost:7777/oauth/callback'),
+    /^Gemini CLI /
+  );
 });

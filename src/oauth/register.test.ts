@@ -84,6 +84,12 @@ test('filterAllowedRedirectUris keeps VS Code gallery DCR callbacks', () => {
   }
 });
 
+test('filterAllowedRedirectUris keeps Gemini CLI DCR callback', () => {
+  const uri = 'http://localhost:7777/oauth/callback';
+  const { allowed } = _test.filterAllowedRedirectUris([uri]);
+  assert.ok(allowed.includes(uri));
+});
+
 test('filterAllowedRedirectUris keeps Claude and loopback from Claude DCR payload', () => {
   const { allowed, rejected } = _test.filterAllowedRedirectUris([
     'https://claude.ai/api/mcp/auth_callback',

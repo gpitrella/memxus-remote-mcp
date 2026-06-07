@@ -104,6 +104,42 @@ curl -s -X POST https://mcp.memxus.com/oauth/register \
 
 Registry listing: `com.memxus/memxus` on [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io).
 
+## Gemini CLI (OAuth — recommended)
+
+1. Install [Gemini CLI](https://geminicli.com/docs/).
+2. Add Memxus to `~/.gemini/settings.json` (or project `.gemini/settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "memxus": {
+      "httpUrl": "https://mcp.memxus.com/mcp"
+    }
+  }
+}
+```
+
+3. Run `gemini` and authenticate: `/mcp auth memxus` (or connect when prompted after 401).
+4. Complete Google sign-in via dashboard when the browser opens.
+5. Expected: **8 tools**; API key name **Gemini CLI (...)** in dashboard after connect.
+
+Bearer fallback:
+
+```bash
+gemini mcp add --transport http memxus https://mcp.memxus.com/mcp \
+  -H "Authorization: Bearer aimem_YOUR_KEY"
+```
+
+DCR smoke (after deploy with Gemini CLI redirect allowlist):
+
+```bash
+curl -s -X POST https://mcp.memxus.com/oauth/register \
+  -H "Content-Type: application/json" \
+  -d '{"redirect_uris":["http://localhost:7777/oauth/callback"],"client_name":"gemini-cli-smoke","token_endpoint_auth_method":"none"}'
+```
+
+**Note:** Consumer Gemini at gemini.google.com does not support custom MCP. Use the [Memxus Chrome extension](https://www.memxus.com/extension) for browser capture instead.
+
 ## Cursor / VS Code (Bearer token — fallback)
 
 1. Settings → MCP → Add server.

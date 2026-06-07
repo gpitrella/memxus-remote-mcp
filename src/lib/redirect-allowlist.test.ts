@@ -10,13 +10,16 @@ import {
   redirectUrisMatch,
   validateRedirectUris,
   vsCodeLoopbackRedirectUrisMatch,
+  geminiCliLoopbackRedirectUrisMatch,
 } from './redirect-allowlist.js';
 import {
   CLAUDE_REDIRECT_URIS,
   GLAMA_APP_REDIRECT_URI,
   GLAMA_INSPECTOR_REDIRECT_URI,
   VS_CODE_REDIRECT_URIS,
+  GEMINI_CLI_REDIRECT_URIS,
   isVsCodeLoopbackRedirect,
+  isGeminiCliLoopbackRedirect,
 } from '../oauth/client-routes.js';
 import { config } from '../config.js';
 
@@ -117,6 +120,39 @@ test('isRedirectUriRegistered matches VS Code loopback with different ports', ()
 test('redirectUrisMatch cross-matches VS Code loopback ports', () => {
   assert.equal(redirectUrisMatch('http://127.0.0.1:61789', VS_CODE_REDIRECT_URIS[1]), true);
   assert.equal(redirectUrisMatch('https://vscode.dev/redirect', VS_CODE_REDIRECT_URIS[0]), true);
+});
+
+test('isGeminiCliLoopbackRedirect accepts localhost /oauth/callback only', () => {
+  assert.equal(isGeminiCliLoopbackRedirect('http://localhost:7777/oauth/callback'), true);
+  assert.equal(isGeminiCliLoopbackRedirect('http://127.0.0.1:7777/oauth/callback'), true);
+  assert.equal(isGeminiCliLoopbackRedirect('http://127.0.0.1:54321/callback'), false);
+  assert.equal(isGeminiCliLoopbackRedirect(GEMINI_CLI_REDIRECT_URIS[0]), true);
+});
+
+test('geminiCliLoopbackRedirectUrisMatch ignores port on /oauth/callback', () => {
+  assert.equal(
+    geminiCliLoopbackRedirectUrisMatch(
+      'http://localhost:8888/oauth/callback',
+      GEMINI_CLI_REDIRECT_URIS[0]
+    ),
+    true
+  );
+  assert.equal(
+    geminiCliLoopbackRedirectUrisMatch(
+      'http://127.0.0.1:7777/oauth/callback',
+      'http://localhost:7777/oauth/callback'
+    ),
+    false
+  );
+});
+
+test('isKnownMcpRedirectUri includes Gemini CLI callback', () => {
+  assert.equal(isKnownMcpRedirectUri(GEMINI_CLI_REDIRECT_URIS[0]), true);
+});
+
+test('isRedirectUriRegistered matches Gemini CLI loopback with different ports', () => {
+  const registered = [GEMINI_CLI_REDIRECT_URIS[0]];
+  assert.equal(isRedirectUriRegistered('http://localhost:8888/oauth/callback', registered), true);
 });
 
 test('isKnownMcpRedirectUri includes Smithery run and Connect callbacks', () => {

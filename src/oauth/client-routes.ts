@@ -24,6 +24,9 @@ export const VS_CODE_REDIRECT_URIS = [
   'http://127.0.0.1:33418',
 ] as const;
 
+/** Gemini CLI remote MCP OAuth (DCR + loopback callback on port 7777). */
+export const GEMINI_CLI_REDIRECT_URIS = ['http://localhost:7777/oauth/callback'] as const;
+
 export function isSmitheryRedirectUri(uri: string): boolean {
   return (SMITHERY_REDIRECT_URIS as readonly string[]).includes(uri);
 }
@@ -55,6 +58,25 @@ export function isVsCodeLoopbackRedirect(uri: string): boolean {
 export function isVsCodeRedirectUri(uri: string): boolean {
   return (
     (VS_CODE_REDIRECT_URIS as readonly string[]).includes(uri) || isVsCodeLoopbackRedirect(uri)
+  );
+}
+
+/** Gemini CLI loopback OAuth uses /oauth/callback; port may vary on token exchange. */
+export function isGeminiCliLoopbackRedirect(uri: string): boolean {
+  try {
+    const u = new URL(uri);
+    if (u.protocol !== 'http:') return false;
+    if (u.hostname !== '127.0.0.1' && u.hostname !== 'localhost') return false;
+    return u.pathname === '/oauth/callback';
+  } catch {
+    return false;
+  }
+}
+
+export function isGeminiCliRedirectUri(uri: string): boolean {
+  return (
+    (GEMINI_CLI_REDIRECT_URIS as readonly string[]).includes(uri) ||
+    isGeminiCliLoopbackRedirect(uri)
   );
 }
 
@@ -92,5 +114,6 @@ export function apiKeyNameForOAuthClient(
     return `Glama (${clientId})`;
   }
   if (isVsCodeRedirectUri(redirectUri)) return `VS Code (${clientId})`;
+  if (isGeminiCliRedirectUri(redirectUri)) return `Gemini CLI (${clientId})`;
   return `Claude (${clientId})`;
 }

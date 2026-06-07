@@ -5,13 +5,16 @@ import {
   GLAMA_INSPECTOR_REDIRECT_URI,
   SMITHERY_REDIRECT_URIS,
   VS_CODE_REDIRECT_URIS,
+  GEMINI_CLI_REDIRECT_URIS,
   isVsCodeLoopbackRedirect,
+  isGeminiCliLoopbackRedirect,
 } from '../oauth/client-routes.js';
 
 const KNOWN_MCP_REDIRECT_URIS = new Set<string>([
   ...CLAUDE_REDIRECT_URIS,
   ...SMITHERY_REDIRECT_URIS,
   ...VS_CODE_REDIRECT_URIS,
+  ...GEMINI_CLI_REDIRECT_URIS,
   GLAMA_APP_REDIRECT_URI,
   GLAMA_INSPECTOR_REDIRECT_URI,
 ]);
@@ -65,6 +68,18 @@ export function vsCodeLoopbackRedirectUrisMatch(a: string, b: string): boolean {
   }
 }
 
+/** Gemini CLI loopback uses /oauth/callback; port differences are ignored on token exchange. */
+export function geminiCliLoopbackRedirectUrisMatch(a: string, b: string): boolean {
+  if (!isGeminiCliLoopbackRedirect(a) || !isGeminiCliLoopbackRedirect(b)) return false;
+  try {
+    const ua = new URL(a);
+    const ub = new URL(b);
+    return ua.hostname === ub.hostname;
+  } catch {
+    return false;
+  }
+}
+
 export function isKnownMcpRedirectUri(uri: string): boolean {
   return KNOWN_MCP_REDIRECT_URIS.has(uri);
 }
@@ -77,6 +92,7 @@ export function isRedirectUriAllowed(uri: string): boolean {
   if (isKnownMcpRedirectUri(uri)) return true;
   if (isLoopbackMcpCallback(uri)) return true;
   if (isVsCodeLoopbackRedirect(uri)) return true;
+  if (isGeminiCliLoopbackRedirect(uri)) return true;
   return false;
 }
 
@@ -98,6 +114,7 @@ export function redirectUrisMatch(requested: string, registered: string): boolea
   if (requested === registered) return true;
   if (loopbackRedirectUrisMatch(requested, registered)) return true;
   if (vsCodeLoopbackRedirectUrisMatch(requested, registered)) return true;
+  if (geminiCliLoopbackRedirectUrisMatch(requested, registered)) return true;
   if (glamaOfficialCrossMatch(requested, registered)) return true;
   return false;
 }
