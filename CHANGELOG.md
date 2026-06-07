@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-06-07
+
+### Added
+
+- VS Code MCP gallery OAuth redirect URIs (`vscode.dev/redirect`, `127.0.0.1:33418` loopback)
+- CI auto-publish to Official MCP Registry on `v*` tags (`MCP_REGISTRY_PRIVATE_KEY`)
+
+### Changed
+
+- `server.json` icons metadata for registry gallery
+
 ## [1.0.0] - 2026-06-01
 
 ### Added

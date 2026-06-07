@@ -53,7 +53,7 @@ const memoryTypeEnum = z.enum(['general', 'preference', 'fact', 'instruction', '
 export function createMCPServer(ctx: McpContext): Server {
   const { userId, apiKeyId, workforceWorkspaceId } = ctx;
   const server = new Server(
-    { name: 'aimemory-remote', version: '1.0.0' },
+    { name: 'aimemory-remote', version: '1.0.1' },
     { capabilities: { tools: {}, resources: {}, prompts: {} } }
   );
 

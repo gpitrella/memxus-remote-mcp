@@ -1,6 +1,6 @@
 {
   "name": "@aimemory/mcp-remote",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "AI Memory Remote MCP Server — OAuth 2.1, Streamable HTTP, ready for Claude Connectors Directory",
   "type": "module",
   "main": "dist/index.js",
