@@ -99,5 +99,16 @@ jobs:
             echo "MCP_REGISTRY_PRIVATE_KEY not set — skipping registry publish"
             exit 0
           fi
-          ./mcp-publisher login dns --domain memxus.com --private-key "$MCP_REGISTRY_PRIVATE_KEY"
+          if echo "$MCP_REGISTRY_PRIVATE_KEY" | grep -q "BEGIN PRIVATE KEY"; then
+            printf '%s\n' "$MCP_REGISTRY_PRIVATE_KEY" > /tmp/mcp-registry-key.pem
+            PRIV=$(openssl pkey -in /tmp/mcp-registry-key.pem -noout -text \
+              | grep -A3 "priv:" | tail -n +2 | tr -d ' :\n')
+          else
+            PRIV="$MCP_REGISTRY_PRIVATE_KEY"
+          fi
+          if [ -z "$PRIV" ]; then
+            echo "Could not derive Ed25519 private key from MCP_REGISTRY_PRIVATE_KEY"
+            exit 1
+          fi
+          ./mcp-publisher login dns --domain memxus.com --private-key "$PRIV"
           ./mcp-publisher publish
