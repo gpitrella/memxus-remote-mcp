@@ -105,6 +105,9 @@ export function createMCPServer(ctx: McpContext): Server {
               collection: z.string().optional().nullable(),
               importance: z.number().min(0).max(1).default(0.5),
               append_to: z.string().uuid().optional(),
+              visibility: z.enum(['private', 'shared']).default('private'),
+              group_id: z.string().uuid().optional(),
+              group_name: z.string().optional(),
             })
             .parse(a);
           const m = await saveMemory({
@@ -116,6 +119,9 @@ export function createMCPServer(ctx: McpContext): Server {
             collection: input.collection,
             importance: input.importance,
             append_to: input.append_to,
+            visibility: input.visibility,
+            group_id: input.group_id,
+            group_name: input.group_name,
           });
           const text = formatRememberText(m);
           result = toolSuccess(text, {
@@ -136,6 +142,9 @@ export function createMCPServer(ctx: McpContext): Server {
               type: memoryTypeEnum.optional(),
               collection: z.string().optional().nullable(),
               tags: z.array(z.string()).optional(),
+              visibility: z.enum(['private', 'shared', 'all']).default('all'),
+              group_id: z.string().uuid().optional(),
+              group_name: z.string().optional(),
             })
             .parse(a);
           const searchLimit = resolveSearchLimit(limits, input.limit);
@@ -148,6 +157,9 @@ export function createMCPServer(ctx: McpContext): Server {
             type: input.type,
             collection: input.collection,
             tags: input.tags,
+            visibility: input.visibility,
+            group_id: input.group_id,
+            group_name: input.group_name,
           });
           if (ms.length === 0) {
             const scope = input.collection ? ` in collection "${input.collection}"` : '';
@@ -176,6 +188,9 @@ export function createMCPServer(ctx: McpContext): Server {
               type: memoryTypeEnum.optional(),
               collection: z.string().optional().nullable(),
               tags: z.array(z.string()).optional(),
+              visibility: z.enum(['private', 'shared', 'all']).default('all'),
+              group_id: z.string().uuid().optional(),
+              group_name: z.string().optional(),
             })
             .parse(a);
           const contextLimit = resolveSearchLimit(limits, input.max_memories);
@@ -188,6 +203,9 @@ export function createMCPServer(ctx: McpContext): Server {
             type: input.type,
             collection: input.collection,
             tags: input.tags,
+            visibility: input.visibility,
+            group_id: input.group_id,
+            group_name: input.group_name,
           });
           if (ms.length === 0) {
             const scope = input.collection ? ` (collection: ${input.collection})` : '';
@@ -219,6 +237,9 @@ export function createMCPServer(ctx: McpContext): Server {
               type: memoryTypeEnum.optional(),
               collection: z.string().optional().nullable(),
               tags: z.array(z.string()).optional(),
+              visibility: z.enum(['private', 'shared', 'all']).default('all'),
+              group_id: z.string().uuid().optional(),
+              group_name: z.string().optional(),
             })
             .parse(a);
           const listLimit = resolveListLimit(limits, input.limit);
@@ -230,6 +251,8 @@ export function createMCPServer(ctx: McpContext): Server {
             type: input.type,
             collection: input.collection,
             tags: input.tags,
+            visibility: input.visibility,
+            group_id: input.group_id,
           });
           if (ms.length === 0) {
             const text = 'No memories stored yet. Use the `remember` tool to save information.';

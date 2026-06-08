@@ -15,6 +15,23 @@ const MEMORY_TYPE_PROPERTY = {
     'Memory category: general, preference, fact, instruction, or conversation. Omit to include all types.',
 };
 
+const GROUP_VISIBILITY_FIELDS = {
+  visibility: {
+    type: 'string',
+    enum: ['private', 'shared', 'all'],
+    description:
+      'private = only you; shared = group memories; all = personal + accessible groups (default for recall/get_context).',
+  },
+  group_id: {
+    type: 'string',
+    description: 'UUID of a shared group. Required with visibility=shared when group_name is not set.',
+  },
+  group_name: {
+    type: 'string',
+    description: 'Exact group name (case-insensitive). Alternative to group_id for shared memories.',
+  },
+};
+
 const SCOPE_FIELDS = {
   collection: {
     type: 'string',
@@ -110,6 +127,14 @@ export const MCP_TOOLS: Tool[] = [
           type: 'string',
           description: 'UUID of an existing memory to append to (same user). Keeps revision history.',
         },
+        visibility: {
+          type: 'string',
+          enum: ['private', 'shared'],
+          default: 'private',
+          description: 'private = personal only (default). shared = save to a group (set group_id or group_name).',
+        },
+        group_id: GROUP_VISIBILITY_FIELDS.group_id,
+        group_name: GROUP_VISIBILITY_FIELDS.group_name,
       },
       required: ['content'],
     },
@@ -150,6 +175,12 @@ export const MCP_TOOLS: Tool[] = [
         },
         type: MEMORY_TYPE_PROPERTY,
         ...SCOPE_FIELDS,
+        visibility: {
+          ...GROUP_VISIBILITY_FIELDS.visibility,
+          default: 'all',
+        },
+        group_id: GROUP_VISIBILITY_FIELDS.group_id,
+        group_name: GROUP_VISIBILITY_FIELDS.group_name,
       },
       required: ['query'],
     },
@@ -187,6 +218,12 @@ export const MCP_TOOLS: Tool[] = [
         },
         type: MEMORY_TYPE_PROPERTY,
         ...SCOPE_FIELDS,
+        visibility: {
+          ...GROUP_VISIBILITY_FIELDS.visibility,
+          default: 'all',
+        },
+        group_id: GROUP_VISIBILITY_FIELDS.group_id,
+        group_name: GROUP_VISIBILITY_FIELDS.group_name,
       },
       required: ['topic'],
     },
@@ -228,6 +265,12 @@ export const MCP_TOOLS: Tool[] = [
         },
         type: MEMORY_TYPE_PROPERTY,
         ...SCOPE_FIELDS,
+        visibility: {
+          ...GROUP_VISIBILITY_FIELDS.visibility,
+          default: 'all',
+        },
+        group_id: GROUP_VISIBILITY_FIELDS.group_id,
+        group_name: GROUP_VISIBILITY_FIELDS.group_name,
       },
     },
     outputSchema: {

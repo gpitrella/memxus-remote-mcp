@@ -2,7 +2,18 @@ import { supabase } from '../lib/supabase.js';
 import { config } from '../config.js';
 import { getPlan, type PlanDefinition } from '../lib/plans.js';
 import { resolveListLimit, resolveSearchLimit } from '../lib/plan-enforcement.js';
-import { toPublicMemories } from '../lib/memory-public.js';
+import { enrichRowsWithGroupNames } from '../lib/memory-public.js';
+import {
+  applyMemoryListFilter,
+  buildAccessibleVectorRpcParams,
+  canDeleteMemory,
+  canReadMemory,
+  canUpdateMemory,
+  fetchGroupNameMap,
+  resolveMemoryWriteTarget,
+  type MemoryScopeValue,
+  type VisibilityFilter,
+} from '../lib/memory-access.js';
 import {
   applyTextSearchOr,
   resolveVectorThreshold,
@@ -25,17 +36,10 @@ import {
 export type TenantFilter = {
   userId: string;
   workforceWorkspaceId?: string;
+  memoryScope?: MemoryScopeValue;
+  visibility?: VisibilityFilter;
+  groupId?: string;
 };
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function applyTenantToQuery(query: any, tenant: TenantFilter): any {
-  if (tenant.workforceWorkspaceId) {
-    return query
-      .eq('scope', 'workforce')
-      .eq('workforce_workspace_id', tenant.workforceWorkspaceId);
-  }
-  return query.eq('user_id', tenant.userId).eq('scope', 'personal');
-}
 
 export interface MemoryRow {
   id: string;
@@ -68,6 +72,9 @@ export async function saveMemory(p: {
   metadata?: Record<string, unknown>;
   thread_id?: string | null;
   append_to?: string;
+  visibility?: VisibilityFilter;
+  group_id?: string;
+  group_name?: string;
 }): Promise<MemoryRow> {
   if (p.append_to) {
     return appendToMemory({
@@ -91,7 +98,21 @@ export async function saveMemory(p: {
     defaultMemoryType: p.type ?? 'general',
   });
 
-  const memoryScope = p.workforceWorkspaceId ? 'workforce' : 'personal';
+  const writeTarget = await resolveMemoryWriteTarget(
+    p.userId,
+    {
+      visibility: p.visibility ?? 'private',
+      groupId: p.group_id,
+      groupName: p.group_name,
+      workforceWorkspaceId: p.workforceWorkspaceId,
+    },
+    p.workforceWorkspaceId
+  );
+  if ('error' in writeTarget) {
+    throw new Error(writeTarget.error);
+  }
+
+  const memoryScope = writeTarget.scope;
 
   const { data, error } = await supabase
     .from('memories')
@@ -105,7 +126,9 @@ export async function saveMemory(p: {
       importance: p.importance ?? 0.5,
       metadata: p.metadata ?? {},
       scope: memoryScope,
-      workforce_workspace_id: p.workforceWorkspaceId ?? null,
+      group_id: memoryScope === 'group' ? writeTarget.groupId : null,
+      workforce_workspace_id:
+        memoryScope === 'workforce' ? writeTarget.workforceWorkspaceId : null,
     })
     .select()
     .single();
@@ -114,12 +137,12 @@ export async function saveMemory(p: {
   const row = data as MemoryRow;
   const embedding = await generateEmbedding(p.content);
   if (embedding) {
-    let updateQ = supabase.from('memories').update({ embedding }).eq('id', row.id);
-    updateQ = applyTenantToQuery(updateQ, {
-      userId: p.userId,
-      workforceWorkspaceId: p.workforceWorkspaceId,
-    });
-    const { data: updated, error: embedError } = await updateQ.select().single();
+    const { data: updated, error: embedError } = await supabase
+      .from('memories')
+      .update({ embedding })
+      .eq('id', row.id)
+      .select()
+      .single();
     if (!embedError && updated) return updated as MemoryRow;
   }
 
@@ -132,14 +155,16 @@ export async function appendToMemory(p: {
   memoryId: string;
   newContent: string;
 }): Promise<MemoryRow> {
-  let fetchQ = supabase.from('memories').select('*').eq('id', p.memoryId);
-  fetchQ = applyTenantToQuery(fetchQ, {
-    userId: p.userId,
-    workforceWorkspaceId: p.workforceWorkspaceId,
-  });
-  const { data: existing, error: fetchError } = await fetchQ.single();
+  const { data: existing, error: fetchError } = await supabase
+    .from('memories')
+    .select('*')
+    .eq('id', p.memoryId)
+    .single();
 
   if (fetchError || !existing) throw new Error('Memory not found');
+
+  const canUpdate = await canUpdateMemory(p.userId, existing as Record<string, unknown>);
+  if (!canUpdate) throw new Error('Not authorized to append to this memory');
 
   const merged = `${existing.content}${APPEND_SEPARATOR}${p.newContent.trim()}`;
   if (merged.length > MAX_MEMORY_CONTENT_LENGTH) {
@@ -163,12 +188,12 @@ export async function appendToMemory(p: {
   const embedding = await generateEmbedding(merged);
   if (embedding) updates.embedding = embedding;
 
-  let updateQ = supabase.from('memories').update(updates).eq('id', p.memoryId);
-  updateQ = applyTenantToQuery(updateQ, {
-    userId: p.userId,
-    workforceWorkspaceId: p.workforceWorkspaceId,
-  });
-  const { data, error } = await updateQ.select().single();
+  const { data, error } = await supabase
+    .from('memories')
+    .update(updates)
+    .eq('id', p.memoryId)
+    .select()
+    .single();
 
   if (error) throw new Error(`appendToMemory: ${error.message}`);
   return data as MemoryRow;
@@ -187,6 +212,9 @@ export async function searchMemories(p: {
   type?: string;
   collection?: string | null;
   tags?: string[];
+  visibility?: VisibilityFilter;
+  group_id?: string;
+  group_name?: string;
 }): Promise<MemoryRow[]> {
   const limit = resolveSearchLimit(resolveLimits(p.planLimits), p.limit);
   const baseScope: MemoryScopeFilters = {
@@ -204,7 +232,8 @@ export async function searchMemories(p: {
   }
 
   const embedding = await generateEmbedding(p.query);
-  const tenant = { userId: p.userId, workforceWorkspaceId: p.workforceWorkspaceId };
+  const memoryScope: MemoryScopeValue =
+    p.visibility === 'private' ? 'personal' : p.visibility === 'shared' ? 'group' : 'all';
 
   const results = await searchMemoriesWithScopeRetry<Record<string, unknown>>({
     query: p.query,
@@ -215,13 +244,39 @@ export async function searchMemories(p: {
     vectorSearch: async (queryEmbedding, scope) => {
       if (!queryEmbedding) return [];
       const threshold = resolveVectorThreshold(scope);
-      const rpcParams = buildVectorRpcParams(p.userId, queryEmbedding, limit, threshold, scope);
-      const { data, error } = await supabase.rpc('search_memories_vector', rpcParams);
-      if (error || !data?.length) return [];
+      const rpcParams = await buildAccessibleVectorRpcParams(
+        p.userId,
+        queryEmbedding,
+        limit,
+        threshold,
+        scope,
+        {
+          workforceWorkspaceId: p.workforceWorkspaceId,
+          visibility: p.visibility ?? 'all',
+          memoryScope,
+          groupId: p.group_id,
+        }
+      );
+      const { data, error } = await supabase.rpc('search_memories_accessible', rpcParams);
+      if (error || !data?.length) {
+        const legacyParams = buildVectorRpcParams(p.userId, queryEmbedding, limit, threshold, scope);
+        const legacy = await supabase.rpc('search_memories_vector', legacyParams);
+        if (legacy.error || !legacy.data?.length) return [];
+        return legacy.data as Record<string, unknown>[];
+      }
       return data as Record<string, unknown>[];
     },
     textSearch: async (scope) => {
-      let q = applyTenantToQuery(supabase.from('memories').select('*'), tenant)
+      let q = supabase.from('memories').select('*');
+      const accessResult = await applyMemoryListFilter(q, {
+        userId: p.userId,
+        workforceWorkspaceId: p.workforceWorkspaceId,
+        memoryScope,
+        visibility: p.visibility ?? 'all',
+        groupId: p.group_id,
+      });
+      if (accessResult.error) return [];
+      q = accessResult.query
         .order('importance', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(limit);
@@ -235,7 +290,8 @@ export async function searchMemories(p: {
     },
   });
 
-  return toPublicMemories(results) as unknown as MemoryRow[];
+  const enriched = await enrichRowsWithGroupNames(results, fetchGroupNameMap);
+  return enriched as unknown as MemoryRow[];
 }
 
 export async function getMemoryById(p: {
@@ -243,15 +299,20 @@ export async function getMemoryById(p: {
   workforceWorkspaceId?: string;
   memoryId: string;
 }): Promise<MemoryRow> {
-  let q = supabase.from('memories').select('*').eq('id', p.memoryId);
-  q = applyTenantToQuery(q, {
-    userId: p.userId,
-    workforceWorkspaceId: p.workforceWorkspaceId,
-  });
-  const { data, error } = await q.single();
+  const { data, error } = await supabase
+    .from('memories')
+    .select('*')
+    .eq('id', p.memoryId)
+    .single();
   if (error || !data) throw new Error('Memory not found');
-  const rows = toPublicMemories([data]);
-  return rows[0] as unknown as MemoryRow;
+  const allowed = await canReadMemory(
+    p.userId,
+    data as Record<string, unknown>,
+    p.workforceWorkspaceId
+  );
+  if (!allowed) throw new Error('Memory not found');
+  const [row] = await enrichRowsWithGroupNames([data as Record<string, unknown>], fetchGroupNameMap);
+  return row as unknown as MemoryRow;
 }
 
 export async function listMemories(p: {
@@ -262,6 +323,8 @@ export async function listMemories(p: {
   type?: string;
   collection?: string | null;
   tags?: string[];
+  visibility?: VisibilityFilter;
+  group_id?: string;
 }): Promise<MemoryRow[]> {
   const listLimit = resolveListLimit(resolveLimits(p.planLimits), p.limit);
   const scope: MemoryScopeFilters = {
@@ -269,19 +332,29 @@ export async function listMemories(p: {
     tags: p.tags?.length ? normalizeTags(p.tags) : undefined,
     type: p.type,
   };
+  const memoryScope: MemoryScopeValue =
+    p.visibility === 'private' ? 'personal' : p.visibility === 'shared' ? 'group' : 'all';
 
-  let q = applyTenantToQuery(supabase.from('memories').select('*'), {
+  let q = supabase.from('memories').select('*');
+  const accessResult = await applyMemoryListFilter(q, {
     userId: p.userId,
     workforceWorkspaceId: p.workforceWorkspaceId,
-  })
-    .order('created_at', { ascending: false })
-    .limit(listLimit);
+    memoryScope,
+    visibility: p.visibility ?? 'all',
+    groupId: p.group_id,
+  });
+  if (accessResult.error) return [];
+  q = accessResult.query.order('created_at', { ascending: false }).limit(listLimit);
 
   q = applyScopeToQuery(q, scope);
 
   const { data, error } = await q;
   if (error) throw new Error(`listMemories: ${error.message}`);
-  return toPublicMemories(data ?? []) as unknown as MemoryRow[];
+  const enriched = await enrichRowsWithGroupNames(
+    (data ?? []) as Record<string, unknown>[],
+    fetchGroupNameMap
+  );
+  return enriched as unknown as MemoryRow[];
 }
 
 export async function listCollections(userId: string): Promise<
@@ -316,12 +389,15 @@ export async function deleteMemory(p: {
   workforceWorkspaceId?: string;
   memoryId: string;
 }): Promise<void> {
-  let q = supabase.from('memories').delete().eq('id', p.memoryId);
-  q = applyTenantToQuery(q, {
-    userId: p.userId,
-    workforceWorkspaceId: p.workforceWorkspaceId,
-  });
-  const { error } = await q;
+  const { data: existing, error: fetchError } = await supabase
+    .from('memories')
+    .select('*')
+    .eq('id', p.memoryId)
+    .single();
+  if (fetchError || !existing) throw new Error('Memory not found');
+  const canDelete = await canDeleteMemory(p.userId, existing as Record<string, unknown>);
+  if (!canDelete) throw new Error('Not authorized to delete this memory');
+  const { error } = await supabase.from('memories').delete().eq('id', p.memoryId);
   if (error) throw new Error(`deleteMemory: ${error.message}`);
 }
 
@@ -329,18 +405,29 @@ export async function getStats(
   userId: string,
   workforceWorkspaceId?: string
 ): Promise<{ total: number; byType: Record<string, number>; byCollection: Record<string, number> }> {
-  const tenant = { userId, workforceWorkspaceId };
-  const countQ = applyTenantToQuery(
-    supabase.from('memories').select('*', { count: 'exact', head: true }),
-    tenant
-  );
+  let countQ = supabase.from('memories').select('*', { count: 'exact', head: true });
+  const countAccess = await applyMemoryListFilter(countQ, {
+    userId,
+    workforceWorkspaceId,
+    memoryScope: 'all',
+    visibility: 'all',
+  });
+  countQ = countAccess.error
+    ? countQ.eq('user_id', userId).eq('scope', 'personal')
+    : countAccess.query;
   const { count, error: countError } = await countQ;
   if (countError) throw new Error(`getStats: ${countError.message}`);
 
-  const rowsQ = applyTenantToQuery(
-    supabase.from('memories').select('memory_type, collection'),
-    tenant
-  );
+  let rowsQ = supabase.from('memories').select('memory_type, collection');
+  const rowsAccess = await applyMemoryListFilter(rowsQ, {
+    userId,
+    workforceWorkspaceId,
+    memoryScope: 'all',
+    visibility: 'all',
+  });
+  rowsQ = rowsAccess.error
+    ? rowsQ.eq('user_id', userId).eq('scope', 'personal')
+    : rowsAccess.query;
   const { data, error } = await rowsQ;
   if (error) throw new Error(`getStats: ${error.message}`);
   const rows = data ?? [];
