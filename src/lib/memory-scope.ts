@@ -49,19 +49,27 @@ export function normalizeTags(tags: unknown, max = 20): string[] {
     .slice(0, max);
 }
 
-export function applyScopeToQuery<
-  T extends {
-    eq: (column: string, value: unknown) => unknown;
-    contains: (column: string, value: unknown) => unknown;
-  },
->(
+/** Minimal Supabase filter builder shape for memories table queries. */
+export interface ScopedQueryBuilder {
+  eq(column: string, value: string): ScopedQueryBuilder;
+  contains(column: string, value: string[]): ScopedQueryBuilder;
+}
+
+/** Apply scope filters to a Supabase query builder (memories table). */
+export function applyScopeToQuery<T extends ScopedQueryBuilder>(
   query: T,
   filters: MemoryScopeFilters
 ): T {
   let q = query;
-  if (filters.collection) q = q.eq('collection', filters.collection) as T;
-  if (filters.type) q = q.eq('memory_type', filters.type) as T;
-  if (filters.tags?.length) q = q.contains('tags', filters.tags) as T;
+  if (filters.collection) {
+    q = q.eq('collection', filters.collection) as T;
+  }
+  if (filters.type) {
+    q = q.eq('memory_type', filters.type) as T;
+  }
+  if (filters.tags && filters.tags.length > 0) {
+    q = q.contains('tags', filters.tags) as T;
+  }
   return q;
 }
 

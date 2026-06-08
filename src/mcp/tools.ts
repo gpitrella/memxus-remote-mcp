@@ -11,6 +11,8 @@ import {
   canUpdateMemory,
   fetchGroupNameMap,
   resolveMemoryWriteTarget,
+  type MemoryRow as AccessMemoryRow,
+  type MemoryQueryBuilder,
   type MemoryScopeValue,
   type VisibilityFilter,
 } from '../lib/memory-access.js';
@@ -163,7 +165,7 @@ export async function appendToMemory(p: {
 
   if (fetchError || !existing) throw new Error('Memory not found');
 
-  const canUpdate = await canUpdateMemory(p.userId, existing as Record<string, unknown>);
+  const canUpdate = await canUpdateMemory(p.userId, existing as AccessMemoryRow);
   if (!canUpdate) throw new Error('Not authorized to append to this memory');
 
   const merged = `${existing.content}${APPEND_SEPARATOR}${p.newContent.trim()}`;
@@ -267,7 +269,7 @@ export async function searchMemories(p: {
       return data as Record<string, unknown>[];
     },
     textSearch: async (scope) => {
-      let q = supabase.from('memories').select('*');
+      let q: MemoryQueryBuilder = supabase.from('memories').select('*');
       const accessResult = await applyMemoryListFilter(q, {
         userId: p.userId,
         workforceWorkspaceId: p.workforceWorkspaceId,
@@ -307,7 +309,7 @@ export async function getMemoryById(p: {
   if (error || !data) throw new Error('Memory not found');
   const allowed = await canReadMemory(
     p.userId,
-    data as Record<string, unknown>,
+    data as AccessMemoryRow,
     p.workforceWorkspaceId
   );
   if (!allowed) throw new Error('Memory not found');
@@ -335,7 +337,7 @@ export async function listMemories(p: {
   const memoryScope: MemoryScopeValue =
     p.visibility === 'private' ? 'personal' : p.visibility === 'shared' ? 'group' : 'all';
 
-  let q = supabase.from('memories').select('*');
+  let q: MemoryQueryBuilder = supabase.from('memories').select('*');
   const accessResult = await applyMemoryListFilter(q, {
     userId: p.userId,
     workforceWorkspaceId: p.workforceWorkspaceId,
@@ -395,7 +397,7 @@ export async function deleteMemory(p: {
     .eq('id', p.memoryId)
     .single();
   if (fetchError || !existing) throw new Error('Memory not found');
-  const canDelete = await canDeleteMemory(p.userId, existing as Record<string, unknown>);
+  const canDelete = await canDeleteMemory(p.userId, existing as AccessMemoryRow);
   if (!canDelete) throw new Error('Not authorized to delete this memory');
   const { error } = await supabase.from('memories').delete().eq('id', p.memoryId);
   if (error) throw new Error(`deleteMemory: ${error.message}`);
