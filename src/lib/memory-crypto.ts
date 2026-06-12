@@ -10,8 +10,8 @@ import {
   isEncrypted,
   isEncryptionEnabled,
   isMetadataEncryptionEnabled,
-} from './encryption';
-import { resolveDekForMemory, resolveDekForReader } from './dek';
+} from './encryption.js';
+import { resolveDekForMemory, resolveDekForReader } from './dek.js';
 
 export interface MemoryRowMinimal {
   id?: string;

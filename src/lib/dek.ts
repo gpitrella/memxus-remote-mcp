@@ -4,13 +4,13 @@
  * SYNC: RemoteMCP-AIMemory/src/lib/dek.ts
  */
 
-import { supabase as supabaseAdmin } from './supabase';
+import { supabase as supabaseAdmin } from './supabase.js';
 import {
   generateDek,
   loadMasterKey,
   unwrapDek,
   wrapDek,
-} from './encryption';
+} from './encryption.js';
 
 // ─── Cache ────────────────────────────────────────────────────────────────────
 

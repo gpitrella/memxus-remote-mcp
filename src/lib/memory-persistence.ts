@@ -4,15 +4,15 @@
  * SYNC: RemoteMCP-AIMemory/src/lib/memory-persistence.ts
  */
 
-import { supabase as supabaseAdmin } from './supabase';
+import { supabase as supabaseAdmin } from './supabase.js';
 import {
   prepareContentForStorage,
   preparePatchForStorage,
   decryptMemoryRow,
   decryptMemoryRows,
   type MemoryRowMinimal,
-} from './memory-crypto';
-import { isEncrypted, isEncryptionEnabled } from './encryption';
+} from './memory-crypto.js';
+import { isEncrypted, isEncryptionEnabled } from './encryption.js';
 
 const KEYWORD_SEARCH_DECRYPT_CAP = Number(process.env.KEYWORD_SEARCH_DECRYPT_CAP) || 500;
 
