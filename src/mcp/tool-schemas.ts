@@ -60,7 +60,7 @@ const MEMORY_ITEM_SCHEMA = {
     },
     collection: {
       type: 'string',
-      description: 'Collection slug, or null if uncategorized.',
+      description: 'Collection slug, or empty string if uncategorized.',
     },
     created_at: { type: 'string', description: 'ISO 8601 creation timestamp.' },
   },

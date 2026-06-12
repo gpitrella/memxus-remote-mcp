@@ -18,6 +18,7 @@ test('toStructuredMemory omits embedding and exposes public fields', () => {
   const s = toStructuredMemory(row);
   assert.equal(s.id, FIXTURE.id);
   assert.equal(s.content, 'hello');
+  assert.equal(s.collection, '');
   assert.equal('embedding' in s, false);
 });
 

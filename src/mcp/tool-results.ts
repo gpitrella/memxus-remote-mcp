@@ -12,7 +12,7 @@ export function toStructuredMemory(m: FormattableMemory): Record<string, unknown
     content: m.content,
     importance: m.importance,
     tags: m.tags,
-    collection: m.collection,
+    collection: m.collection ?? '',
     created_at: m.created_at,
   };
 }
