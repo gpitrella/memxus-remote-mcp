@@ -3,12 +3,13 @@
 -- =============================================================================
 -- Run ONCE per Supabase project. Idempotent (IF NOT EXISTS).
 -- These tables store wrapped (encrypted) DEKs only — never plaintext key material.
+-- user_id references public.users (same as memories, api_keys) — not auth.users.
 -- Access: service_role only. No anon/authenticated policies.
 -- =============================================================================
 
 -- ─── User DEKs (one per user_id, wrapped with MASTER_ENCRYPTION_KEY) ──────────
 CREATE TABLE IF NOT EXISTS public.user_keys (
-  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
   wrapped_dek TEXT NOT NULL,       -- mxe1:base64(iv || ciphertext || tag)
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   rotated_at TIMESTAMPTZ
@@ -18,7 +19,7 @@ CREATE TABLE IF NOT EXISTS public.user_keys (
 CREATE TABLE IF NOT EXISTS public.group_keys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   group_id UUID NOT NULL REFERENCES public.shared_groups(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   wrapped_dek TEXT NOT NULL,       -- GDEK wrapped with this user's UDEK
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (group_id, user_id)
@@ -28,7 +29,7 @@ CREATE TABLE IF NOT EXISTS public.group_keys (
 CREATE TABLE IF NOT EXISTS public.workforce_keys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id UUID NOT NULL REFERENCES public.workforce_workspaces(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   wrapped_dek TEXT NOT NULL,       -- WDEK wrapped with this user's UDEK
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (workspace_id, user_id)
