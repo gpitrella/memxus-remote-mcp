@@ -1,5 +1,5 @@
 /**
- * Text + vector search helpers (SYNC: API-IAMemory/src/lib/memory-search.ts)
+ * Text + vector search helpers (SYNC: RemoteMCP-AIMemory/src/lib/memory-search.ts)
  */
 import type { MemoryScopeFilters } from './memory-scope.js';
 
@@ -46,7 +46,6 @@ const STOPWORDS = new Set([
   'del',
 ]);
 
-/** Split query into tokens suitable for ILIKE fallback (min length 3). */
 export function tokenizeQueryForSearch(query: string): string[] {
   const normalized = query
     .trim()
@@ -65,7 +64,6 @@ export function tokenizeQueryForSearch(query: string): string[] {
   return [...tokens];
 }
 
-/** Vector similarity threshold: lower when searching across all collections. */
 export function resolveVectorThreshold(scope: MemoryScopeFilters): number {
   if (scope.collection) return 0.6;
   return 0.5;
@@ -75,10 +73,7 @@ export type TextSearchQuery = {
   or: (filters: string) => unknown;
 };
 
-/**
- * Apply OR ilike filters for full phrase and per-token matches.
- */
-export function applyTextSearchOr<T extends TextSearchQuery>(query: T, searchText: string): T {
+export function applyTextSearchOr<T extends TextSearchQuery>(query: T, searchText: string, opts?: { skipContentIlike?: boolean }): T {
   const phrase = searchText.trim();
   const tokens = tokenizeQueryForSearch(phrase);
   const patterns = new Set<string>();
@@ -92,8 +87,11 @@ export function applyTextSearchOr<T extends TextSearchQuery>(query: T, searchTex
     return query;
   }
   const parts: string[] = [];
+  const skipContent = opts?.skipContentIlike ?? false;
   for (const p of patterns) {
-    parts.push(`content.ilike.${p}`);
+    if (!skipContent) {
+      parts.push(`content.ilike.${p}`);
+    }
     parts.push(`collection.ilike.${p}`);
   }
   for (const token of tokens) {
@@ -101,5 +99,6 @@ export function applyTextSearchOr<T extends TextSearchQuery>(query: T, searchTex
       parts.push(`tags.cs.{${token}}`);
     }
   }
+  if (parts.length === 0) return query;
   return query.or(parts.join(',')) as T;
 }

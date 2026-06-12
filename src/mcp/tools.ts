@@ -34,6 +34,14 @@ import {
   MAX_MEMORY_CONTENT_LENGTH,
   APPEND_SEPARATOR,
 } from '../lib/memory-scope.js';
+import {
+  prepareContentForStorage,
+  decryptMemoryRow,
+  decryptMemoryRows,
+  filterRowsByTextContent,
+  type MemoryRowMinimal,
+} from '../lib/memory-crypto.js';
+import { shouldSkipContentIlike } from '../lib/memory-persistence.js';
 
 export type TenantFilter = {
   userId: string;
@@ -116,21 +124,34 @@ export async function saveMemory(p: {
 
   const memoryScope = writeTarget.scope;
 
+  const scopeInfo = {
+    user_id: p.userId,
+    scope: memoryScope,
+    group_id: memoryScope === 'group' ? writeTarget.groupId : null,
+    workforce_workspace_id: memoryScope === 'workforce' ? writeTarget.workforceWorkspaceId : null,
+  };
+
+  // Encrypt content + metadata for storage (embedding generated from plaintext)
+  const { content: encContent, metadata: encMeta } = await prepareContentForStorage(
+    p.content,
+    p.metadata ?? {},
+    scopeInfo
+  );
+
   const { data, error } = await supabase
     .from('memories')
     .insert({
       user_id: p.userId,
-      content: p.content,
+      content: encContent,
       memory_type: p.type ?? 'general',
       tags,
       collection,
       thread_id: p.thread_id ?? null,
       importance: p.importance ?? 0.5,
-      metadata: p.metadata ?? {},
+      metadata: encMeta,
       scope: memoryScope,
-      group_id: memoryScope === 'group' ? writeTarget.groupId : null,
-      workforce_workspace_id:
-        memoryScope === 'workforce' ? writeTarget.workforceWorkspaceId : null,
+      group_id: scopeInfo.group_id ?? null,
+      workforce_workspace_id: scopeInfo.workforce_workspace_id ?? null,
     })
     .select()
     .single();
@@ -145,10 +166,14 @@ export async function saveMemory(p: {
       .eq('id', row.id)
       .select()
       .single();
-    if (!embedError && updated) return updated as MemoryRow;
+    if (!embedError && updated) {
+      const dec = await decryptMemoryRow(updated as unknown as MemoryRowMinimal, p.userId);
+      return (dec ?? updated) as unknown as MemoryRow;
+    }
   }
 
-  return row;
+  const dec = await decryptMemoryRow(row as unknown as MemoryRowMinimal, p.userId);
+  return (dec ?? row) as unknown as MemoryRow;
 }
 
 export async function appendToMemory(p: {
@@ -168,26 +193,46 @@ export async function appendToMemory(p: {
   const canUpdate = await canUpdateMemory(p.userId, existing as AccessMemoryRow);
   if (!canUpdate) throw new Error('Not authorized to append to this memory');
 
-  const merged = `${existing.content}${APPEND_SEPARATOR}${p.newContent.trim()}`;
+  // Decrypt existing content before merge
+  const decrypted = await decryptMemoryRow(existing as unknown as MemoryRowMinimal, p.userId);
+  if (!decrypted) throw new Error('Memory not found');
+
+  const existingContent = decrypted.content as string;
+  const merged = `${existingContent}${APPEND_SEPARATOR}${p.newContent.trim()}`;
   if (merged.length > MAX_MEMORY_CONTENT_LENGTH) {
     throw new Error(
       `Merged content exceeds ${MAX_MEMORY_CONTENT_LENGTH} chars. Create a new memory in the same collection instead.`
     );
   }
 
-  const metadata = (existing.metadata as Record<string, unknown>) || {};
+  const metadata = (decrypted.metadata as Record<string, unknown>) || {};
   const revisions = Array.isArray(metadata.revisions)
     ? [...(metadata.revisions as RevisionEntry[])]
     : [];
-  revisions.push({ content: existing.content, appended_at: new Date().toISOString() });
+  revisions.push({ content: existingContent, appended_at: new Date().toISOString() });
+
+  const newMetadata = { ...metadata, revisions };
+
+  // Embedding from plaintext
+  const embedding = await generateEmbedding(merged);
+
+  // Encrypt for storage
+  const { content: encContent, metadata: encMeta } = await prepareContentForStorage(
+    merged,
+    newMetadata,
+    {
+      user_id: existing.user_id,
+      scope: existing.scope,
+      group_id: existing.group_id,
+      workforce_workspace_id: existing.workforce_workspace_id,
+    }
+  );
 
   const updates: Record<string, unknown> = {
-    content: merged,
-    metadata: { ...metadata, revisions },
+    content: encContent,
+    metadata: encMeta,
     updated_at: new Date().toISOString(),
   };
-
-  const embedding = await generateEmbedding(merged);
   if (embedding) updates.embedding = embedding;
 
   const { data, error } = await supabase
@@ -198,7 +243,9 @@ export async function appendToMemory(p: {
     .single();
 
   if (error) throw new Error(`appendToMemory: ${error.message}`);
-  return data as MemoryRow;
+
+  const dec = await decryptMemoryRow(data as unknown as MemoryRowMinimal, p.userId);
+  return (dec ?? data) as unknown as MemoryRow;
 }
 
 function resolveLimits(planLimits?: PlanDefinition['limits']): PlanDefinition['limits'] {
@@ -284,7 +331,7 @@ export async function searchMemories(p: {
         .limit(limit);
 
       q = applyScopeToQuery(q, scope);
-      q = applyTextSearchOr(q, p.query);
+      q = applyTextSearchOr(q, p.query, { skipContentIlike: shouldSkipContentIlike() });
 
       const { data, error } = await q;
       if (error) throw new Error(`searchMemories: ${error.message}`);
@@ -292,7 +339,22 @@ export async function searchMemories(p: {
     },
   });
 
-  const enriched = await enrichRowsWithGroupNames(results, fetchGroupNameMap);
+  // Decrypt all search results
+  const decrypted = await decryptMemoryRows(
+    results as unknown as MemoryRowMinimal[],
+    p.userId
+  );
+
+  // Post-decrypt keyword filter when content.ilike was skipped
+  let filtered = decrypted as unknown as Record<string, unknown>[];
+  if (shouldSkipContentIlike() && p.query.trim()) {
+    filtered = filterRowsByTextContent(
+      decrypted,
+      p.query
+    ) as unknown as Record<string, unknown>[];
+  }
+
+  const enriched = await enrichRowsWithGroupNames(filtered, fetchGroupNameMap);
   return enriched as unknown as MemoryRow[];
 }
 
@@ -313,7 +375,11 @@ export async function getMemoryById(p: {
     p.workforceWorkspaceId
   );
   if (!allowed) throw new Error('Memory not found');
-  const [row] = await enrichRowsWithGroupNames([data as Record<string, unknown>], fetchGroupNameMap);
+
+  const dec = await decryptMemoryRow(data as unknown as MemoryRowMinimal, p.userId);
+  if (!dec) throw new Error('Memory not found');
+
+  const [row] = await enrichRowsWithGroupNames([dec as unknown as Record<string, unknown>], fetchGroupNameMap);
   return row as unknown as MemoryRow;
 }
 
@@ -352,8 +418,14 @@ export async function listMemories(p: {
 
   const { data, error } = await q;
   if (error) throw new Error(`listMemories: ${error.message}`);
+
+  const decrypted = await decryptMemoryRows(
+    ((data ?? []) as unknown as MemoryRowMinimal[]),
+    p.userId
+  );
+
   const enriched = await enrichRowsWithGroupNames(
-    (data ?? []) as Record<string, unknown>[],
+    decrypted as unknown as Record<string, unknown>[],
     fetchGroupNameMap
   );
   return enriched as unknown as MemoryRow[];
