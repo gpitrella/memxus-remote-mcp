@@ -321,3 +321,52 @@ export async function resolveDekForReader(
   }
   return null;
 }
+
+export type DekScopeRow = {
+  user_id: string;
+  scope: string;
+  group_id?: string | null;
+  workforce_workspace_id?: string | null;
+};
+
+/**
+ * Warm DEK cache for unique scopes in a batch before bulk decrypt.
+ * Reduces N sequential DB round-trips to O(unique scopes) parallel fetches.
+ */
+export async function prefetchDekScopes(
+  rows: DekScopeRow[],
+  readerUserId: string
+): Promise<void> {
+  if (rows.length === 0) return;
+
+  const groupIds = new Set<string>();
+  const workforceIds = new Set<string>();
+  let needsUserDek = false;
+
+  for (const row of rows) {
+    if (row.scope === 'personal') {
+      if (row.user_id === readerUserId) needsUserDek = true;
+    } else if (row.scope === 'group' && row.group_id) {
+      groupIds.add(row.group_id);
+    } else if (row.scope === 'workforce' && row.workforce_workspace_id) {
+      workforceIds.add(row.workforce_workspace_id);
+    } else if (row.user_id === readerUserId) {
+      needsUserDek = true;
+    }
+  }
+
+  const tasks: Promise<unknown>[] = [];
+  if (needsUserDek) {
+    tasks.push(getOrCreateUserDek(readerUserId));
+  }
+  for (const groupId of groupIds) {
+    tasks.push(getGroupDekForUser(groupId, readerUserId));
+  }
+  for (const workspaceId of workforceIds) {
+    tasks.push(getWorkforceDekForUser(workspaceId, readerUserId));
+  }
+
+  if (tasks.length > 0) {
+    await Promise.all(tasks);
+  }
+}

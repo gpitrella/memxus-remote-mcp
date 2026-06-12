@@ -11,7 +11,7 @@ import {
   isEncryptionEnabled,
   isMetadataEncryptionEnabled,
 } from './encryption.js';
-import { resolveDekForMemory, resolveDekForReader } from './dek.js';
+import { prefetchDekScopes, resolveDekForMemory, resolveDekForReader } from './dek.js';
 
 export interface MemoryRowMinimal {
   id?: string;
@@ -162,6 +162,10 @@ export async function decryptMemoryRows<T extends MemoryRowMinimal>(
   rows: T[],
   readerUserId: string
 ): Promise<T[]> {
+  if (rows.length === 0) return [];
+
+  await prefetchDekScopes(rows, readerUserId);
+
   const results = await Promise.all(
     rows.map((row) => decryptMemoryRow(row, readerUserId))
   );
