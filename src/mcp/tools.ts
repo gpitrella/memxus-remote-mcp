@@ -168,12 +168,14 @@ export async function saveMemory(p: {
       .single();
     if (!embedError && updated) {
       const dec = await decryptMemoryRow(updated as unknown as MemoryRowMinimal, p.userId);
-      return (dec ?? updated) as unknown as MemoryRow;
+      if (!dec) throw new Error('Memory not found');
+      return dec as unknown as MemoryRow;
     }
   }
 
   const dec = await decryptMemoryRow(row as unknown as MemoryRowMinimal, p.userId);
-  return (dec ?? row) as unknown as MemoryRow;
+  if (!dec) throw new Error('Memory not found');
+  return dec as unknown as MemoryRow;
 }
 
 export async function appendToMemory(p: {
@@ -245,7 +247,8 @@ export async function appendToMemory(p: {
   if (error) throw new Error(`appendToMemory: ${error.message}`);
 
   const dec = await decryptMemoryRow(data as unknown as MemoryRowMinimal, p.userId);
-  return (dec ?? data) as unknown as MemoryRow;
+  if (!dec) throw new Error('Memory not found');
+  return dec as unknown as MemoryRow;
 }
 
 function resolveLimits(planLimits?: PlanDefinition['limits']): PlanDefinition['limits'] {

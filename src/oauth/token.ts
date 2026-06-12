@@ -124,6 +124,10 @@ export async function token(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: 'invalid_grant' });
     return;
   }
+  if (consumed.clientId !== client_id) {
+    res.status(400).json({ error: 'invalid_grant', error_description: 'client_id mismatch' });
+    return;
+  }
   if (!redirectUrisMatch(consumed.redirectUri, redirect_uri)) {
     res.status(400).json({ error: 'invalid_grant', error_description: 'redirect_uri mismatch' });
     return;

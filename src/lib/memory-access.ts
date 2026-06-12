@@ -418,13 +418,28 @@ export async function buildAccessibleVectorRpcParams(
     includePersonal = true;
   } else if (memoryScope === 'group') {
     const gid = accessCtx.groupId;
-    groupIds = gid && isValidUuid(gid) ? [gid] : allGroupIds;
+    if (gid && isValidUuid(gid)) {
+      const role = await getGroupMemberRole(userId, gid);
+      groupIds = role ? [gid] : [];
+    } else {
+      groupIds = allGroupIds;
+    }
   } else if (memoryScope === 'workforce') {
     const wsId = accessCtx.workforceWorkspaceId;
-    workforceIds = wsId && isValidUuid(wsId) ? [wsId] : allWorkforceIds;
+    if (wsId && isValidUuid(wsId)) {
+      const wsRole = await getWorkforceMemberRoleSafe(userId, wsId);
+      workforceIds = wsRole ? [wsId] : [];
+    } else {
+      workforceIds = allWorkforceIds;
+    }
   } else if (visibility === 'shared') {
     const gid = accessCtx.groupId;
-    groupIds = gid && isValidUuid(gid) ? [gid] : allGroupIds;
+    if (gid && isValidUuid(gid)) {
+      const role = await getGroupMemberRole(userId, gid);
+      groupIds = role ? [gid] : [];
+    } else {
+      groupIds = allGroupIds;
+    }
   } else {
     includePersonal = true;
     groupIds = allGroupIds.length > 0 ? allGroupIds : null;

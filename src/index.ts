@@ -43,7 +43,7 @@ app.get('/.well-known/oauth-protected-resource/mcp', protectedResourceMetadata);
 app.get('/.well-known/glama.json', glamaWellKnown);
 app.get('/oauth/authorize', oauthRateLimit, authorize);
 app.post('/oauth/token', oauthRateLimit, token);
-app.post('/oauth/register', register);
+app.post('/oauth/register', oauthRateLimit, register);
 
 mcpRouter.use(mcpOriginValidation);
 mcpRouter.post('/', bearerAuth, mcpRateLimit, handleMcp);
