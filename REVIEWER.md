@@ -185,7 +185,7 @@ After a Railway deploy or long idle period, Cursor may log:
 - `Failed to open SSE stream: Bad Request`
 - `no valid session and not an initialize request`
 
-**Fix:** Toggle the Memxus MCP server off and on in Cursor Settings, or restart Cursor. Sessions are in-memory on the server (use one Railway replica until shared session storage exists).
+**Fix:** Toggle the Memxus MCP server off and on in Cursor Settings, or restart Cursor. Sessions are in-memory on the server (use one Railway replica until shared session storage exists). Set `MCP_SESSION_TTL_MS=86400000` (24h) on Railway to reduce idle disconnects.
 
 Maintainers: `npm run test:smoke` in RemoteMCP-AIMemory (requires `MEMXUS_API_KEY`).
 
@@ -196,6 +196,7 @@ Maintainers: `npm run test:smoke` in RemoteMCP-AIMemory (requires `MEMXUS_API_KE
 | `ALLOWED_REDIRECT_URIS` | OAuth redirect allowlist (DCR + authorize) |
 | `CORS_ORIGINS` | Browser CORS for `/oauth/*` and `/mcp` (include `https://glama.ai`) |
 | `MCP_ORIGIN_ALLOWLIST` | Origin gate for `/mcp` only (include `https://glama.ai`) |
+| `MCP_SESSION_TTL_MS` | Recommended `86400000` (24h idle before session prune) |
 
 Set **`MCP_STATELESS=false`** (or unset) — Claude web, Smithery, and Glama require **stateful** MCP (initialize → `mcp-session-id` → tools/list + GET SSE).
 

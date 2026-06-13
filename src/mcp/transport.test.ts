@@ -93,6 +93,7 @@ const toolsListBody = {
 test.afterEach(() => {
   _test.resetSessions();
   _test.setStatelessMode(undefined);
+  _test.setSessionTtlMs(undefined);
 });
 
 test('handleMcp returns unauthorized without userId', async () => {
@@ -168,4 +169,62 @@ test('stateful handleMcpGet rejects missing session', async () => {
   const err = (res.body as { error?: { message?: string } }).error;
   assert.match(String(err?.message), /missing or expired MCP session id/);
   assert.match(String(err?.message), /Re-initialize/);
+});
+
+test('pruneIdleSessions removes sessions past TTL', () => {
+  _test.setSessionTtlMs(60_000);
+  const sessionId = 'expired-session';
+  _test.seedSession(sessionId, Date.now() - 120_000);
+  assert.equal(_test.hasSession(sessionId), true);
+
+  _test.pruneIdleSessions();
+
+  assert.equal(_test.hasSession(sessionId), false);
+});
+
+test('pruneIdleSessions keeps sessions within TTL', () => {
+  _test.setSessionTtlMs(60_000);
+  const sessionId = 'active-session';
+  _test.seedSession(sessionId, Date.now() - 30_000);
+  assert.equal(_test.hasSession(sessionId), true);
+
+  _test.pruneIdleSessions();
+
+  assert.equal(_test.hasSession(sessionId), true);
+});
+
+test('handleMcpDelete prunes expired session before lookup', async () => {
+  _test.setStatelessMode(false);
+  _test.setSessionTtlMs(60_000);
+  const sessionId = 'expired-on-delete';
+  _test.seedSession(sessionId, Date.now() - 120_000, 'user-1');
+
+  const req = mockAuthedReq({
+    userId: 'user-1',
+    headers: { 'mcp-session-id': sessionId },
+  });
+  const res = mockRes();
+  await handleMcpDelete(req, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(_test.hasSession(sessionId), false);
+  const err = (res.body as { error?: { message?: string } }).error;
+  assert.match(String(err?.message), /missing or expired MCP session id/);
+});
+
+test('handleMcpGet prunes expired session before lookup', async () => {
+  _test.setStatelessMode(false);
+  _test.setSessionTtlMs(60_000);
+  const sessionId = 'expired-on-get';
+  _test.seedSession(sessionId, Date.now() - 120_000, 'user-1');
+
+  const req = mockAuthedReq({
+    userId: 'user-1',
+    headers: { 'mcp-session-id': sessionId },
+  });
+  const res = mockRes();
+  await handleMcpGet(req, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(_test.hasSession(sessionId), false);
 });

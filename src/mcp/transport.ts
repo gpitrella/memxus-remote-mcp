@@ -16,7 +16,17 @@ interface Session {
 
 const sessions = new Map<string, Session>();
 
-const SESSION_TTL_MS = Number(process.env.MCP_SESSION_TTL_MS ?? 60 * 60 * 1000);
+const DEFAULT_SESSION_TTL_MS = 60 * 60 * 1000;
+
+let sessionTtlOverride: number | undefined;
+
+function getSessionTtlMs(): number {
+  if (sessionTtlOverride !== undefined) return sessionTtlOverride;
+  const fromEnv = process.env.MCP_SESSION_TTL_MS;
+  if (fromEnv === undefined || fromEnv === '') return DEFAULT_SESSION_TTL_MS;
+  const parsed = Number(fromEnv);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_SESSION_TTL_MS;
+}
 
 let mcpStatelessOverride: boolean | undefined;
 
@@ -27,9 +37,12 @@ function isMcpStateless(): boolean {
 
 function pruneIdleSessions(): void {
   const now = Date.now();
+  const sessionTtlMs = getSessionTtlMs();
   for (const [id, session] of sessions) {
-    if (now - session.lastActivityAt > SESSION_TTL_MS) {
+    const idleMs = now - session.lastActivityAt;
+    if (idleMs > sessionTtlMs) {
       sessions.delete(id);
+      logMcpSessionExpired(id, session.userId, idleMs, sessionTtlMs);
       void session.transport.close().catch(() => undefined);
     }
   }
@@ -81,6 +94,22 @@ function logMcpSessionMiss(
 function logMcpSseConflict(sessionId: string, userId: string): void {
   // eslint-disable-next-line no-console
   console.info('mcp_sse_conflict', { sessionId, userId });
+}
+
+function logMcpSessionExpired(
+  sessionId: string,
+  userId: string,
+  idleMs: number,
+  sessionTtlMs: number
+): void {
+  // eslint-disable-next-line no-console
+  console.info('mcp_session_expired', {
+    sessionId,
+    userId,
+    idleMs,
+    sessionTtlMs,
+    idleMinutes: Math.round(idleMs / 60_000),
+  });
 }
 
 function createServerContext(req: AuthedRequest) {
@@ -237,6 +266,8 @@ export async function handleMcpDelete(req: AuthedRequest, res: Response): Promis
     return;
   }
 
+  pruneIdleSessions();
+
   const sessionIdHeader = req.headers['mcp-session-id'];
   const sessionId = Array.isArray(sessionIdHeader) ? sessionIdHeader[0] : sessionIdHeader;
   const session = sessionId ? sessions.get(sessionId) : undefined;
@@ -262,5 +293,23 @@ export const _test = {
   setStatelessMode: (value: boolean | undefined) => {
     mcpStatelessOverride = value;
   },
+  setSessionTtlMs: (value: number | undefined) => {
+    sessionTtlOverride = value;
+  },
+  seedSession: (sessionId: string, lastActivityAt: number, userId = 'user-test') => {
+    const transport = {
+      close: async () => undefined,
+      handleRequest: async () => undefined,
+    } as unknown as StreamableHTTPServerTransport;
+    sessions.set(sessionId, {
+      transport,
+      userId,
+      lastActivityAt,
+      sseActive: false,
+    });
+  },
+  hasSession: (sessionId: string) => sessions.has(sessionId),
+  pruneIdleSessions,
+  getSessionTtlMs,
   isStatelessMode: isMcpStateless,
 };

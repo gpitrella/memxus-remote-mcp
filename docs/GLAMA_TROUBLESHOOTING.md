@@ -11,12 +11,15 @@ Short operational guide for Memxus on [Glama Inspector](https://glama.ai/mcp/ins
 | `mcp_session_miss` | MCP session | Reconnect MCP or send `initialize` again |
 | `mcp_sse_conflict` or `GET /mcp` 409 | SSE proxy noise | OK if `tools/list` works; ignore failed Connection Test |
 | `no valid session` on POST | Stale session / redeploy | Re-initialize; toggle MCP off/on in client |
+| `GET /mcp` 400 after inactivity (Cursor) | Expired MCP session (idle > TTL) | Toggle Memxus MCP off/on in Cursor Settings |
+| `mcp_session_expired` in logs | Server pruned idle session | Client must re-initialize |
 | Inspector "OAuth Required" after success popup | Token not persisted | Incognito, no OAuth redirect extensions; check Railway `POST /oauth/token` |
 
 ## Railway env (production)
 
 - **Replicas:** 1 (sessions are in-memory until shared storage exists)
 - **`MCP_STATELESS`:** unset or `false` (default)
+- **`MCP_SESSION_TTL_MS`:** `86400000` (24h recommended; default in code is 1h if unset)
 - **`MCP_PUBLIC_URL`:** `https://mcp.memxus.com` (no trailing slash)
 - **`DASHBOARD_URL`:** `https://dashboard.memxus.com`
 - **`ALLOWED_REDIRECT_URIS`:** include both Glama callbacks:
@@ -44,7 +47,17 @@ Common failures:
 3. `GET /mcp` SSE → **200** (second concurrent GET may return **409** — expected)
 4. Tool call e.g. `memory_stats` → success
 
-After Railway redeploy or idle timeout (~1h): clients must **re-initialize** (toggle MCP connection).
+After Railway redeploy or idle timeout (default 1h; set `MCP_SESSION_TTL_MS=86400000` for 24h): clients must **re-initialize** (toggle MCP connection).
+
+### Cursor (SSE / "Not connected")
+
+After a long idle period or Railway deploy, Cursor may log:
+
+- `Failed to open SSE stream: Bad Request`
+- `no valid session and not an initialize request`
+- `Maximum reconnection attempts (2) exceeded`
+
+**Fix:** Cursor Settings → MCP → toggle Memxus off, wait 2–3s, toggle on. OAuth stays valid; only the MCP transport session expired.
 
 ## Structured logs to search
 
@@ -52,6 +65,7 @@ After Railway redeploy or idle timeout (~1h): clients must **re-initialize** (to
 |-------|---------|
 | `mcp_session_created` | New stateful session registered |
 | `mcp_session_miss` | Request without valid session |
+| `mcp_session_expired` | Idle session pruned (check `idleMinutes` vs TTL) |
 | `mcp_sse_conflict` | Second SSE stream blocked (409) |
 | `[oauth/token]` request fields | Token attempt (grant_type, client_id) |
 | `[oauth/token]` customerId/userId | Successful token exchange |
