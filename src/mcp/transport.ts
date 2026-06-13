@@ -11,6 +11,7 @@ interface Session {
   userId: string;
   apiKeyId?: string;
   lastActivityAt: number;
+  sseActive: boolean;
 }
 
 const sessions = new Map<string, Session>();
@@ -42,6 +43,14 @@ function sessionJsonError(res: Response, message: string, code = -32000): void {
   });
 }
 
+function sessionConflictError(res: Response, message: string): void {
+  res.status(409).json({
+    jsonrpc: '2.0',
+    error: { code: -32000, message },
+    id: null,
+  });
+}
+
 function methodNotAllowed(res: Response, message: string): void {
   res.status(405).json({
     jsonrpc: '2.0',
@@ -54,12 +63,57 @@ function touchSession(session: Session): void {
   session.lastActivityAt = Date.now();
 }
 
+function logMcpSessionCreated(sessionId: string, userId: string): void {
+  // eslint-disable-next-line no-console
+  console.info('mcp_session_created', { sessionId, userId });
+}
+
+function logMcpSessionMiss(
+  method: string,
+  userId: string,
+  sessionId: string | undefined,
+  reason: string
+): void {
+  // eslint-disable-next-line no-console
+  console.info('mcp_session_miss', { method, userId, sessionId, reason });
+}
+
+function logMcpSseConflict(sessionId: string, userId: string): void {
+  // eslint-disable-next-line no-console
+  console.info('mcp_sse_conflict', { sessionId, userId });
+}
+
 function createServerContext(req: AuthedRequest) {
   return {
     userId: req.userId!,
     apiKeyId: req.apiKeyId,
     workforceWorkspaceId: req.workforceWorkspaceId,
   };
+}
+
+function createSessionEntry(
+  transport: StreamableHTTPServerTransport,
+  req: AuthedRequest
+): Session {
+  return {
+    transport,
+    userId: req.userId!,
+    apiKeyId: req.apiKeyId,
+    lastActivityAt: Date.now(),
+    sseActive: false,
+  };
+}
+
+function trackSseLifecycle(session: Session, res: Response): void {
+  session.sseActive = true;
+  res.on('close', () => {
+    session.sseActive = false;
+  });
+  res.on('finish', () => {
+    if (res.statusCode !== 200) {
+      session.sseActive = false;
+    }
+  });
 }
 
 async function handleStatelessPost(req: AuthedRequest, res: Response): Promise<void> {
@@ -86,9 +140,10 @@ async function handleStatefulPost(req: AuthedRequest, res: Response): Promise<vo
 
   if (!session) {
     if (!isInitializeRequest(req.body)) {
+      logMcpSessionMiss('POST', req.userId!, sessionId, 'no_session_not_initialize');
       sessionJsonError(
         res,
-        'Bad Request: no valid session and not an initialize request'
+        'Bad Request: no valid session and not an initialize request. Send a new initialize request to create a session.'
       );
       return;
     }
@@ -97,12 +152,10 @@ async function handleStatefulPost(req: AuthedRequest, res: Response): Promise<vo
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => newSessionId,
       onsessioninitialized: (id) => {
-        sessions.set(id, {
-          transport,
-          userId: req.userId!,
-          apiKeyId: req.apiKeyId,
-          lastActivityAt: Date.now(),
-        });
+        const existing = sessions.get(id);
+        if (existing) {
+          touchSession(existing);
+        }
       },
     });
     transport.onclose = () => {
@@ -110,12 +163,9 @@ async function handleStatefulPost(req: AuthedRequest, res: Response): Promise<vo
     };
     const server = createMCPServer(createServerContext(req));
     await server.connect(transport);
-    session = {
-      transport,
-      userId: req.userId!,
-      apiKeyId: req.apiKeyId,
-      lastActivityAt: Date.now(),
-    };
+    session = createSessionEntry(transport, req);
+    sessions.set(newSessionId, session);
+    logMcpSessionCreated(newSessionId, req.userId!);
   } else {
     touchSession(session);
   }
@@ -154,10 +204,25 @@ export async function handleMcpGet(req: AuthedRequest, res: Response): Promise<v
   const sessionId = Array.isArray(sessionIdHeader) ? sessionIdHeader[0] : sessionIdHeader;
   const session = sessionId ? sessions.get(sessionId) : undefined;
   if (!session) {
-    sessionJsonError(res, 'Bad Request: missing or expired MCP session id');
+    logMcpSessionMiss('GET', req.userId!, sessionId, 'missing_or_expired');
+    sessionJsonError(
+      res,
+      'Bad Request: missing or expired MCP session id. Re-initialize the MCP connection (POST initialize).'
+    );
     return;
   }
+
+  if (session.sseActive) {
+    logMcpSseConflict(sessionId!, req.userId!);
+    sessionConflictError(
+      res,
+      'Conflict: only one SSE stream is allowed per MCP session. Close the existing stream or re-initialize.'
+    );
+    return;
+  }
+
   touchSession(session);
+  trackSseLifecycle(session, res);
   await session.transport.handleRequest(req, res);
 }
 
@@ -176,7 +241,11 @@ export async function handleMcpDelete(req: AuthedRequest, res: Response): Promis
   const sessionId = Array.isArray(sessionIdHeader) ? sessionIdHeader[0] : sessionIdHeader;
   const session = sessionId ? sessions.get(sessionId) : undefined;
   if (!session) {
-    sessionJsonError(res, 'Bad Request: missing or expired MCP session id');
+    logMcpSessionMiss('DELETE', req.userId!, sessionId, 'missing_or_expired');
+    sessionJsonError(
+      res,
+      'Bad Request: missing or expired MCP session id. Re-initialize the MCP connection (POST initialize).'
+    );
     return;
   }
   touchSession(session);

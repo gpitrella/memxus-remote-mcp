@@ -21,6 +21,12 @@ function logTokenRequest(body: Record<string, string | undefined>): void {
   });
 }
 
+function logTokenSuccess(customerId: string, userId: string): void {
+  if (process.env.NODE_ENV !== 'production') return;
+  // eslint-disable-next-line no-console
+  console.info('[oauth/token]', { customerId, userId });
+}
+
 function sendTokenResponse(res: Response, accessToken: string, scope: string): void {
   res.json({
     access_token: accessToken,
@@ -52,6 +58,7 @@ async function handleRefreshTokenGrant(
     return;
   }
 
+  logTokenSuccess(client_id, result.userId);
   sendTokenResponse(res, result.accessToken, result.scope);
 }
 
@@ -187,5 +194,6 @@ export async function token(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  logTokenSuccess(client_id, consumed.userId);
   sendTokenResponse(res, apiKey, consumed.scope);
 }

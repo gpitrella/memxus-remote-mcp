@@ -68,6 +68,12 @@ const schema = z.object({
   GLAMA_MAINTAINER_EMAIL: z.string().email().default('gabriel98_@hotmail.com'),
 });
 
+/**
+ * MCP transport mode (env var, read in mcp/transport.ts):
+ * - Default: stateful (`MCP_STATELESS` unset or `false`) — required for Claude web, Smithery, and Glama.
+ * - Set `MCP_STATELESS=true` only for single-shot JSON clients; breaks SSE and session-based tool reload.
+ */
+
 const parsed = schema.parse(process.env);
 
 if (process.env.NODE_ENV === 'production') {

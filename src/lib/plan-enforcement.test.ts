@@ -6,6 +6,9 @@ import {
   resolveListLimit,
   resolveSearchLimit,
   buildDailyRateLimitState,
+  buildPlanWarningState,
+  getRetentionCutoffIso,
+  isPlanWarningsEnabled,
 } from './plan-enforcement.js';
 
 describe('plan-enforcement (Remote MCP)', () => {
@@ -28,7 +31,29 @@ describe('plan-enforcement (Remote MCP)', () => {
 
   it('builds daily rate limit state', () => {
     const state = buildDailyRateLimitState(PLANS.free.limits, 40);
-    assert.equal(state.limit, 100);
-    assert.equal(state.remaining, 60);
+    assert.equal(state.limit, 250);
+    assert.equal(state.remaining, 210);
+  });
+
+  it('builds approaching memory warning at 80%', () => {
+    const prev = process.env.ENABLE_PLAN_WARNINGS;
+    process.env.ENABLE_PLAN_WARNINGS = 'true';
+    const state = buildPlanWarningState(PLANS.free.limits, 1200, 0, 'Free');
+    assert.equal(state.level, 'approaching');
+    assert.equal(state.warnings.length, 1);
+    process.env.ENABLE_PLAN_WARNINGS = prev;
+  });
+
+  it('returns none when plan warnings disabled', () => {
+    const prev = process.env.ENABLE_PLAN_WARNINGS;
+    delete process.env.ENABLE_PLAN_WARNINGS;
+    assert.equal(isPlanWarningsEnabled(), false);
+    const state = buildPlanWarningState(PLANS.free.limits, 1400, 200, 'Free');
+    assert.equal(state.level, 'none');
+    process.env.ENABLE_PLAN_WARNINGS = prev;
+  });
+
+  it('getRetentionCutoffIso returns null for unlimited', () => {
+    assert.equal(getRetentionCutoffIso(-1), null);
   });
 });

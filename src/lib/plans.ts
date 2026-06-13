@@ -28,6 +28,7 @@ export interface PlanDefinition {
     apiKeys: number; // -1 = unlimited
     requestsPerDay: number; // -1 = unlimited
     memories: number; // -1 = unlimited
+    retentionDays: number; // -1 = unlimited retention
     listResultsMax: number; // per GET /memories; -1 = server absolute ceiling
     searchResultsMax: number; // per POST /memories/search; -1 = server absolute ceiling
   };
@@ -44,17 +45,18 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     priceLabel: '$0',
     description: 'Perfect for trying MCP, GPT Actions, or the SDK',
     features: [
-      '100 API calls / day',
-      '500 memories stored',
+      '250 API calls / day',
+      '1,500 memories stored',
       'Basic semantic search',
-      '7-day memory retention',
+      '30-day memory retention',
       '1 shared group (up to 3 members)',
       'Community support',
     ],
     limits: {
       apiKeys: 1,
-      requestsPerDay: 100,
-      memories: 500,
+      requestsPerDay: 250,
+      memories: 1_500,
+      retentionDays: 30,
       listResultsMax: 25,
       searchResultsMax: 10,
     },
@@ -81,6 +83,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       apiKeys: 5,
       requestsPerDay: 10_000,
       memories: 5_000,
+      retentionDays: 90,
       listResultsMax: 50,
       searchResultsMax: 20,
     },
@@ -108,6 +111,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       apiKeys: -1,
       requestsPerDay: -1,
       memories: 25_000,
+      retentionDays: -1,
       listResultsMax: 100,
       searchResultsMax: 50,
     },
@@ -134,6 +138,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       apiKeys: -1,
       requestsPerDay: -1,
       memories: -1,
+      retentionDays: -1,
       listResultsMax: 200,
       searchResultsMax: 100,
     },
@@ -151,6 +156,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       apiKeys: 0,
       requestsPerDay: 500,
       memories: 500,
+      retentionDays: 30,
       listResultsMax: 25,
       searchResultsMax: 10,
     },
@@ -168,6 +174,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       apiKeys: 0,
       requestsPerDay: 5_000,
       memories: 5_000,
+      retentionDays: 90,
       listResultsMax: 50,
       searchResultsMax: 20,
     },
@@ -185,6 +192,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       apiKeys: 0,
       requestsPerDay: 50_000,
       memories: 50_000,
+      retentionDays: -1,
       listResultsMax: 100,
       searchResultsMax: 50,
     },

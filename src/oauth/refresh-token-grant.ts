@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase.js';
 import { config } from '../config.js';
 
 export type RefreshTokenGrantResult =
-  | { ok: true; accessToken: string; scope: string }
+  | { ok: true; accessToken: string; scope: string; userId: string }
   | { ok: false; error: string; error_description?: string };
 
 const DEFAULT_OAUTH_SCOPE = config.SUPPORTED_SCOPES.join(' ');
@@ -58,5 +58,10 @@ export async function resolveRefreshTokenGrant(
     return { ok: false, error: 'server_error', error_description: insertError.message };
   }
 
-  return { ok: true, accessToken: newApiKey, scope: DEFAULT_OAUTH_SCOPE };
+  return {
+    ok: true,
+    accessToken: newApiKey,
+    scope: DEFAULT_OAUTH_SCOPE,
+    userId: existing.user_id as string,
+  };
 }

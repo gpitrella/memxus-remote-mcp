@@ -124,6 +124,7 @@ test('stateful handleMcp rejects tools/list without session', async () => {
   assert.equal(res.statusCode, 400);
   const err = (res.body as { error?: { message?: string } }).error;
   assert.match(String(err?.message), /no valid session/);
+  assert.match(String(err?.message), /initialize/);
 });
 
 test('stateless handleMcp does not apply session wrapper gate on tools/list', async () => {
@@ -166,4 +167,5 @@ test('stateful handleMcpGet rejects missing session', async () => {
   assert.equal(res.statusCode, 400);
   const err = (res.body as { error?: { message?: string } }).error;
   assert.match(String(err?.message), /missing or expired MCP session id/);
+  assert.match(String(err?.message), /Re-initialize/);
 });

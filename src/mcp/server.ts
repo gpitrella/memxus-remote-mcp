@@ -347,6 +347,15 @@ export function createMCPServer(ctx: McpContext): Server {
           latencyMs: Date.now() - started,
           tokensUsed: estimateTokens(responseText),
         });
+
+        const warnState = planCtx?.planWarnings;
+        if (
+          warnState &&
+          (warnState.level === 'approaching' || warnState.level === 'critical') &&
+          'structuredContent' in result
+        ) {
+          result.structuredContent.warnings = warnState.warnings;
+        }
       }
 
       return result;
