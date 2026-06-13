@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-06-13
+
+### Added
+
+- MCP Registry v1.0.2 metadata: `websiteUrl`, `icons`, `categories`, 17 `tags`, 8 `tools`, OAuth auth spec, links, screenshots
+- Publisher-provided `_meta` for discoverability (PulseMCP, Glama, VS Code gallery)
+
+### Changed
+
+- Registry `description` updated to include individuals, groups and teams use cases
+
 ## [1.0.1] - 2026-06-07
 
 ### Added

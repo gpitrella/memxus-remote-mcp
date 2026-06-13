@@ -1,23 +1,107 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "com.memxus/memxus",
   "title": "Memxus",
-  "description": "Multi-platform AI memory. One save, recall everywhere—Claude, ChatGPT, Cursor, VS Code, and more.",
-  "version": "1.0.1",
-  "icons": [
-    {
-      "src": "https://www.memxus.com/icon.png",
-      "sizes":  ["512x512"]
-    }
-  ],
+  "description": "Multi-platform AI memory for individuals, groups and teams. One save, recall everywhere.",
+  "version": "1.0.2",
+  "websiteUrl": "https://www.memxus.com",
   "repository": {
     "url": "https://github.com/gpitrella/memxus-remote-mcp",
     "source": "github"
   },
+  "icons": [
+    {
+      "src": "https://www.memxus.com/icon.png",
+      "mimeType": "image/png",
+      "sizes": ["512x512"]
+    }
+  ],
   "remotes": [
     {
       "type": "streamable-http",
       "url": "https://mcp.memxus.com/mcp"
     }
-  ]
+  ],
+  "_meta": {
+    "io.modelcontextprotocol.registry/publisher-provided": {
+      "license": "MIT",
+      "categories": ["memory", "productivity", "ai-tools", "collaboration"],
+      "tags": [
+        "memory",
+        "persistent-memory",
+        "cross-platform",
+        "claude",
+        "chatgpt",
+        "cursor",
+        "vscode",
+        "gemini",
+        "slack",
+        "oauth",
+        "mcp",
+        "context",
+        "recall",
+        "teams",
+        "groups",
+        "workforce",
+        "remote"
+      ],
+      "auth": {
+        "type": "oauth2",
+        "authorizationUrl": "https://mcp.memxus.com/oauth/authorize",
+        "tokenUrl": "https://mcp.memxus.com/oauth/token",
+        "registrationUrl": "https://mcp.memxus.com/oauth/register",
+        "wellKnownUrl": "https://mcp.memxus.com/.well-known/oauth-authorization-server/mcp",
+        "scopes": ["memories:read", "memories:write", "memories:delete"]
+      },
+      "tools": [
+        {
+          "name": "remember",
+          "description": "Save a memory with optional collection, tags, type, importance and visibility (private or shared with a group)"
+        },
+        {
+          "name": "recall",
+          "description": "Semantically search long-term memory by topic or keyword and return ranked results"
+        },
+        {
+          "name": "get_context",
+          "description": "Build a formatted context block for the current topic — ideal for injecting relevant memory into agent prompts"
+        },
+        {
+          "name": "list_memories",
+          "description": "List recent memories with optional filters by collection, tags, type or visibility"
+        },
+        {
+          "name": "get_memory",
+          "description": "Get the full content of a single memory by its UUID"
+        },
+        {
+          "name": "list_collections",
+          "description": "List all memory collections and scopes for the current user"
+        },
+        {
+          "name": "forget",
+          "description": "Delete a specific memory by ID"
+        },
+        {
+          "name": "memory_stats",
+          "description": "Show statistics about stored memories by type and collection"
+        }
+      ],
+      "links": {
+        "documentation": "https://www.memxus.com/docs/mcp",
+        "install": "https://www.memxus.com/install",
+        "dashboard": "https://dashboard.memxus.com",
+        "pricing": "https://www.memxus.com/pricing",
+        "changelog": "https://github.com/gpitrella/memxus-remote-mcp/releases",
+        "privacy": "https://www.memxus.com/privacy",
+        "reviewer": "https://github.com/gpitrella/memxus-remote-mcp/blob/main/REVIEWER.md"
+      },
+      "screenshots": [
+        {
+          "url": "https://www.memxus.com/og-image.png",
+          "description": "Memxus memory layer — save once, recall everywhere"
+        }
+      ]
+    }
+  }
 }
