@@ -42,6 +42,7 @@ import {
   type MemoryRowMinimal,
 } from '../lib/memory-crypto.js';
 import { shouldSkipContentIlike } from '../lib/memory-persistence.js';
+import { getCachedEmbedding, setCachedEmbedding } from '../lib/embedding-cache.js';
 
 export type TenantFilter = {
   userId: string;
@@ -69,6 +70,14 @@ export interface MemoryRow {
 export interface RevisionEntry {
   content: string;
   appended_at: string;
+}
+
+const MCP_PERF_LOGS = process.env.MCP_PERF_LOGS === 'true';
+
+function logPerfPhase(phase: string, ms: number, extra?: Record<string, unknown>): void {
+  if (!MCP_PERF_LOGS) return;
+  // eslint-disable-next-line no-console
+  console.info('mcp_perf_phase', { phase, ms, ...extra });
 }
 
 export async function saveMemory(p: {
@@ -268,6 +277,7 @@ export async function searchMemories(p: {
   group_id?: string;
   group_name?: string;
 }): Promise<MemoryRow[]> {
+  const searchStartedAt = Date.now();
   const limit = resolveSearchLimit(resolveLimits(p.planLimits), p.limit);
   const baseScope: MemoryScopeFilters = {
     collection: normalizeCollectionSlug(p.collection ?? undefined) ?? undefined,
@@ -275,18 +285,21 @@ export async function searchMemories(p: {
     type: p.type,
   };
   const rawCollection = p.collection ?? null;
-
-  let collections: Awaited<ReturnType<typeof listCollections>> = [];
-  try {
-    collections = await listCollections(p.userId);
-  } catch {
-    // continue without fuzzy collection resolution
-  }
-
-  const embedding = await generateEmbedding(p.query);
+  const shouldResolveCollectionHints = Boolean(rawCollection?.trim());
+  const collectionsPromise = shouldResolveCollectionHints
+    ? listCollections(p.userId).catch(() => [] as Awaited<ReturnType<typeof listCollections>>)
+    : Promise.resolve([] as Awaited<ReturnType<typeof listCollections>>);
+  const embeddingPromise = generateEmbedding(p.query);
+  const prepStartedAt = Date.now();
+  const [collections, embedding] = await Promise.all([collectionsPromise, embeddingPromise]);
+  logPerfPhase('search_prepare', Date.now() - prepStartedAt, {
+    hasCollectionHint: shouldResolveCollectionHints,
+    collectionsCount: collections.length,
+    hasEmbedding: Boolean(embedding),
+  });
   const memoryScope: MemoryScopeValue =
     p.visibility === 'private' ? 'personal' : p.visibility === 'shared' ? 'group' : 'all';
-
+  const searchDbStartedAt = Date.now();
   const results = await searchMemoriesWithScopeRetry<Record<string, unknown>>({
     query: p.query,
     baseScope,
@@ -341,23 +354,44 @@ export async function searchMemories(p: {
       return (data ?? []) as Record<string, unknown>[];
     },
   });
+  logPerfPhase('search_db', Date.now() - searchDbStartedAt, {
+    resultCount: results.length,
+    encryptedSearch: shouldSkipContentIlike(),
+  });
 
   // Decrypt all search results
+  const decryptStartedAt = Date.now();
   const decrypted = await decryptMemoryRows(
     results as unknown as MemoryRowMinimal[],
     p.userId
   );
+  logPerfPhase('search_decrypt', Date.now() - decryptStartedAt, {
+    resultCount: results.length,
+    decryptedCount: decrypted.length,
+  });
 
   // Post-decrypt keyword filter when content.ilike was skipped
   let filtered = decrypted as unknown as Record<string, unknown>[];
   if (shouldSkipContentIlike() && p.query.trim()) {
+    const postFilterStartedAt = Date.now();
     filtered = filterRowsByTextContent(
       decrypted,
       p.query
     ) as unknown as Record<string, unknown>[];
+    logPerfPhase('search_post_filter', Date.now() - postFilterStartedAt, {
+      filteredCount: filtered.length,
+    });
   }
 
+  const enrichStartedAt = Date.now();
   const enriched = await enrichRowsWithGroupNames(filtered, fetchGroupNameMap);
+  logPerfPhase('search_enrich', Date.now() - enrichStartedAt, {
+    enrichedCount: enriched.length,
+  });
+  logPerfPhase('search_total', Date.now() - searchStartedAt, {
+    finalCount: enriched.length,
+    visibility: p.visibility ?? 'all',
+  });
   return enriched as unknown as MemoryRow[];
 }
 
@@ -520,6 +554,13 @@ export async function getStats(
 
 async function generateEmbedding(text: string): Promise<number[] | null> {
   if (!config.OPENAI_API_KEY) return null;
+  const cached = getCachedEmbedding(text);
+  if (cached) {
+    logPerfPhase('embedding_cache_hit', 0, { textLength: text.length });
+    return cached;
+  }
+
+  const startedAt = Date.now();
   try {
     const res = await fetch('https://api.openai.com/v1/embeddings', {
       method: 'POST',
@@ -531,7 +572,15 @@ async function generateEmbedding(text: string): Promise<number[] | null> {
     });
     if (!res.ok) return null;
     const json = (await res.json()) as { data: { embedding: number[] }[] };
-    return json.data?.[0]?.embedding ?? null;
+    const embedding = json.data?.[0]?.embedding ?? null;
+    if (embedding) {
+      setCachedEmbedding(text, embedding);
+      logPerfPhase('embedding_openai', Date.now() - startedAt, {
+        textLength: text.length,
+        cached: false,
+      });
+    }
+    return embedding;
   } catch {
     return null;
   }
