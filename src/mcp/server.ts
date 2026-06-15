@@ -22,6 +22,7 @@ import { getPlan } from '../lib/plans.js';
 import {
   assertWithinPlanLimits,
   formatPlanLimitToolError,
+  invalidatePlanContextCache,
   logUsage,
   PlanLimitError,
   resolveListLimit,
@@ -132,6 +133,7 @@ export function createMCPServer(ctx: McpContext): Server {
             importance: m.importance,
             message: text,
           });
+          invalidatePlanContextCache(userId);
           break;
         }
         case 'recall': {
@@ -320,6 +322,7 @@ export function createMCPServer(ctx: McpContext): Server {
             deleted: true,
             message: text,
           });
+          invalidatePlanContextCache(userId);
           break;
         }
         case 'memory_stats': {

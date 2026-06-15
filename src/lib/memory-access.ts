@@ -460,6 +460,81 @@ export async function buildAccessibleVectorRpcParams(
   };
 }
 
+export interface AccessibleStatsRpcParams {
+  p_user_id: string;
+  p_group_ids: string[] | null;
+  p_workforce_workspace_ids: string[] | null;
+  p_include_personal: boolean;
+}
+
+export async function buildAccessibleStatsRpcParams(
+  userId: string,
+  accessCtx: {
+    workforceWorkspaceId?: string;
+    visibility?: VisibilityFilter;
+    memoryScope?: MemoryScopeValue;
+    groupId?: string;
+  }
+): Promise<AccessibleStatsRpcParams> {
+  const memoryScope = accessCtx.memoryScope ?? 'all';
+  const visibility = parseVisibility(accessCtx.visibility, memoryScope);
+
+  if (accessCtx.workforceWorkspaceId) {
+    return {
+      p_user_id: userId,
+      p_group_ids: null,
+      p_workforce_workspace_ids: [accessCtx.workforceWorkspaceId],
+      p_include_personal: false,
+    };
+  }
+
+  const allGroupIds = await getAccessibleGroupIds(userId);
+  const allWorkforceIds = await getAccessibleWorkforceIds(userId);
+
+  let includePersonal = false;
+  let groupIds: string[] | null = null;
+  let workforceIds: string[] | null = null;
+
+  if (memoryScope === 'personal' || visibility === 'private') {
+    includePersonal = true;
+  } else if (memoryScope === 'group') {
+    const gid = accessCtx.groupId;
+    if (gid && isValidUuid(gid)) {
+      const role = await getGroupMemberRole(userId, gid);
+      groupIds = role ? [gid] : [];
+    } else {
+      groupIds = allGroupIds;
+    }
+  } else if (memoryScope === 'workforce') {
+    const wsId = accessCtx.workforceWorkspaceId;
+    if (wsId && isValidUuid(wsId)) {
+      const wsRole = await getWorkforceMemberRoleSafe(userId, wsId);
+      workforceIds = wsRole ? [wsId] : [];
+    } else {
+      workforceIds = allWorkforceIds;
+    }
+  } else if (visibility === 'shared') {
+    const gid = accessCtx.groupId;
+    if (gid && isValidUuid(gid)) {
+      const role = await getGroupMemberRole(userId, gid);
+      groupIds = role ? [gid] : [];
+    } else {
+      groupIds = allGroupIds;
+    }
+  } else {
+    includePersonal = true;
+    groupIds = allGroupIds.length > 0 ? allGroupIds : null;
+    workforceIds = allWorkforceIds.length > 0 ? allWorkforceIds : null;
+  }
+
+  return {
+    p_user_id: userId,
+    p_group_ids: groupIds,
+    p_workforce_workspace_ids: workforceIds,
+    p_include_personal: includePersonal,
+  };
+}
+
 export async function fetchGroupNameMap(
   groupIds: string[]
 ): Promise<Map<string, string>> {

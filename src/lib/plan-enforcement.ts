@@ -1,6 +1,16 @@
 // SYNC: Dash-AIMemory/lib/plan-enforcement.ts
 import { supabase } from './supabase.js';
 import { getPlan, PLANS, type PlanDefinition, type PlanId } from './plans.js';
+import {
+  getCachedPlanContext,
+  isPlanContextCacheEnabled,
+  setCachedPlanContext,
+} from './plan-context-cache.js';
+import { logPerfPhase } from './mcp-perf.js';
+
+export { invalidatePlanContextCache } from './plan-context-cache.js';
+
+const DAILY_LIMIT_REFRESH_BUFFER = 5;
 
 export type PlanLimitCode = 'PLAN_LIMIT_MEMORY' | 'PLAN_LIMIT_DAILY';
 
@@ -308,43 +318,43 @@ export interface AssertPlanLimitsOptions {
   isWriteMemory?: boolean;
 }
 
-export async function assertWithinPlanLimits(opts: AssertPlanLimitsOptions): Promise<UserPlanContext> {
-  if (!isPlanLimitsEnabled()) {
-    const ctx = await loadUserPlan(opts.userId);
-    if (!ctx) throw new Error('User plan context unavailable');
-    pruneExpiredMemoriesForUser(opts.userId, ctx.limits);
-    const [memoryCount, dailyUsage] = await Promise.all([
-      getMemoryCount(opts.userId, ctx.limits),
-      getDailyUsageCount(opts.userId),
-    ]);
-    ctx.dailyUsage = dailyUsage;
-    ctx.memoryCount = memoryCount;
-    ctx.planWarnings = buildPlanWarningState(ctx.limits, memoryCount, dailyUsage, ctx.plan.name);
-    return ctx;
-  }
+function shouldBypassPlanCache(ctx: UserPlanContext): boolean {
+  const limit = ctx.limits.requestsPerDay;
+  const usage = ctx.dailyUsage ?? 0;
+  if (limit === -1) return false;
+  return usage >= Math.max(0, limit - DAILY_LIMIT_REFRESH_BUFFER);
+}
 
-  if (opts.isForget) {
-    const ctx = await loadUserPlan(opts.userId);
-    if (!ctx) throw new Error('User plan context unavailable');
-    const dailyUsage = await getDailyUsageCount(opts.userId);
-    ctx.dailyUsage = dailyUsage;
-    return ctx;
-  }
-
-  const ctx = await loadUserPlan(opts.userId);
+async function buildFreshPlanContext(userId: string): Promise<UserPlanContext> {
+  const ctx = await loadUserPlan(userId);
   if (!ctx) throw new Error('User plan context unavailable');
 
-  pruneExpiredMemoriesForUser(opts.userId, ctx.limits);
+  pruneExpiredMemoriesForUser(userId, ctx.limits);
 
   const [memoryCount, dailyUsage] = await Promise.all([
-    getMemoryCount(opts.userId, ctx.limits),
-    getDailyUsageCount(opts.userId),
+    getMemoryCount(userId, ctx.limits),
+    getDailyUsageCount(userId),
   ]);
 
-  const warnState = buildPlanWarningState(ctx.limits, memoryCount, dailyUsage, ctx.plan.name);
   ctx.dailyUsage = dailyUsage;
   ctx.memoryCount = memoryCount;
-  ctx.planWarnings = warnState;
+  ctx.planWarnings = buildPlanWarningState(ctx.limits, memoryCount, dailyUsage, ctx.plan.name);
+  return ctx;
+}
+
+function enforcePlanLimits(ctx: UserPlanContext, opts: AssertPlanLimitsOptions): UserPlanContext {
+  if (!isPlanLimitsEnabled()) {
+    return ctx;
+  }
+
+  const warnState = ctx.planWarnings ?? buildPlanWarningState(
+    ctx.limits,
+    ctx.memoryCount ?? 0,
+    ctx.dailyUsage ?? 0,
+    ctx.plan.name
+  );
+  const memoryCount = ctx.memoryCount ?? 0;
+  const dailyUsage = ctx.dailyUsage ?? 0;
 
   if (isOverDailyLimit(dailyUsage, ctx.limits)) {
     throw new PlanLimitError(
@@ -362,7 +372,7 @@ export async function assertWithinPlanLimits(opts: AssertPlanLimitsOptions): Pro
     );
   }
 
-  if (!opts.isWriteMemory && isOverMemoryLimit(memoryCount, ctx.limits)) {
+  if (!opts.isWriteMemory && !opts.isForget && isOverMemoryLimit(memoryCount, ctx.limits)) {
     throw new PlanLimitError(
       'PLAN_LIMIT_MEMORY',
       `You have ${memoryCount} memories but your ${ctx.plan.name} plan allows ${ctx.limits.memories}. Use forget to delete memories or upgrade at ${BILLING_UPGRADE_URL}`,
@@ -371,6 +381,36 @@ export async function assertWithinPlanLimits(opts: AssertPlanLimitsOptions): Pro
   }
 
   return ctx;
+}
+
+export async function assertWithinPlanLimits(opts: AssertPlanLimitsOptions): Promise<UserPlanContext> {
+  const startedAt = Date.now();
+
+  if (opts.isForget) {
+    const ctx = await loadUserPlan(opts.userId);
+    if (!ctx) throw new Error('User plan context unavailable');
+    const dailyUsage = await getDailyUsageCount(opts.userId);
+    ctx.dailyUsage = dailyUsage;
+    logPerfPhase('plan_check', Date.now() - startedAt, { cached: false, forget: true });
+    return ctx;
+  }
+
+  if (isPlanContextCacheEnabled()) {
+    const cached = getCachedPlanContext(opts.userId);
+    if (cached && !shouldBypassPlanCache(cached)) {
+      const result = enforcePlanLimits(cached, opts);
+      logPerfPhase('plan_check', Date.now() - startedAt, { cached: true });
+      return result;
+    }
+  }
+
+  const fresh = await buildFreshPlanContext(opts.userId);
+  if (isPlanContextCacheEnabled()) {
+    setCachedPlanContext(opts.userId, fresh);
+  }
+  const result = enforcePlanLimits(fresh, opts);
+  logPerfPhase('plan_check', Date.now() - startedAt, { cached: false });
+  return result;
 }
 
 export function formatPlanLimitToolError(err: PlanLimitError): string {

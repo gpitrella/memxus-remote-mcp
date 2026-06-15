@@ -1,16 +1,17 @@
 import { supabase } from '../lib/supabase.js';
-import { config } from '../config.js';
 import { getPlan, type PlanDefinition } from '../lib/plans.js';
 import { resolveListLimit, resolveSearchLimit } from '../lib/plan-enforcement.js';
 import { enrichRowsWithGroupNames } from '../lib/memory-public.js';
 import {
   applyMemoryListFilter,
+  buildAccessibleStatsRpcParams,
   buildAccessibleVectorRpcParams,
   canDeleteMemory,
   canReadMemory,
   canUpdateMemory,
   fetchGroupNameMap,
   resolveMemoryWriteTarget,
+  type AccessibleStatsRpcParams,
   type MemoryRow as AccessMemoryRow,
   type MemoryQueryBuilder,
   type MemoryScopeValue,
@@ -42,7 +43,9 @@ import {
   type MemoryRowMinimal,
 } from '../lib/memory-crypto.js';
 import { shouldSkipContentIlike } from '../lib/memory-persistence.js';
-import { getCachedEmbedding, setCachedEmbedding } from '../lib/embedding-cache.js';
+import { scheduleEmbeddingUpdate } from '../lib/embedding-background.js';
+import { generateEmbedding } from '../lib/embedding.js';
+import { logPerfPhase } from '../lib/mcp-perf.js';
 
 export type TenantFilter = {
   userId: string;
@@ -72,14 +75,6 @@ export interface RevisionEntry {
   appended_at: string;
 }
 
-const MCP_PERF_LOGS = process.env.MCP_PERF_LOGS === 'true';
-
-function logPerfPhase(phase: string, ms: number, extra?: Record<string, unknown>): void {
-  if (!MCP_PERF_LOGS) return;
-  // eslint-disable-next-line no-console
-  console.info('mcp_perf_phase', { phase, ms, ...extra });
-}
-
 export async function saveMemory(p: {
   userId: string;
   workforceWorkspaceId?: string;
@@ -103,6 +98,8 @@ export async function saveMemory(p: {
       newContent: p.content,
     });
   }
+
+  const saveStartedAt = Date.now();
 
   const tags = normalizeTags(p.tags);
   const collection = resolveCollection({
@@ -167,23 +164,15 @@ export async function saveMemory(p: {
   if (error) throw new Error(`saveMemory: ${error.message}`);
 
   const row = data as MemoryRow;
-  const embedding = await generateEmbedding(p.content);
-  if (embedding) {
-    const { data: updated, error: embedError } = await supabase
-      .from('memories')
-      .update({ embedding })
-      .eq('id', row.id)
-      .select()
-      .single();
-    if (!embedError && updated) {
-      const dec = await decryptMemoryRow(updated as unknown as MemoryRowMinimal, p.userId);
-      if (!dec) throw new Error('Memory not found');
-      return dec as unknown as MemoryRow;
-    }
-  }
+  scheduleEmbeddingUpdate(row.id, p.content);
 
   const dec = await decryptMemoryRow(row as unknown as MemoryRowMinimal, p.userId);
   if (!dec) throw new Error('Memory not found');
+  logPerfPhase('remember_save', Date.now() - saveStartedAt, {
+    memoryId: row.id,
+    collection,
+    embedding: 'async',
+  });
   return dec as unknown as MemoryRow;
 }
 
@@ -193,6 +182,7 @@ export async function appendToMemory(p: {
   memoryId: string;
   newContent: string;
 }): Promise<MemoryRow> {
+  const appendStartedAt = Date.now();
   const { data: existing, error: fetchError } = await supabase
     .from('memories')
     .select('*')
@@ -224,10 +214,7 @@ export async function appendToMemory(p: {
 
   const newMetadata = { ...metadata, revisions };
 
-  // Embedding from plaintext
-  const embedding = await generateEmbedding(merged);
-
-  // Encrypt for storage
+  // Encrypt for storage (embedding scheduled after persist)
   const { content: encContent, metadata: encMeta } = await prepareContentForStorage(
     merged,
     newMetadata,
@@ -244,7 +231,6 @@ export async function appendToMemory(p: {
     metadata: encMeta,
     updated_at: new Date().toISOString(),
   };
-  if (embedding) updates.embedding = embedding;
 
   const { data, error } = await supabase
     .from('memories')
@@ -255,8 +241,14 @@ export async function appendToMemory(p: {
 
   if (error) throw new Error(`appendToMemory: ${error.message}`);
 
+  scheduleEmbeddingUpdate(p.memoryId, merged);
+
   const dec = await decryptMemoryRow(data as unknown as MemoryRowMinimal, p.userId);
   if (!dec) throw new Error('Memory not found');
+  logPerfPhase('append_save', Date.now() - appendStartedAt, {
+    memoryId: p.memoryId,
+    embedding: 'async',
+  });
   return dec as unknown as MemoryRow;
 }
 
@@ -516,6 +508,67 @@ export async function getStats(
   userId: string,
   workforceWorkspaceId?: string
 ): Promise<{ total: number; byType: Record<string, number>; byCollection: Record<string, number> }> {
+  const statsStartedAt = Date.now();
+
+  try {
+    const rpcParams = await buildAccessibleStatsRpcParams(userId, {
+      workforceWorkspaceId,
+      memoryScope: 'all',
+      visibility: 'all',
+    });
+    const rpcStats = await fetchStatsViaRpc(rpcParams);
+    if (rpcStats) {
+      logPerfPhase('stats_query', Date.now() - statsStartedAt, { via: 'rpc' });
+      return rpcStats;
+    }
+  } catch {
+    // Fall back to list-based aggregation when RPC is unavailable.
+  }
+
+  const fallback = await fetchStatsFallback(userId, workforceWorkspaceId);
+  logPerfPhase('stats_query', Date.now() - statsStartedAt, { via: 'fallback' });
+  return fallback;
+}
+
+function parseStatsRpcPayload(data: unknown): {
+  total: number;
+  byType: Record<string, number>;
+  byCollection: Record<string, number>;
+} | null {
+  if (!data || typeof data !== 'object') return null;
+  const payload = data as Record<string, unknown>;
+  const total = Number(payload.total);
+  if (!Number.isFinite(total)) return null;
+
+  const byType =
+    payload.by_type && typeof payload.by_type === 'object'
+      ? (payload.by_type as Record<string, number>)
+      : payload.byType && typeof payload.byType === 'object'
+        ? (payload.byType as Record<string, number>)
+        : {};
+
+  const byCollection =
+    payload.by_collection && typeof payload.by_collection === 'object'
+      ? (payload.by_collection as Record<string, number>)
+      : payload.byCollection && typeof payload.byCollection === 'object'
+        ? (payload.byCollection as Record<string, number>)
+        : {};
+
+  return { total, byType, byCollection };
+}
+
+async function fetchStatsViaRpc(
+  params: AccessibleStatsRpcParams
+): Promise<{ total: number; byType: Record<string, number>; byCollection: Record<string, number> } | null> {
+  const { data, error } = await supabase.rpc('get_accessible_memory_stats', params);
+  if (error || data == null) return null;
+  return parseStatsRpcPayload(data);
+}
+
+async function fetchStatsFallback(
+  userId: string,
+  workforceWorkspaceId?: string
+): Promise<{ total: number; byType: Record<string, number>; byCollection: Record<string, number> }> {
   let countQ = supabase.from('memories').select('*', { count: 'exact', head: true });
   const countAccess = await applyMemoryListFilter(countQ, {
     userId,
@@ -550,40 +603,6 @@ export async function getStats(
     byCollection[coll] = (byCollection[coll] ?? 0) + 1;
   }
   return { total: count ?? rows.length, byType, byCollection };
-}
-
-async function generateEmbedding(text: string): Promise<number[] | null> {
-  if (!config.OPENAI_API_KEY) return null;
-  const cached = getCachedEmbedding(text);
-  if (cached) {
-    logPerfPhase('embedding_cache_hit', 0, { textLength: text.length });
-    return cached;
-  }
-
-  const startedAt = Date.now();
-  try {
-    const res = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({ model: 'text-embedding-ada-002', input: text }),
-    });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { data: { embedding: number[] }[] };
-    const embedding = json.data?.[0]?.embedding ?? null;
-    if (embedding) {
-      setCachedEmbedding(text, embedding);
-      logPerfPhase('embedding_openai', Date.now() - startedAt, {
-        textLength: text.length,
-        cached: false,
-      });
-    }
-    return embedding;
-  } catch {
-    return null;
-  }
 }
 
 export { hasScopedSearch };

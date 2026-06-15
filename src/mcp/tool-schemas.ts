@@ -103,7 +103,7 @@ export const MCP_TOOLS: Tool[] = [
     name: 'remember',
     ...toolMeta('Remember', { openWorld: true, idempotent: false }),
     description:
-      'Save important information to long-term memory. Always set collection when the topic is clear: project work → project:<slug>, personal tastes → personal:preferences. Use append_to to extend an existing memory instead of creating duplicates.',
+      'Save important information to long-term memory. Always set collection when the topic is clear: project work → project:<slug>, personal tastes → personal:preferences. Use append_to to extend an existing memory instead of creating duplicates. Vector search indexing completes asynchronously within a few seconds after save.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -159,7 +159,7 @@ export const MCP_TOOLS: Tool[] = [
     name: 'recall',
     ...toolMeta('Recall memories', { readOnly: true, openWorld: true, idempotent: true }),
     description:
-      'Search long-term memory. Call list_collections first when the scope is unclear. Partial collection names are OK — the server resolves similar slugs. Put topic keywords in query.',
+      'Search long-term memory. Call list_collections first when the scope is unclear. Partial collection names are OK — the server resolves similar slugs. Put topic keywords in query. Very recent saves may match via text fallback until vector indexing finishes.',
     inputSchema: {
       type: 'object',
       properties: {
