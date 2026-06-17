@@ -1,8 +1,6 @@
-<p align="center">
-  <img src="brand/logo.png" alt="AI Memory Logo" width="120" />
-</p>
 
-# AI Memory Remote MCP Server
+
+# Memxus Remote MCP Server
 
 OAuth 2.1 + PKCE remote MCP server for Claude Connectors. Streamable HTTP transport; proxies memory tools to Supabase.
 
@@ -31,11 +29,11 @@ npm run typecheck
 
 ## Railway deploy
 
-Guía completa: [STEP_BY_STEP.md §6](STEP_BY_STEP.md#6-deploy-a-railway).
+Guía completa: 
 
 - Variables en Railway → Settings → Variables (no subir `.env`).
 - `MCP_PUBLIC_URL` = URL pública del servicio (Networking), sin `/mcp`.
-- Health check: `/health` ([`railway.toml`](railway.toml)).
+- Health check: `/health` (`[railway.toml](railway.toml)`).
 - Node 20 on Railway: Supabase Realtime needs the `ws` package (configured in `src/lib/supabase.ts`). Optional: `RAILPACK_NODE_VERSION=22` for native WebSocket.
 
 ```bash
@@ -66,7 +64,34 @@ git push origin vX.Y.Z
 
 Pushing a `v*` tag runs [.github/workflows/release.yml](.github/workflows/release.yml) (quality gate + GitHub Release with `server.json` attached).
 
-Production endpoint: https://mcp.memxus.com/mcp — see [REVIEWER.md](REVIEWER.md) for OAuth and Bearer setup.
+Production endpoint: [https://mcp.memxus.com/mcp](https://mcp.memxus.com/mcp) — see [REVIEWER.md](REVIEWER.md) for OAuth and Bearer setup.
+
+## Pre-publication secrets audit
+
+Run from the repo root before making the repository public. **Last audit: 2026-06-17 — PASSED.**
+
+```bash
+# 1. Verify .env was never committed
+git log --all --full-history -- .env .env.local .env.production
+
+# 2. Check for .env* files added in history
+git log --all --oneline --diff-filter=A -- "*.env*"
+
+# 3. Grep current tree for dangerous patterns (exclude .example)
+git grep -rn -E "(service_role|anon_key|sk-[a-zA-Z0-9]{20,}|aimem_[a-zA-Z0-9]+|eyJ[a-zA-Z0-9_-]{20,})" -- ":(exclude)*.example" ":(exclude)CHANGELOG*"
+
+# 4. Search full git history for leaked keys
+git log --all -p --follow -S "service_role" -- . | head -100
+git log --all -p --follow -S "SUPABASE_SERVICE_ROLE_KEY=" -- . | head -100
+```
+
+| Check | Expected |
+|-------|----------|
+| Commands 1–2 | No `.env` commits (only `.env.example` in initial commit) |
+| Command 3 | Only placeholders (`aimem_YOUR_KEY`), test fixtures, SQL comments |
+| Command 4 | No real key values in diffs |
+
+If commands 1 or 4 find real secrets, rotate keys immediately and run `git filter-repo --path .env --invert-paths` before publishing.
 
 ## Deferred
 
