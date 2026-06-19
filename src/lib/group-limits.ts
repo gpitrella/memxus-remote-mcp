@@ -14,6 +14,7 @@ export interface GroupPlanLimits {
 
 const GROUP_LIMITS: Record<PlanId, GroupPlanLimits> = {
   free: { maxGroupsOwned: 1, maxMembersPerGroup: 3 },
+  starter: { maxGroupsOwned: 2, maxMembersPerGroup: 5 },
   pro: { maxGroupsOwned: -1, maxMembersPerGroup: 10 },
   team: { maxGroupsOwned: -1, maxMembersPerGroup: -1 },
   enterprise: { maxGroupsOwned: -1, maxMembersPerGroup: -1 },

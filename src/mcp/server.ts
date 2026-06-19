@@ -332,6 +332,8 @@ export function createMCPServer(ctx: McpContext): Server {
             total: s.total,
             by_type: s.byType,
             by_collection: s.byCollection,
+            storage_bytes_used: s.storageBytesUsed,
+            storage_bytes_limit: s.storageBytesLimit,
             message: text,
           });
           break;

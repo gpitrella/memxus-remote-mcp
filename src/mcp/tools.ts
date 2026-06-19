@@ -1,6 +1,11 @@
 import { supabase } from '../lib/supabase.js';
 import { getPlan, type PlanDefinition } from '../lib/plans.js';
-import { resolveListLimit, resolveSearchLimit } from '../lib/plan-enforcement.js';
+import { resolveListLimit, resolveSearchLimit, loadUserPlan, assertWriteStorageAllowed } from '../lib/plan-enforcement.js';
+import {
+  estimateMemoryPayloadBytes,
+  estimateStorageDeltaForAppend,
+  getStorageBytesUsed,
+} from '../lib/storage-bytes.js';
 import { enrichRowsWithGroupNames } from '../lib/memory-public.js';
 import {
   applyMemoryListFilter,
@@ -98,6 +103,11 @@ export async function saveMemory(p: {
       newContent: p.content,
     });
   }
+
+  await assertWriteStorageAllowed(
+    p.userId,
+    estimateMemoryPayloadBytes(p.content, p.metadata ?? {})
+  );
 
   const saveStartedAt = Date.now();
 
@@ -199,6 +209,13 @@ export async function appendToMemory(p: {
   if (!decrypted) throw new Error('Memory not found');
 
   const existingContent = decrypted.content as string;
+  const metadata = (decrypted.metadata as Record<string, unknown>) || {};
+
+  await assertWriteStorageAllowed(
+    p.userId,
+    estimateStorageDeltaForAppend(existingContent, p.newContent, metadata)
+  );
+
   const merged = `${existingContent}${APPEND_SEPARATOR}${p.newContent.trim()}`;
   if (merged.length > MAX_MEMORY_CONTENT_LENGTH) {
     throw new Error(
@@ -206,7 +223,6 @@ export async function appendToMemory(p: {
     );
   }
 
-  const metadata = (decrypted.metadata as Record<string, unknown>) || {};
   const revisions = Array.isArray(metadata.revisions)
     ? [...(metadata.revisions as RevisionEntry[])]
     : [];
@@ -507,8 +523,20 @@ export async function deleteMemory(p: {
 export async function getStats(
   userId: string,
   workforceWorkspaceId?: string
-): Promise<{ total: number; byType: Record<string, number>; byCollection: Record<string, number> }> {
+): Promise<{
+  total: number;
+  byType: Record<string, number>;
+  byCollection: Record<string, number>;
+  storageBytesUsed?: number;
+  storageBytesLimit?: number;
+}> {
   const statsStartedAt = Date.now();
+
+  let stats: {
+    total: number;
+    byType: Record<string, number>;
+    byCollection: Record<string, number>;
+  };
 
   try {
     const rpcParams = await buildAccessibleStatsRpcParams(userId, {
@@ -519,15 +547,25 @@ export async function getStats(
     const rpcStats = await fetchStatsViaRpc(rpcParams);
     if (rpcStats) {
       logPerfPhase('stats_query', Date.now() - statsStartedAt, { via: 'rpc' });
-      return rpcStats;
+      stats = rpcStats;
+    } else {
+      stats = await fetchStatsFallback(userId, workforceWorkspaceId);
+      logPerfPhase('stats_query', Date.now() - statsStartedAt, { via: 'fallback' });
     }
   } catch {
-    // Fall back to list-based aggregation when RPC is unavailable.
+    stats = await fetchStatsFallback(userId, workforceWorkspaceId);
+    logPerfPhase('stats_query', Date.now() - statsStartedAt, { via: 'fallback' });
   }
 
-  const fallback = await fetchStatsFallback(userId, workforceWorkspaceId);
-  logPerfPhase('stats_query', Date.now() - statsStartedAt, { via: 'fallback' });
-  return fallback;
+  const planCtx = await loadUserPlan(userId);
+  const limits = planCtx?.limits ?? getPlan('free').limits;
+  const storageBytesUsed = await getStorageBytesUsed(userId, limits);
+
+  return {
+    ...stats,
+    storageBytesUsed,
+    storageBytesLimit: limits.storageBytes,
+  };
 }
 
 function parseStatsRpcPayload(data: unknown): {

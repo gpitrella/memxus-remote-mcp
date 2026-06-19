@@ -7,12 +7,17 @@ import {
   setCachedPlanContext,
 } from './plan-context-cache.js';
 import { logPerfPhase } from './mcp-perf.js';
+import {
+  getStorageBytesUsed,
+  isOverStorageLimit,
+  wouldExceedStorageLimit,
+} from './storage-bytes.js';
 
 export { invalidatePlanContextCache } from './plan-context-cache.js';
 
 const DAILY_LIMIT_REFRESH_BUFFER = 5;
 
-export type PlanLimitCode = 'PLAN_LIMIT_MEMORY' | 'PLAN_LIMIT_DAILY';
+export type PlanLimitCode = 'PLAN_LIMIT_MEMORY' | 'PLAN_LIMIT_STORAGE' | 'PLAN_LIMIT_DAILY';
 
 export const BILLING_UPGRADE_URL =
   process.env.BILLING_UPGRADE_URL || 'https://dashboard.memxus.com/billing';
@@ -41,13 +46,14 @@ export interface UserPlanContext {
   limits: PlanDefinition['limits'];
   dailyUsage?: number;
   memoryCount?: number;
+  storageBytesUsed?: number;
   planWarnings?: PlanWarningState;
 }
 
 export type PlanWarningLevel = 'none' | 'approaching' | 'critical';
 
 export interface PlanWarning {
-  resource: 'memory' | 'daily';
+  resource: 'memory' | 'storage' | 'daily';
   level: Exclude<PlanWarningLevel, 'none'>;
   current: number;
   limit: number;
@@ -152,7 +158,7 @@ function maxWarningLevel(a: PlanWarningLevel, b: PlanWarningLevel): PlanWarningL
 }
 
 function buildResourceWarning(
-  resource: 'memory' | 'daily',
+  resource: 'memory' | 'storage' | 'daily',
   current: number,
   limit: number,
   planName: string
@@ -163,7 +169,12 @@ function buildResourceWarning(
   if (level === 'none') return null;
 
   const percent = Math.min(100, Math.round(ratio * 100));
-  const resourceLabel = resource === 'memory' ? 'memory storage' : 'daily API quota';
+  const resourceLabel =
+    resource === 'memory'
+      ? 'memory count'
+      : resource === 'storage'
+        ? 'memory storage'
+        : 'daily API quota';
   const message =
     level === 'critical'
       ? `You have used ${percent}% of your ${resourceLabel} (${current}/${limit} on ${planName}). Upgrade at ${BILLING_UPGRADE_URL}`
@@ -176,7 +187,8 @@ export function buildPlanWarningState(
   limits: PlanDefinition['limits'],
   memoryCount: number,
   dailyUsage: number,
-  planName: string
+  planName: string,
+  storageBytesUsed = 0
 ): PlanWarningState {
   if (!isPlanWarningsEnabled()) {
     return { level: 'none', warnings: [], message: null };
@@ -185,6 +197,13 @@ export function buildPlanWarningState(
   const warnings: PlanWarning[] = [];
   const memoryWarn = buildResourceWarning('memory', memoryCount, limits.memories, planName);
   if (memoryWarn) warnings.push(memoryWarn);
+  const storageWarn = buildResourceWarning(
+    'storage',
+    storageBytesUsed,
+    limits.storageBytes,
+    planName
+  );
+  if (storageWarn) warnings.push(storageWarn);
   const dailyWarn = buildResourceWarning('daily', dailyUsage, limits.requestsPerDay, planName);
   if (dailyWarn) warnings.push(dailyWarn);
 
@@ -224,7 +243,7 @@ export function pruneExpiredMemoriesForUser(
     });
 }
 
-const PAID_PLANS = new Set<PlanId>(['pro', 'team', 'enterprise']);
+const PAID_PLANS = new Set<PlanId>(['starter', 'pro', 'team', 'enterprise']);
 
 export function isPlanLimitsEnabled(): boolean {
   return process.env.PLAN_LIMITS_ENABLED !== 'false';
@@ -316,6 +335,7 @@ export interface AssertPlanLimitsOptions {
   toolOrEndpoint: string;
   isForget?: boolean;
   isWriteMemory?: boolean;
+  additionalStorageBytes?: number;
 }
 
 function shouldBypassPlanCache(ctx: UserPlanContext): boolean {
@@ -331,14 +351,22 @@ async function buildFreshPlanContext(userId: string): Promise<UserPlanContext> {
 
   pruneExpiredMemoriesForUser(userId, ctx.limits);
 
-  const [memoryCount, dailyUsage] = await Promise.all([
+  const [memoryCount, dailyUsage, storageBytesUsed] = await Promise.all([
     getMemoryCount(userId, ctx.limits),
     getDailyUsageCount(userId),
+    getStorageBytesUsed(userId, ctx.limits),
   ]);
 
   ctx.dailyUsage = dailyUsage;
   ctx.memoryCount = memoryCount;
-  ctx.planWarnings = buildPlanWarningState(ctx.limits, memoryCount, dailyUsage, ctx.plan.name);
+  ctx.storageBytesUsed = storageBytesUsed;
+  ctx.planWarnings = buildPlanWarningState(
+    ctx.limits,
+    memoryCount,
+    dailyUsage,
+    ctx.plan.name,
+    storageBytesUsed
+  );
   return ctx;
 }
 
@@ -351,10 +379,13 @@ function enforcePlanLimits(ctx: UserPlanContext, opts: AssertPlanLimitsOptions):
     ctx.limits,
     ctx.memoryCount ?? 0,
     ctx.dailyUsage ?? 0,
-    ctx.plan.name
+    ctx.plan.name,
+    ctx.storageBytesUsed ?? 0
   );
   const memoryCount = ctx.memoryCount ?? 0;
   const dailyUsage = ctx.dailyUsage ?? 0;
+  const storageBytesUsed = ctx.storageBytesUsed ?? 0;
+  const additionalStorage = opts.additionalStorageBytes ?? 0;
 
   if (isOverDailyLimit(dailyUsage, ctx.limits)) {
     throw new PlanLimitError(
@@ -364,15 +395,28 @@ function enforcePlanLimits(ctx: UserPlanContext, opts: AssertPlanLimitsOptions):
     );
   }
 
-  if (opts.isWriteMemory && isOverMemoryLimit(memoryCount, ctx.limits)) {
-    throw new PlanLimitError(
-      'PLAN_LIMIT_MEMORY',
-      `Memory storage limit reached (${ctx.limits.memories} on ${ctx.plan.name}). Delete memories with forget or upgrade at ${BILLING_UPGRADE_URL}`,
-      warnState
-    );
+  if (opts.isWriteMemory) {
+    if (isOverMemoryLimit(memoryCount, ctx.limits)) {
+      throw new PlanLimitError(
+        'PLAN_LIMIT_MEMORY',
+        `Memory count limit reached (${ctx.limits.memories} on ${ctx.plan.name}). Delete memories with forget or upgrade at ${BILLING_UPGRADE_URL}`,
+        warnState
+      );
+    }
+    if (
+      isOverStorageLimit(storageBytesUsed, ctx.limits) ||
+      wouldExceedStorageLimit(storageBytesUsed, additionalStorage, ctx.limits)
+    ) {
+      throw new PlanLimitError(
+        'PLAN_LIMIT_STORAGE',
+        `Memory storage limit reached on ${ctx.plan.name}. Delete memories with forget or upgrade at ${BILLING_UPGRADE_URL}`,
+        warnState
+      );
+    }
+    return ctx;
   }
 
-  if (!opts.isWriteMemory && !opts.isForget && isOverMemoryLimit(memoryCount, ctx.limits)) {
+  if (!opts.isForget && isOverMemoryLimit(memoryCount, ctx.limits)) {
     throw new PlanLimitError(
       'PLAN_LIMIT_MEMORY',
       `You have ${memoryCount} memories but your ${ctx.plan.name} plan allows ${ctx.limits.memories}. Use forget to delete memories or upgrade at ${BILLING_UPGRADE_URL}`,
@@ -380,7 +424,39 @@ function enforcePlanLimits(ctx: UserPlanContext, opts: AssertPlanLimitsOptions):
     );
   }
 
+  if (!opts.isForget && isOverStorageLimit(storageBytesUsed, ctx.limits)) {
+    throw new PlanLimitError(
+      'PLAN_LIMIT_STORAGE',
+      `Memory storage limit reached on ${ctx.plan.name}. Delete memories with forget or upgrade at ${BILLING_UPGRADE_URL}`,
+      warnState
+    );
+  }
+
   return ctx;
+}
+
+export async function assertWriteStorageAllowed(
+  userId: string,
+  additionalBytes: number
+): Promise<void> {
+  if (!isPlanLimitsEnabled() || additionalBytes <= 0) return;
+  const ctx = await loadUserPlan(userId);
+  if (!ctx) throw new Error('User plan context unavailable');
+  const storageBytesUsed = await getStorageBytesUsed(userId, ctx.limits);
+  if (wouldExceedStorageLimit(storageBytesUsed, additionalBytes, ctx.limits)) {
+    const warnState = buildPlanWarningState(
+      ctx.limits,
+      await getMemoryCount(userId, ctx.limits),
+      await getDailyUsageCount(userId),
+      ctx.plan.name,
+      storageBytesUsed
+    );
+    throw new PlanLimitError(
+      'PLAN_LIMIT_STORAGE',
+      `Memory storage limit reached on ${ctx.plan.name}. Delete memories with forget or upgrade at ${BILLING_UPGRADE_URL}`,
+      warnState
+    );
+  }
 }
 
 export async function assertWithinPlanLimits(opts: AssertPlanLimitsOptions): Promise<UserPlanContext> {

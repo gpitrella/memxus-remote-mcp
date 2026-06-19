@@ -58,6 +58,8 @@ export function formatMemoryStatsText(s: {
   total: number;
   byType: Record<string, number>;
   byCollection: Record<string, number>;
+  storageBytesUsed?: number;
+  storageBytesLimit?: number;
 }): string {
   const typeBreakdown = Object.entries(s.byType)
     .map(([t, c]) => `  ${t}: ${c}`)
@@ -65,5 +67,21 @@ export function formatMemoryStatsText(s: {
   const collBreakdown = Object.entries(s.byCollection)
     .map(([t, c]) => `  ${t}: ${c}`)
     .join('\n');
-  return `Memory Statistics\n\nTotal: ${s.total}\n\nBy type:\n${typeBreakdown || '  (none)'}\n\nBy collection:\n${collBreakdown || '  (none)'}`;
+  const storageLine =
+    s.storageBytesUsed != null
+      ? `\nStorage: ${formatBytes(s.storageBytesUsed)}${
+          s.storageBytesLimit != null && s.storageBytesLimit !== -1
+            ? ` / ${formatBytes(s.storageBytesLimit)}`
+            : s.storageBytesLimit === -1
+              ? ' (unlimited)'
+              : ''
+        }`
+      : '';
+  return `Memory Statistics\n\nTotal: ${s.total}${storageLine}\n\nBy type:\n${typeBreakdown || '  (none)'}\n\nBy collection:\n${collBreakdown || '  (none)'}`;
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }

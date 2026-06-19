@@ -370,6 +370,14 @@ export const MCP_TOOLS: Tool[] = [
           additionalProperties: { type: 'number' },
           description: 'Count per collection slug.',
         },
+        storage_bytes_used: {
+          type: 'number',
+          description: 'Total storage bytes used (content + metadata + embedding).',
+        },
+        storage_bytes_limit: {
+          type: 'number',
+          description: 'Plan storage limit in bytes (-1 = unlimited).',
+        },
         message: { type: 'string', description: 'Human-readable statistics (same as content text).' },
       },
       required: ['total', 'by_type', 'by_collection', 'message'],

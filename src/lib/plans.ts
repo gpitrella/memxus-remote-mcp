@@ -7,6 +7,7 @@
  */
 export type PlanId =
   | 'free'
+  | 'starter'
   | 'pro'
   | 'team'
   | 'enterprise'
@@ -20,7 +21,7 @@ export interface PlanDefinition {
   id: PlanId;
   name: string;
   category: PlanCategory;
-  priceMonthly: number; // USD
+  priceMonthly: number; // USD; 0 for free / contact-sales
   priceLabel: string;
   description: string;
   features: string[];
@@ -28,11 +29,14 @@ export interface PlanDefinition {
     apiKeys: number; // -1 = unlimited
     requestsPerDay: number; // -1 = unlimited
     memories: number; // -1 = unlimited
+    storageBytes: number; // -1 = unlimited
     retentionDays: number; // -1 = unlimited retention
     listResultsMax: number; // per GET /memories; -1 = server absolute ceiling
     searchResultsMax: number; // per POST /memories/search; -1 = server absolute ceiling
   };
   popular?: boolean;
+  /** No Polar checkout — link to sales instead (Enterprise). */
+  contactSalesOnly?: boolean;
   polarProductIdEnv: string;
 }
 
@@ -45,8 +49,9 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     priceLabel: '$0',
     description: 'Perfect for trying MCP, GPT Actions, or the SDK',
     features: [
-      '250 API calls / day',
-      '1,500 memories stored',
+      '150 API calls / day',
+      '40 memories stored',
+      '1 MB storage',
       'Basic semantic search',
       '30-day memory retention',
       '1 shared group (up to 3 members)',
@@ -54,13 +59,40 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     ],
     limits: {
       apiKeys: 1,
-      requestsPerDay: 250,
-      memories: 1_500,
+      requestsPerDay: 150,
+      memories: 40,
+      storageBytes: 1_048_576,
       retentionDays: 30,
       listResultsMax: 25,
       searchResultsMax: 10,
     },
     polarProductIdEnv: '',
+  },
+  starter: {
+    id: 'starter',
+    name: 'Starter',
+    category: 'dashboard',
+    priceMonthly: 3.99,
+    priceLabel: '$3.99',
+    description: 'More room for daily AI workflows',
+    features: [
+      '500 API calls / day',
+      '150 memories stored',
+      '3 MB storage',
+      '60-day memory retention',
+      '2 shared groups (up to 5 members each)',
+      'Email support',
+    ],
+    limits: {
+      apiKeys: 2,
+      requestsPerDay: 500,
+      memories: 150,
+      storageBytes: 3_145_728,
+      retentionDays: 60,
+      listResultsMax: 35,
+      searchResultsMax: 15,
+    },
+    polarProductIdEnv: 'NEXT_PUBLIC_POLAR_PRODUCT_STARTER',
   },
   pro: {
     id: 'pro',
@@ -70,8 +102,9 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     priceLabel: '$12',
     description: 'For power users and solo builders',
     features: [
-      '10,000 API calls / day',
-      '5,000 memories stored',
+      '1,500 API calls / day',
+      '400 memories stored',
+      '10 MB storage',
       'Advanced semantic search',
       '90-day memory retention',
       'Unlimited shared groups (up to 10 members each)',
@@ -81,8 +114,9 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     ],
     limits: {
       apiKeys: 5,
-      requestsPerDay: 10_000,
-      memories: 5_000,
+      requestsPerDay: 1_500,
+      memories: 400,
+      storageBytes: 10_485_760,
       retentionDays: 90,
       listResultsMax: 50,
       searchResultsMax: 20,
@@ -100,6 +134,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     features: [
       'Everything in Pro',
       '25,000 memories stored',
+      '~352 MB storage',
       'Unlimited API calls',
       'Unlimited memory retention',
       'Unlimited shared groups & members',
@@ -111,6 +146,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       apiKeys: -1,
       requestsPerDay: -1,
       memories: 25_000,
+      storageBytes: 368_951_296,
       retentionDays: -1,
       listResultsMax: 100,
       searchResultsMax: 50,
@@ -121,12 +157,13 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     id: 'enterprise',
     name: 'Enterprise',
     category: 'dashboard',
-    priceMonthly: 199,
-    priceLabel: '$199',
+    priceMonthly: 0,
+    priceLabel: 'Contact Sales',
     description: 'For regulated or large-scale deployments',
+    contactSalesOnly: true,
     features: [
       'Everything in Team',
-      'Unlimited memories',
+      'Unlimited memories & storage',
       'Unlimited workspaces',
       'SLA 99.95% uptime',
       'SSO / SAML authentication',
@@ -138,11 +175,12 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       apiKeys: -1,
       requestsPerDay: -1,
       memories: -1,
+      storageBytes: -1,
       retentionDays: -1,
       listResultsMax: 200,
       searchResultsMax: 100,
     },
-    polarProductIdEnv: 'NEXT_PUBLIC_POLAR_PRODUCT_ENTERPRISE',
+    polarProductIdEnv: '',
   },
   'ext-starter': {
     id: 'ext-starter',
@@ -156,6 +194,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       apiKeys: 0,
       requestsPerDay: 500,
       memories: 500,
+      storageBytes: 3_145_728,
       retentionDays: 30,
       listResultsMax: 25,
       searchResultsMax: 10,
@@ -174,6 +213,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       apiKeys: 0,
       requestsPerDay: 5_000,
       memories: 5_000,
+      storageBytes: 52_428_800,
       retentionDays: 90,
       listResultsMax: 50,
       searchResultsMax: 20,
@@ -192,6 +232,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       apiKeys: 0,
       requestsPerDay: 50_000,
       memories: 50_000,
+      storageBytes: 524_288_000,
       retentionDays: -1,
       listResultsMax: 100,
       searchResultsMax: 50,
@@ -200,6 +241,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   },
 };
 
+/** Public dashboard plans shown in billing UI and marketing. Starter is implemented but hidden. */
 export const PLAN_ORDER: PlanId[] = ['free', 'pro', 'team', 'enterprise'];
 export const EXTENSION_PLAN_ORDER: PlanId[] = ['ext-starter', 'ext-plus', 'ext-premium'];
 
