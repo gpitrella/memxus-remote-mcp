@@ -3,7 +3,7 @@
   "name": "com.memxus/memxus",
   "title": "Memxus",
   "description": "Multi-platform AI memory for individuals, groups and teams. One save, recall everywhere.",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "websiteUrl": "https://www.memxus.com",
   "repository": {
     "url": "https://github.com/gpitrella/memxus-remote-mcp",
@@ -24,7 +24,7 @@
   ],
   "_meta": {
     "io.modelcontextprotocol.registry/publisher-provided": {
-      "license": "MIT",
+      "license": "AGPL-3.0",
       "categories": ["memory", "productivity", "ai-tools", "collaboration"],
       "tags": [
         "memory",

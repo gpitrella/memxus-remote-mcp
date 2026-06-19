@@ -96,3 +96,11 @@ If commands 1 or 4 find real secrets, rotate keys immediately and run `git filte
 ## Deferred
 
 npm publish, MCP Registry submit, Connectors Directory listing, refresh tokens, multi-client OAuth UX.
+
+## License
+
+This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+
+This means: you can use, modify and distribute this code freely, but if you use it to run a network service (SaaS), you must publish your source code under the same license.
+
+© 2026 Gabriel Pitrella - Memxus | https://memxus.com
