@@ -62,7 +62,7 @@ export function createMCPServer(ctx: McpContext): Server {
 
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: RESOURCES }));
 
-  // Glama Inspector probes optional MCP methods; empty lists avoid -32601 Method not found.
+  // Glama Inspector UI probes optional MCP methods; empty lists avoid -32601 Method not found.
   server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
     resourceTemplates: [],
   }));
