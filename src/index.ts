@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { config, getEffectiveCorsOrigins } from './config.js';
 import { health } from './routes/health.js';
+import { mcpHealth } from './routes/mcp-health.js';
 import { glamaWellKnown } from './routes/glama-well-known.js';
 import {
   authorizationServerMetadata,
@@ -46,6 +47,7 @@ app.post('/oauth/token', oauthRateLimit, token);
 app.post('/oauth/register', oauthRateLimit, register);
 
 mcpRouter.use(mcpOriginValidation);
+mcpRouter.get('/health', mcpHealth);
 mcpRouter.post('/', bearerAuth, mcpRateLimit, handleMcp);
 mcpRouter.get('/', bearerAuth, mcpRateLimit, handleMcpGet);
 mcpRouter.delete('/', bearerAuth, mcpRateLimit, handleMcpDelete);
