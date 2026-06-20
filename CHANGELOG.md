@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- README: Glama badge (shields.io + connector URL) and demo hero (clickable poster; inline video via GitHub user-attachments — see docs/README-DEMO-VIDEO.md)
+- README: inline demo video via GitHub user-attachments (Glama badge already fixed)
 
 ## [1.0.3] - 2026-06-19
 

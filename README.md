@@ -19,14 +19,12 @@ Save context once. Recall it instantly across Claude, Cursor, ChatGPT, VS Code a
 ---
 
 <div align="center">
-  <a href="https://www.memxus.com/demo">
-    <img src="https://www.memxus.com/og-image.png" alt="Memxus demo — save once, recall everywhere" width="900">
-  </a>
+  <video src="https://github.com/user-attachments/assets/99538f58-e404-4aff-8e9a-c6ea3213fbd3" width="100%" autoplay muted loop playsinline controls>
+    <a href="https://www.memxus.com/demo">Watch the Memxus demo</a>
+  </video>
   <br>
   <sub><a href="https://www.memxus.com/demo">Demo page</a> · <a href="https://www.memxus.com/memxus-demo.mp4">Direct MP4</a></sub>
 </div>
-
-<!-- Inline autoplay: replace the block above with <video src="https://github.com/user-attachments/assets/YOUR-UUID" ...> after uploading memxus-demo.mp4 via GitHub Issues. See docs/README-DEMO-VIDEO.md -->
 
 ---
 
