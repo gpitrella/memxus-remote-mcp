@@ -16,6 +16,7 @@ import { bearerAuth } from './lib/auth.js';
 import { oauthRateLimit } from './middleware/oauthRateLimit.js';
 import { mcpRateLimit } from './middleware/mcpRateLimit.js';
 import { mcpOriginValidation } from './middleware/origin-validation.js';
+import { mcpPublicDiscovery } from './mcp/public-discovery.js';
 import { handleMcp, handleMcpGet, handleMcpDelete } from './mcp/transport.js';
 
 const app = express();
@@ -48,7 +49,7 @@ app.post('/oauth/register', oauthRateLimit, register);
 
 mcpRouter.use(mcpOriginValidation);
 mcpRouter.get('/health', mcpHealth);
-mcpRouter.post('/', bearerAuth, mcpRateLimit, handleMcp);
+mcpRouter.post('/', mcpPublicDiscovery, bearerAuth, mcpRateLimit, handleMcp);
 mcpRouter.get('/', bearerAuth, mcpRateLimit, handleMcpGet);
 mcpRouter.delete('/', bearerAuth, mcpRateLimit, handleMcpDelete);
 app.use('/mcp', mcpRouter);
