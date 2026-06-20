@@ -6,7 +6,7 @@
 
 Save context once. Recall it instantly across Claude, Cursor, ChatGPT, VS Code and any MCP-compatible client.
 
-[![Glama Score](https://glama.ai/mcp/servers/com.memxus/memxus/badges/score.svg)](https://glama.ai/mcp/servers/com.memxus/memxus)
+[![Glama MCP Connector](https://img.shields.io/badge/Glama-MCP_Connector-6366f1?style=flat)](https://glama.ai/mcp/connectors/com.memxus/memxus)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 [![Node 20+](https://img.shields.io/badge/Node-20%2B-brightgreen)](https://nodejs.org)
 [![Railway](https://img.shields.io/badge/Deployed%20on-Railway-purple)](https://railway.app)
@@ -19,10 +19,14 @@ Save context once. Recall it instantly across Claude, Cursor, ChatGPT, VS Code a
 ---
 
 <div align="center">
-  <video src="https://www.memxus.com/memxus-demo.mp4" width="100%" autoplay muted loop playsinline controls>
-    <a href="https://www.memxus.com/demo">Watch the Memxus demo</a>
-  </video>
+  <a href="https://www.memxus.com/demo">
+    <img src="https://www.memxus.com/og-image.png" alt="Memxus demo — save once, recall everywhere" width="900">
+  </a>
+  <br>
+  <sub><a href="https://www.memxus.com/demo">Demo page</a> · <a href="https://www.memxus.com/memxus-demo.mp4">Direct MP4</a></sub>
 </div>
+
+<!-- Inline autoplay: replace the block above with <video src="https://github.com/user-attachments/assets/YOUR-UUID" ...> after uploading memxus-demo.mp4 via GitHub Issues. See docs/README-DEMO-VIDEO.md -->
 
 ---
 
