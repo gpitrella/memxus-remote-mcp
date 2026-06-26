@@ -209,11 +209,12 @@ export function resolveScopeCollection(
   return undefined;
 }
 
-/** Ordered scope attempts: fuzzy collection, exact scope, then unscoped retry. */
+/** Ordered scope attempts: fuzzy collection, exact scope, then optional unscoped retry. */
 export function buildSearchScopeAttempts(
   baseScope: MemoryScopeFilters,
   rawCollection: string | null | undefined,
-  collections: CollectionListItem[]
+  collections: CollectionListItem[],
+  options?: { strictScope?: boolean }
 ): MemoryScopeFilters[] {
   const attempts: MemoryScopeFilters[] = [];
   const seen = new Set<string>();
@@ -239,11 +240,22 @@ export function buildSearchScopeAttempts(
     push(baseScope);
   }
 
-  if (hint || baseScope.collection) {
+  if ((hint || baseScope.collection) && !options?.strictScope) {
     push({ ...baseScope, collection: undefined });
   }
 
   return attempts.length > 0 ? attempts : [baseScope];
+}
+
+/** True when search should not fall back to unscoped results (project collections). */
+export function shouldUseStrictProjectScope(
+  rawCollection: string | null | undefined,
+  baseScope: MemoryScopeFilters
+): boolean {
+  const fromBase = normalizeCollectionSlug(baseScope.collection ?? undefined);
+  const fromRaw = normalizeCollectionSlug(rawCollection ?? undefined);
+  const slug = fromBase ?? fromRaw;
+  return Boolean(slug?.startsWith('project:'));
 }
 
 export function mergeCollectionLists(

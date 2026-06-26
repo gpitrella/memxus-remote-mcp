@@ -9,6 +9,7 @@ export async function searchMemoriesWithScopeRetry<T extends Record<string, unkn
   baseScope: MemoryScopeFilters;
   rawCollection?: string | null;
   collections: CollectionListItem[];
+  strictScope?: boolean;
   generateEmbedding: (text: string) => Promise<number[] | null>;
   vectorSearch: (embedding: number[], scope: MemoryScopeFilters) => Promise<T[]>;
   textSearch: (scope: MemoryScopeFilters) => Promise<T[]>;
@@ -16,7 +17,8 @@ export async function searchMemoriesWithScopeRetry<T extends Record<string, unkn
   const attempts = buildSearchScopeAttempts(
     options.baseScope,
     options.rawCollection,
-    options.collections
+    options.collections,
+    { strictScope: options.strictScope }
   );
 
   for (const scope of attempts) {

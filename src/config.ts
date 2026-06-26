@@ -102,7 +102,13 @@ export const config = {
   DASHBOARD_URL: stripTrailingSlash(parsed.DASHBOARD_URL),
   CODE_TTL_SECONDS: 600,
   TOKEN_TTL_SECONDS: 31536000,
-  SUPPORTED_SCOPES: ['memories:read', 'memories:write', 'memories:delete'] as const,
+  SUPPORTED_SCOPES: [
+    'memories:read',
+    'memories:write',
+    'memories:delete',
+    'sources:read',
+    'sources:write',
+  ] as const,
 };
 
 export type AppConfig = typeof config;

@@ -35,6 +35,16 @@ test('buildSearchScopeAttempts includes unscoped retry', () => {
   assert.ok(attempts.some((a) => a.collection === undefined));
 });
 
+test('buildSearchScopeAttempts skips unscoped retry when strictScope', () => {
+  const attempts = buildSearchScopeAttempts(
+    { collection: 'project:memxus' },
+    'memxus',
+    COLLECTIONS,
+    { strictScope: true }
+  );
+  assert.ok(attempts.every((a) => a.collection !== undefined));
+});
+
 test('scoreCollectionMatch gives 1 for exact slug', () => {
   assert.equal(scoreCollectionMatch('project:memxus', COLLECTIONS[2]), 1);
 });

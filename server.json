@@ -51,7 +51,13 @@
         "tokenUrl": "https://mcp.memxus.com/oauth/token",
         "registrationUrl": "https://mcp.memxus.com/oauth/register",
         "wellKnownUrl": "https://mcp.memxus.com/.well-known/oauth-authorization-server/mcp",
-        "scopes": ["memories:read", "memories:write", "memories:delete"]
+        "scopes": [
+          "memories:read",
+          "memories:write",
+          "memories:delete",
+          "sources:read",
+          "sources:write"
+        ]
       },
       "tools": [
         {
@@ -85,6 +91,30 @@
         {
           "name": "memory_stats",
           "description": "Show statistics about stored memories by type and collection"
+        },
+        {
+          "name": "update",
+          "description": "Update an existing memory by ID (replace fields or append content)"
+        },
+        {
+          "name": "connect_source",
+          "description": "Connect GitHub or Notion from chat (requires ENABLE_INAPP_CONNECT)"
+        },
+        {
+          "name": "list_syncable_items",
+          "description": "List syncable repos or Notion pages after connecting a source"
+        },
+        {
+          "name": "set_sync_selection",
+          "description": "Save sync selection and trigger initial sync"
+        },
+        {
+          "name": "check_connect_status",
+          "description": "Poll GitHub/Notion connection status after connect_source"
+        },
+        {
+          "name": "get_context_with_skills",
+          "description": "Build context and suggest verified Agent Skills (requires approval)"
         }
       ],
       "links": {

@@ -4,6 +4,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { createMCPServer } from './server.js';
 import { AuthedRequest } from '../lib/auth.js';
+import { getCachedUserMcpPreferences } from '../lib/mcp-preferences-cache.js';
 import { sendMcpUnauthorized } from '../oauth/unauthorized.js';
 
 interface Session {
@@ -112,11 +113,15 @@ function logMcpSessionExpired(
   });
 }
 
-function createServerContext(req: AuthedRequest) {
+async function createServerContext(req: AuthedRequest) {
+  const mcpPreferences = await getCachedUserMcpPreferences(req.userId!);
   return {
     userId: req.userId!,
     apiKeyId: req.apiKeyId,
     workforceWorkspaceId: req.workforceWorkspaceId,
+    oauthScope: req.oauthScope,
+    isOAuthToken: req.isOAuthToken,
+    mcpPreferences,
   };
 }
 
@@ -150,7 +155,7 @@ async function handleStatelessPost(req: AuthedRequest, res: Response): Promise<v
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
   });
-  const server = createMCPServer(createServerContext(req));
+  const server = createMCPServer(await createServerContext(req));
   await server.connect(transport);
   try {
     await transport.handleRequest(req, res, req.body);
@@ -190,7 +195,7 @@ async function handleStatefulPost(req: AuthedRequest, res: Response): Promise<vo
     transport.onclose = () => {
       if (transport.sessionId) sessions.delete(transport.sessionId);
     };
-    const server = createMCPServer(createServerContext(req));
+    const server = createMCPServer(await createServerContext(req));
     await server.connect(transport);
     session = createSessionEntry(transport, req);
     sessions.set(newSessionId, session);

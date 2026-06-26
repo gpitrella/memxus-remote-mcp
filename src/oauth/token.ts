@@ -170,6 +170,7 @@ export async function token(req: Request, res: Response): Promise<void> {
   const keyMetadata: Record<string, unknown> = {
     source: 'oauth',
     issued_at: new Date().toISOString(),
+    oauth_scope: consumed.scope,
   };
   if (workforceWorkspaceId) {
     keyMetadata.workforce_workspace_id = workforceWorkspaceId;

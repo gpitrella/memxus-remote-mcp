@@ -9,6 +9,7 @@ import {
 } from './chatgpt-client.js';
 import { isRedirectUriRegistered } from '../lib/redirect-allowlist.js';
 import { shouldServeAuthorizeHtmlLanding } from './client-routes.js';
+import { normalizeRequestedOAuthScopes } from '../lib/oauth-scopes.js';
 
 export function buildDashboardAuthorizeUrl(ticket: string): string {
   const url = new URL(`${config.DASHBOARD_URL}/api/oauth/mcp/authorize`);
@@ -24,8 +25,18 @@ export async function authorize(req: Request, res: Response): Promise<void> {
     code_challenge,
     code_challenge_method = 'S256',
     state,
-    scope = 'memories:read memories:write',
+    scope: requestedScope,
   } = req.query as Record<string, string | undefined>;
+
+  const scopeResult = normalizeRequestedOAuthScopes(requestedScope);
+  if (!scopeResult.ok) {
+    res.status(400).json({
+      error: scopeResult.error,
+      error_description: scopeResult.error_description,
+    });
+    return;
+  }
+  const scope = scopeResult.scope;
 
   if (response_type !== 'code') {
     res.status(400).json({ error: 'unsupported_response_type' });

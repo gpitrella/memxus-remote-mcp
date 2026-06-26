@@ -7,6 +7,7 @@ const INTERNAL_ERROR_PREFIXES = [
   'listMemories:',
   'listCollections:',
   'deleteMemory:',
+  'updateMemory:',
   'getStats:',
 ];
 

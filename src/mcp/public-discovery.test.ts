@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Request, Response, NextFunction } from 'express';
 import { mcpPublicDiscovery } from './public-discovery.js';
-import { MCP_TOOLS } from './tool-schemas.js';
+import { MCP_CORE_TOOLS } from './tool-schemas.js';
 
 function mockReq(body: unknown, headers: Record<string, string> = {}): Request {
   return { body, headers } as Request;
@@ -40,19 +40,19 @@ function mockRes(): Response & {
   return res as Response & { statusCode: number; body?: unknown; ended: boolean };
 }
 
-function runMiddleware(
+async function runMiddleware(
   req: Request
-): { res: ReturnType<typeof mockRes>; nextCalled: boolean } {
+): Promise<{ res: ReturnType<typeof mockRes>; nextCalled: boolean }> {
   const res = mockRes();
   let nextCalled = false;
-  mcpPublicDiscovery(req, res, (() => {
+  await mcpPublicDiscovery(req, res, (() => {
     nextCalled = true;
   }) as NextFunction);
   return { res, nextCalled };
 }
 
-test('anonymous initialize returns public server info', () => {
-  const { res, nextCalled } = runMiddleware(
+test('anonymous initialize returns public server info', async () => {
+  const { res, nextCalled } = await runMiddleware(
     mockReq({
       jsonrpc: '2.0',
       method: 'initialize',
@@ -70,8 +70,8 @@ test('anonymous initialize returns public server info', () => {
   assert.equal(body.result.serverInfo.name, 'aimemory-remote');
 });
 
-test('notifications/initialized without auth returns 202', () => {
-  const { res, nextCalled } = runMiddleware(
+test('notifications/initialized without auth returns 202', async () => {
+  const { res, nextCalled } = await runMiddleware(
     mockReq({ jsonrpc: '2.0', method: 'notifications/initialized' })
   );
   assert.equal(nextCalled, false);
@@ -79,8 +79,8 @@ test('notifications/initialized without auth returns 202', () => {
   assert.equal(res.ended, true);
 });
 
-test('notifications/initialized with Bearer and session passes through', () => {
-  const { nextCalled } = runMiddleware(
+test('notifications/initialized with Bearer and session passes through', async () => {
+  const { nextCalled } = await runMiddleware(
     mockReq(
       { jsonrpc: '2.0', method: 'notifications/initialized' },
       { authorization: 'Bearer tok', 'mcp-session-id': 'sess-1' }
@@ -89,16 +89,16 @@ test('notifications/initialized with Bearer and session passes through', () => {
   assert.equal(nextCalled, true);
 });
 
-test('ping returns empty result', () => {
-  const { res, nextCalled } = runMiddleware(
+test('ping returns empty result', async () => {
+  const { res, nextCalled } = await runMiddleware(
     mockReq({ jsonrpc: '2.0', method: 'ping', id: 99 })
   );
   assert.equal(nextCalled, false);
   assert.deepEqual(res.body, { jsonrpc: '2.0', result: {}, id: 99 });
 });
 
-test('Bearer tools/list without session returns static tools', () => {
-  const { res, nextCalled } = runMiddleware(
+test('Bearer tools/list without session returns static tools', async () => {
+  const { res, nextCalled } = await runMiddleware(
     mockReq(
       { jsonrpc: '2.0', method: 'tools/list', id: 2 },
       { authorization: 'Bearer tok' }
@@ -106,11 +106,11 @@ test('Bearer tools/list without session returns static tools', () => {
   );
   assert.equal(nextCalled, false);
   const body = res.body as { result: { tools: unknown[] } };
-  assert.equal(body.result.tools.length, MCP_TOOLS.length);
+  assert.equal(body.result.tools.length, MCP_CORE_TOOLS.length);
 });
 
-test('Bearer tools/list with session passes through', () => {
-  const { nextCalled } = runMiddleware(
+test('Bearer tools/list with session passes through', async () => {
+  const { nextCalled } = await runMiddleware(
     mockReq(
       { jsonrpc: '2.0', method: 'tools/list', id: 2 },
       { authorization: 'Bearer tok', 'mcp-session-id': 'sess-1' }
@@ -119,8 +119,8 @@ test('Bearer tools/list with session passes through', () => {
   assert.equal(nextCalled, true);
 });
 
-test('Bearer initialize without session passes through for session creation', () => {
-  const { nextCalled } = runMiddleware(
+test('Bearer initialize without session passes through for session creation', async () => {
+  const { nextCalled } = await runMiddleware(
     mockReq(
       {
         jsonrpc: '2.0',
@@ -138,8 +138,8 @@ test('Bearer initialize without session passes through for session creation', ()
   assert.equal(nextCalled, true);
 });
 
-test('tools/call without auth passes through to bearerAuth', () => {
-  const { nextCalled } = runMiddleware(
+test('tools/call without auth passes through to bearerAuth', async () => {
+  const { nextCalled } = await runMiddleware(
     mockReq({
       jsonrpc: '2.0',
       method: 'tools/call',

@@ -3,7 +3,6 @@ import { getPlan, type PlanDefinition } from '../lib/plans.js';
 import { resolveListLimit, resolveSearchLimit, loadUserPlan, assertWriteStorageAllowed } from '../lib/plan-enforcement.js';
 import {
   estimateMemoryPayloadBytes,
-  estimateStorageDeltaForAppend,
   getStorageBytesUsed,
 } from '../lib/storage-bytes.js';
 import { enrichRowsWithGroupNames } from '../lib/memory-public.js';
@@ -13,7 +12,6 @@ import {
   buildAccessibleVectorRpcParams,
   canDeleteMemory,
   canReadMemory,
-  canUpdateMemory,
   fetchGroupNameMap,
   resolveMemoryWriteTarget,
   type AccessibleStatsRpcParams,
@@ -37,9 +35,9 @@ import {
   ensureMemoryCollectionRegistered,
   mergeCollectionLists,
   MemoryScopeFilters,
-  MAX_MEMORY_CONTENT_LENGTH,
-  APPEND_SEPARATOR,
+  shouldUseStrictProjectScope,
 } from '../lib/memory-scope.js';
+import { appendToMemory } from '../lib/memory-append.js';
 import {
   prepareContentForStorage,
   decryptMemoryRow,
@@ -51,6 +49,9 @@ import { shouldSkipContentIlike } from '../lib/memory-persistence.js';
 import { scheduleEmbeddingUpdate } from '../lib/embedding-background.js';
 import { generateEmbedding } from '../lib/embedding.js';
 import { logPerfPhase } from '../lib/mcp-perf.js';
+import type { MemoryRow } from './memory-types.js';
+
+export type { MemoryRow } from './memory-types.js';
 
 export type TenantFilter = {
   userId: string;
@@ -60,25 +61,7 @@ export type TenantFilter = {
   groupId?: string;
 };
 
-export interface MemoryRow {
-  id: string;
-  user_id: string;
-  content: string;
-  memory_type: 'general' | 'preference' | 'fact' | 'instruction' | 'conversation';
-  importance: number;
-  tags: string[];
-  collection: string | null;
-  thread_id: string | null;
-  metadata: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-  similarity?: number;
-}
-
-export interface RevisionEntry {
-  content: string;
-  appended_at: string;
-}
+export { appendToMemory } from '../lib/memory-append.js';
 
 export async function saveMemory(p: {
   userId: string;
@@ -186,88 +169,6 @@ export async function saveMemory(p: {
   return dec as unknown as MemoryRow;
 }
 
-export async function appendToMemory(p: {
-  userId: string;
-  workforceWorkspaceId?: string;
-  memoryId: string;
-  newContent: string;
-}): Promise<MemoryRow> {
-  const appendStartedAt = Date.now();
-  const { data: existing, error: fetchError } = await supabase
-    .from('memories')
-    .select('*')
-    .eq('id', p.memoryId)
-    .single();
-
-  if (fetchError || !existing) throw new Error('Memory not found');
-
-  const canUpdate = await canUpdateMemory(p.userId, existing as AccessMemoryRow);
-  if (!canUpdate) throw new Error('Not authorized to append to this memory');
-
-  // Decrypt existing content before merge
-  const decrypted = await decryptMemoryRow(existing as unknown as MemoryRowMinimal, p.userId);
-  if (!decrypted) throw new Error('Memory not found');
-
-  const existingContent = decrypted.content as string;
-  const metadata = (decrypted.metadata as Record<string, unknown>) || {};
-
-  await assertWriteStorageAllowed(
-    p.userId,
-    estimateStorageDeltaForAppend(existingContent, p.newContent, metadata)
-  );
-
-  const merged = `${existingContent}${APPEND_SEPARATOR}${p.newContent.trim()}`;
-  if (merged.length > MAX_MEMORY_CONTENT_LENGTH) {
-    throw new Error(
-      `Merged content exceeds ${MAX_MEMORY_CONTENT_LENGTH} chars. Create a new memory in the same collection instead.`
-    );
-  }
-
-  const revisions = Array.isArray(metadata.revisions)
-    ? [...(metadata.revisions as RevisionEntry[])]
-    : [];
-  revisions.push({ content: existingContent, appended_at: new Date().toISOString() });
-
-  const newMetadata = { ...metadata, revisions };
-
-  // Encrypt for storage (embedding scheduled after persist)
-  const { content: encContent, metadata: encMeta } = await prepareContentForStorage(
-    merged,
-    newMetadata,
-    {
-      user_id: existing.user_id,
-      scope: existing.scope,
-      group_id: existing.group_id,
-      workforce_workspace_id: existing.workforce_workspace_id,
-    }
-  );
-
-  const updates: Record<string, unknown> = {
-    content: encContent,
-    metadata: encMeta,
-    updated_at: new Date().toISOString(),
-  };
-
-  const { data, error } = await supabase
-    .from('memories')
-    .update(updates)
-    .eq('id', p.memoryId)
-    .select()
-    .single();
-
-  if (error) throw new Error(`appendToMemory: ${error.message}`);
-
-  scheduleEmbeddingUpdate(p.memoryId, merged);
-
-  const dec = await decryptMemoryRow(data as unknown as MemoryRowMinimal, p.userId);
-  if (!dec) throw new Error('Memory not found');
-  logPerfPhase('append_save', Date.now() - appendStartedAt, {
-    memoryId: p.memoryId,
-    embedding: 'async',
-  });
-  return dec as unknown as MemoryRow;
-}
-
 function resolveLimits(planLimits?: PlanDefinition['limits']): PlanDefinition['limits'] {
   return planLimits ?? getPlan('free').limits;
 }
@@ -313,6 +214,7 @@ export async function searchMemories(p: {
     baseScope,
     rawCollection,
     collections,
+    strictScope: shouldUseStrictProjectScope(rawCollection, baseScope),
     generateEmbedding: async () => embedding,
     vectorSearch: async (queryEmbedding, scope) => {
       if (!queryEmbedding) return [];

@@ -52,6 +52,10 @@ export async function resolveRefreshTokenGrant(
       ...metadata,
       source: 'oauth',
       refreshed_at: new Date().toISOString(),
+      oauth_scope:
+        typeof metadata.oauth_scope === 'string'
+          ? metadata.oauth_scope
+          : DEFAULT_OAUTH_SCOPE,
     },
   });
   if (insertError) {

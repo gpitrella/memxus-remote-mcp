@@ -31,34 +31,66 @@ import {
 } from '../lib/plan-enforcement.js';
 import { estimateTokens } from '../lib/estimate-tokens.js';
 import { sanitizeToolError } from '../lib/tool-errors.js';
-import { MCP_TOOLS } from './tool-schemas.js';
+import { getActiveMcpTools } from './tool-schemas.js';
 import {
   formatMemoryLine,
   formatRememberText,
   formatGetMemoryText,
+  formatUpdateText,
   formatContextBlock,
   formatMemoryStatsText,
 } from './format-memory.js';
+import { updateMemoryRecord } from '../lib/memory-update.js';
+import {
+  connectSource,
+  listSyncableItems,
+  setSyncSelection,
+  checkConnectStatus,
+} from './connector-tools.js';
+import { assembleContextWithSkills } from '../routing/context-assembler.js';
+import {
+  isInAppConnectEnabled,
+  isSkillRoutingEnabled,
+} from '../lib/feature-flags.js';
+import {
+  isInAppConnectActiveForUser,
+  isSkillRoutingActiveForUser,
+  resolveDefaultReadVisibility,
+  type UserMcpPreferences,
+} from '../lib/mcp-preferences.js';
+import { assertOAuthScopes, assertMemoryReadScope, assertMemoryWriteScope, assertMemoryDeleteScope } from '../lib/oauth-scopes.js';
+import { getCachedUserMcpPreferences } from '../lib/mcp-preferences-cache.js';
 import { toolSuccess, toStructuredMemory, toStructuredMemories, type ToolSuccessResult } from './tool-results.js';
 
-export { MCP_TOOLS } from './tool-schemas.js';
+export { MCP_TOOLS, getActiveMcpTools, MCP_CORE_TOOLS } from './tool-schemas.js';
 
 export interface McpContext {
   userId: string;
   apiKeyId?: string;
   workforceWorkspaceId?: string;
+  oauthScope?: string;
+  isOAuthToken?: boolean;
+  mcpPreferences?: UserMcpPreferences;
 }
 
 const memoryTypeEnum = z.enum(['general', 'preference', 'fact', 'instruction', 'conversation']);
 
 export function createMCPServer(ctx: McpContext): Server {
-  const { userId, apiKeyId, workforceWorkspaceId } = ctx;
+  const { userId, apiKeyId, workforceWorkspaceId, oauthScope, isOAuthToken } = ctx;
+  const oauthOpts = { isOAuthToken };
+
+  async function resolvePrefs(): Promise<UserMcpPreferences> {
+    return getCachedUserMcpPreferences(userId);
+  }
+
   const server = new Server(
     { name: 'aimemory-remote', version: '1.0.3' },
     { capabilities: { tools: {}, resources: {}, prompts: {} } }
   );
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: MCP_TOOLS }));
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    tools: getActiveMcpTools({ prefs: await resolvePrefs() }),
+  }));
 
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: RESOURCES }));
 
@@ -78,7 +110,7 @@ export function createMCPServer(ctx: McpContext): Server {
     const toolName = req.params.name;
     const endpoint = `mcp/tools/${toolName}`;
     const isForget = toolName === 'forget';
-    const isWriteMemory = toolName === 'remember';
+    const isWriteMemory = toolName === 'remember' || toolName === 'update';
     const started = Date.now();
 
     try {
@@ -98,6 +130,8 @@ export function createMCPServer(ctx: McpContext): Server {
 
       switch (toolName) {
         case 'remember': {
+          assertMemoryWriteScope(oauthScope, oauthOpts);
+          const prefs = await resolvePrefs();
           const input = z
             .object({
               content: z.string().min(1),
@@ -106,11 +140,22 @@ export function createMCPServer(ctx: McpContext): Server {
               collection: z.string().optional().nullable(),
               importance: z.number().min(0).max(1).default(0.5),
               append_to: z.string().uuid().optional(),
-              visibility: z.enum(['private', 'shared']).default('private'),
+              visibility: z.enum(['private', 'shared']).optional(),
               group_id: z.string().uuid().optional(),
               group_name: z.string().optional(),
             })
             .parse(a);
+          let visibility = input.visibility ?? prefs.default_memory_visibility;
+          let visibilityFallback: string | undefined;
+          if (
+            visibility === 'shared' &&
+            !input.group_id &&
+            !input.group_name?.trim()
+          ) {
+            visibility = 'private';
+            visibilityFallback =
+              'Shared visibility requires group_id or group_name; saved as private.';
+          }
           const m = await saveMemory({
             userId,
             workforceWorkspaceId,
@@ -120,7 +165,7 @@ export function createMCPServer(ctx: McpContext): Server {
             collection: input.collection,
             importance: input.importance,
             append_to: input.append_to,
-            visibility: input.visibility,
+            visibility,
             group_id: input.group_id,
             group_name: input.group_name,
           });
@@ -131,12 +176,15 @@ export function createMCPServer(ctx: McpContext): Server {
             collection: m.collection ?? '',
             tags: m.tags,
             importance: m.importance,
-            message: text,
+            message: visibilityFallback ? `${text}\n${visibilityFallback}` : text,
+            ...(visibilityFallback ? { visibility_fallback: visibilityFallback } : {}),
           });
           invalidatePlanContextCache(userId);
           break;
         }
         case 'recall': {
+          assertMemoryReadScope(oauthScope, oauthOpts);
+          const prefs = await resolvePrefs();
           const input = z
             .object({
               query: z.string().min(1),
@@ -144,11 +192,12 @@ export function createMCPServer(ctx: McpContext): Server {
               type: memoryTypeEnum.optional(),
               collection: z.string().optional().nullable(),
               tags: z.array(z.string()).optional(),
-              visibility: z.enum(['private', 'shared', 'all']).default('all'),
+              visibility: z.enum(['private', 'shared', 'all']).optional(),
               group_id: z.string().uuid().optional(),
               group_name: z.string().optional(),
             })
             .parse(a);
+          const visibility = resolveDefaultReadVisibility(prefs, input.visibility);
           const searchLimit = resolveSearchLimit(limits, input.limit);
           const ms = await searchMemories({
             userId,
@@ -159,7 +208,7 @@ export function createMCPServer(ctx: McpContext): Server {
             type: input.type,
             collection: input.collection,
             tags: input.tags,
-            visibility: input.visibility,
+            visibility,
             group_id: input.group_id,
             group_name: input.group_name,
           });
@@ -183,6 +232,8 @@ export function createMCPServer(ctx: McpContext): Server {
           break;
         }
         case 'get_context': {
+          assertMemoryReadScope(oauthScope, oauthOpts);
+          const prefs = await resolvePrefs();
           const input = z
             .object({
               topic: z.string().min(1),
@@ -190,11 +241,12 @@ export function createMCPServer(ctx: McpContext): Server {
               type: memoryTypeEnum.optional(),
               collection: z.string().optional().nullable(),
               tags: z.array(z.string()).optional(),
-              visibility: z.enum(['private', 'shared', 'all']).default('all'),
+              visibility: z.enum(['private', 'shared', 'all']).optional(),
               group_id: z.string().uuid().optional(),
               group_name: z.string().optional(),
             })
             .parse(a);
+          const visibility = resolveDefaultReadVisibility(prefs, input.visibility);
           const contextLimit = resolveSearchLimit(limits, input.max_memories);
           const ms = await searchMemories({
             userId,
@@ -205,7 +257,7 @@ export function createMCPServer(ctx: McpContext): Server {
             type: input.type,
             collection: input.collection,
             tags: input.tags,
-            visibility: input.visibility,
+            visibility,
             group_id: input.group_id,
             group_name: input.group_name,
           });
@@ -232,6 +284,8 @@ export function createMCPServer(ctx: McpContext): Server {
           break;
         }
         case 'list_memories': {
+          assertMemoryReadScope(oauthScope, oauthOpts);
+          const prefs = await resolvePrefs();
           const input = z
             .object({
               limit: z.number().int().optional(),
@@ -239,11 +293,12 @@ export function createMCPServer(ctx: McpContext): Server {
               type: memoryTypeEnum.optional(),
               collection: z.string().optional().nullable(),
               tags: z.array(z.string()).optional(),
-              visibility: z.enum(['private', 'shared', 'all']).default('all'),
+              visibility: z.enum(['private', 'shared', 'all']).optional(),
               group_id: z.string().uuid().optional(),
               group_name: z.string().optional(),
             })
             .parse(a);
+          const visibility = resolveDefaultReadVisibility(prefs, input.visibility);
           const listLimit = resolveListLimit(limits, input.limit);
           const ms = await listMemories({
             userId,
@@ -253,7 +308,7 @@ export function createMCPServer(ctx: McpContext): Server {
             type: input.type,
             collection: input.collection,
             tags: input.tags,
-            visibility: input.visibility,
+            visibility,
             group_id: input.group_id,
           });
           if (ms.length === 0) {
@@ -272,6 +327,7 @@ export function createMCPServer(ctx: McpContext): Server {
           break;
         }
         case 'get_memory': {
+          assertMemoryReadScope(oauthScope, oauthOpts);
           const input = z
             .object({ memory_id: z.string().uuid('memory_id must be a valid UUID') })
             .parse(a);
@@ -288,6 +344,7 @@ export function createMCPServer(ctx: McpContext): Server {
           break;
         }
         case 'list_collections': {
+          assertMemoryReadScope(oauthScope, oauthOpts);
           const cols = await listCollections(userId);
           if (cols.length === 0) {
             const text =
@@ -312,6 +369,7 @@ export function createMCPServer(ctx: McpContext): Server {
           break;
         }
         case 'forget': {
+          assertMemoryDeleteScope(oauthScope, oauthOpts);
           const input = z
             .object({ memory_id: z.string().uuid('memory_id must be a valid UUID') })
             .parse(a);
@@ -326,6 +384,7 @@ export function createMCPServer(ctx: McpContext): Server {
           break;
         }
         case 'memory_stats': {
+          assertMemoryReadScope(oauthScope, oauthOpts);
           const s = await getStats(userId, workforceWorkspaceId);
           const text = formatMemoryStatsText(s);
           result = toolSuccess(text, {
@@ -335,6 +394,202 @@ export function createMCPServer(ctx: McpContext): Server {
             storage_bytes_used: s.storageBytesUsed,
             storage_bytes_limit: s.storageBytesLimit,
             message: text,
+          });
+          break;
+        }
+        case 'update': {
+          assertMemoryWriteScope(oauthScope, oauthOpts);
+          const input = z
+            .object({
+              id: z.string().uuid('id must be a valid UUID'),
+              content: z.string().optional(),
+              type: memoryTypeEnum.optional(),
+              tags: z.array(z.string()).optional(),
+              collection: z.string().optional().nullable(),
+              importance: z.number().min(0).max(1).optional(),
+              mode: z.enum(['replace', 'append']).default('replace'),
+            })
+            .parse(a);
+          const m = await updateMemoryRecord({
+            userId,
+            workforceWorkspaceId,
+            memoryId: input.id,
+            mode: input.mode,
+            content: input.content,
+            memory_type: input.type,
+            tags: input.tags,
+            collection: input.collection,
+            importance: input.importance,
+          });
+          const text = formatUpdateText(m);
+          result = toolSuccess(text, {
+            memory_id: m.id,
+            memory_type: m.memory_type,
+            collection: m.collection ?? '',
+            tags: m.tags,
+            importance: m.importance,
+            message: text,
+          });
+          invalidatePlanContextCache(userId);
+          break;
+        }
+        case 'connect_source': {
+          if (!isInAppConnectEnabled()) {
+            throw new Error('In-app connect is not enabled on this server');
+          }
+          const connectPrefs = await resolvePrefs();
+          if (!isInAppConnectActiveForUser(connectPrefs)) {
+            throw new Error(
+              'In-app connect is disabled in your dashboard settings. Enable it under Settings → AI & MCP.'
+            );
+          }
+          assertOAuthScopes(oauthScope, ['sources:write'], { isOAuthToken });
+          const input = z
+            .object({
+              provider: z.enum(['github', 'notion']),
+              project_slug: z.string().optional(),
+            })
+            .parse(a);
+          const out = await connectSource({
+            userId,
+            provider: input.provider,
+            projectSlug: input.project_slug,
+          });
+          result = toolSuccess(out.message, out);
+          break;
+        }
+        case 'list_syncable_items': {
+          if (!isInAppConnectEnabled()) {
+            throw new Error('In-app connect is not enabled on this server');
+          }
+          const connectPrefs = await resolvePrefs();
+          if (!isInAppConnectActiveForUser(connectPrefs)) {
+            throw new Error(
+              'In-app connect is disabled in your dashboard settings. Enable it under Settings → AI & MCP.'
+            );
+          }
+          assertOAuthScopes(oauthScope, ['sources:read'], { isOAuthToken });
+          const input = z.object({ provider: z.enum(['github', 'notion']) }).parse(a);
+          const { items } = await listSyncableItems({ userId, provider: input.provider });
+          const text = items.length
+            ? `Found ${items.length} syncable ${input.provider} item(s).`
+            : `No syncable ${input.provider} items found.`;
+          result = toolSuccess(text, { count: items.length, items, message: text });
+          break;
+        }
+        case 'set_sync_selection': {
+          if (!isInAppConnectEnabled()) {
+            throw new Error('In-app connect is not enabled on this server');
+          }
+          const connectPrefs = await resolvePrefs();
+          if (!isInAppConnectActiveForUser(connectPrefs)) {
+            throw new Error(
+              'In-app connect is disabled in your dashboard settings. Enable it under Settings → AI & MCP.'
+            );
+          }
+          assertOAuthScopes(oauthScope, ['sources:write'], { isOAuthToken });
+          const input = z
+            .object({
+              provider: z.enum(['github', 'notion']),
+              itemIds: z.array(z.string().min(1)).min(1),
+              project_slug: z.string().optional(),
+            })
+            .parse(a);
+          const out = await setSyncSelection({
+            userId,
+            provider: input.provider,
+            itemIds: input.itemIds,
+            projectSlug: input.project_slug,
+          });
+          const text = `Saved ${out.selected} ${input.provider} item(s) for sync.${
+            out.sync?.ok ? ' Initial sync started.' : out.sync?.detail ? ` Sync note: ${out.sync.detail}` : ''
+          }`;
+          result = toolSuccess(text, {
+            ok: out.ok,
+            selected: out.selected,
+            sync_ok: out.sync?.ok ?? false,
+            message: text,
+          });
+          break;
+        }
+        case 'check_connect_status': {
+          if (!isInAppConnectEnabled()) {
+            throw new Error('In-app connect is not enabled on this server');
+          }
+          const connectPrefs = await resolvePrefs();
+          if (!isInAppConnectActiveForUser(connectPrefs)) {
+            throw new Error(
+              'In-app connect is disabled in your dashboard settings. Enable it under Settings → AI & MCP.'
+            );
+          }
+          assertOAuthScopes(oauthScope, ['sources:read'], { isOAuthToken });
+          const input = z.object({ poll_token: z.string().min(1) }).parse(a);
+          const out = await checkConnectStatus({ userId, pollToken: input.poll_token });
+          result = toolSuccess(out.message, out);
+          break;
+        }
+        case 'get_context_with_skills': {
+          assertMemoryReadScope(oauthScope, oauthOpts);
+          if (!isSkillRoutingEnabled()) {
+            throw new Error('Skill routing is not enabled on this server');
+          }
+          const skillPrefs = await resolvePrefs();
+          if (!isSkillRoutingActiveForUser(skillPrefs)) {
+            throw new Error(
+              'Skill routing is disabled in your dashboard settings. Enable it under Settings → AI & MCP.'
+            );
+          }
+          const input = z
+            .object({
+              topic: z.string().min(1),
+              max_memories: z.number().int().optional(),
+              type: memoryTypeEnum.optional(),
+              collection: z.string().optional().nullable(),
+              tags: z.array(z.string()).optional(),
+              visibility: z.enum(['private', 'shared', 'all']).optional(),
+              group_id: z.string().uuid().optional(),
+              group_name: z.string().optional(),
+            })
+            .parse(a);
+          const visibility = resolveDefaultReadVisibility(skillPrefs, input.visibility);
+          const contextLimit = resolveSearchLimit(limits, input.max_memories);
+          const ms = await searchMemories({
+            userId,
+            workforceWorkspaceId,
+            query: input.topic,
+            limit: contextLimit,
+            planLimits: limits,
+            type: input.type,
+            collection: input.collection,
+            tags: input.tags,
+            visibility,
+            group_id: input.group_id,
+            group_name: input.group_name,
+          });
+          const assembled = assembleContextWithSkills({
+            userId,
+            topic: input.topic,
+            collection: input.collection,
+            memories: ms,
+          });
+          result = toolSuccess(assembled.contextBlock, {
+            topic: input.topic,
+            count: ms.length,
+            context_block: assembled.contextBlock,
+            profile: assembled.routing.profile,
+            intent: assembled.routing.intent,
+            active_skills: assembled.routing.activeSkills.map((s) => ({
+              id: s.id,
+              name: s.name,
+              description: s.description,
+              instructions: s.instructions,
+              verified: s.verified,
+              score: s.score,
+              reason: s.reason,
+            })),
+            requires_approval: true,
+            memories: toStructuredMemories(ms),
+            message: assembled.contextBlock,
           });
           break;
         }

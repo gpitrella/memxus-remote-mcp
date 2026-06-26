@@ -21,6 +21,10 @@ export function formatRememberText(m: FormattableMemory): string {
   return `Remembered (ID: ${m.id})\nType: ${m.memory_type}\nCollection: ${m.collection || 'none'}\nTags: ${m.tags.join(', ') || 'none'}\nImportance: ${m.importance}`;
 }
 
+export function formatUpdateText(m: FormattableMemory): string {
+  return `Updated (ID: ${m.id})\nType: ${m.memory_type}\nCollection: ${m.collection || 'none'}\nTags: ${m.tags.join(', ') || 'none'}\nImportance: ${m.importance}`;
+}
+
 export function formatGetMemoryText(m: FormattableMemory): string {
   return [
     `ID: ${m.id}`,

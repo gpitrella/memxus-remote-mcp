@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import { MCP_TOOLS } from './tool-schemas.js';
+import { MCP_CORE_TOOLS, getActiveMcpTools } from './tool-schemas.js';
 import { RESOURCES } from './resources.js';
+import { resolveBearerAuthContext } from '../lib/auth.js';
+import { getCachedUserMcpPreferences } from '../lib/mcp-preferences-cache.js';
 
 const SERVER_INFO = { name: 'aimemory-remote', version: '1.0.3' } as const;
 const PROTOCOL_VERSION = '2024-11-05';
@@ -40,10 +42,22 @@ function jsonRpcResult(id: string | number, result: unknown): object {
   return { jsonrpc: '2.0', result, id };
 }
 
-function respondDiscoveryList(method: string): unknown {
+async function resolveDiscoveryTools(req: Request): Promise<unknown> {
+  if (!hasBearerAuth(req)) {
+    return { tools: MCP_CORE_TOOLS };
+  }
+  const authCtx = await resolveBearerAuthContext(req);
+  if (!authCtx) {
+    return { tools: MCP_CORE_TOOLS };
+  }
+  const prefs = await getCachedUserMcpPreferences(authCtx.userId);
+  return { tools: getActiveMcpTools({ prefs }) };
+}
+
+async function respondDiscoveryList(method: string, req: Request): Promise<unknown> {
   switch (method) {
     case 'tools/list':
-      return { tools: MCP_TOOLS };
+      return resolveDiscoveryTools(req);
     case 'resources/list':
       return { resources: RESOURCES };
     case 'resources/templates/list':
@@ -60,11 +74,11 @@ function respondDiscoveryList(method: string): unknown {
  * and post-OAuth catalog fetches succeed. Tool execution still requires
  * bearerAuth + a real MCP session via transport.
  */
-export function mcpPublicDiscovery(
+export async function mcpPublicDiscovery(
   req: Request,
   res: Response,
   next: NextFunction
-): void {
+): Promise<void> {
   if (!isJsonRpcMessage(req.body)) {
     next();
     return;
@@ -101,7 +115,7 @@ export function mcpPublicDiscovery(
       next();
       return;
     }
-    const result = respondDiscoveryList(method);
+    const result = await respondDiscoveryList(method, req);
     if (result === null) {
       next();
       return;

@@ -1,4 +1,13 @@
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import {
+  isInAppConnectEnabled,
+  isSkillRoutingEnabled,
+} from '../lib/feature-flags.js';
+import type { UserMcpPreferences } from '../lib/mcp-preferences.js';
+import {
+  isInAppConnectActiveForUser,
+  isSkillRoutingActiveForUser,
+} from '../lib/mcp-preferences.js';
 
 const MEMORY_TYPE_ENUM = [
   'general',
@@ -20,7 +29,7 @@ const GROUP_VISIBILITY_FIELDS = {
     type: 'string',
     enum: ['private', 'shared', 'all'],
     description:
-      'private = only you; shared = group memories; all = personal + accessible groups (default for recall/get_context).',
+      'private = only you; shared = group memories; all = personal + accessible groups. Omit to use dashboard preference.',
   },
   group_id: {
     type: 'string',
@@ -36,7 +45,7 @@ const SCOPE_FIELDS = {
   collection: {
     type: 'string',
     description:
-      'Scope slug (e.g. project:henry-memory, personal:preferences). Partial names work — the server resolves similar slugs. Call list_collections first when unsure.',
+      'Scope slug (e.g. project:memxus, personal:preferences). GitHub/Notion connector syncs use project:<slug> — one collection per project. Partial names work; call list_collections when unsure.',
   },
   tags: {
     type: 'array',
@@ -98,7 +107,7 @@ function toolMeta(
   };
 }
 
-export const MCP_TOOLS: Tool[] = [
+export const MCP_CORE_TOOLS: Tool[] = [
   {
     name: 'remember',
     ...toolMeta('Remember', { openWorld: true, idempotent: false }),
@@ -159,7 +168,7 @@ export const MCP_TOOLS: Tool[] = [
     name: 'recall',
     ...toolMeta('Recall memories', { readOnly: true, openWorld: true, idempotent: true }),
     description:
-      'Search long-term memory. Call list_collections first when the scope is unclear. Partial collection names are OK — the server resolves similar slugs. Put topic keywords in query. Very recent saves may match via text fallback until vector indexing finishes.',
+      'Search long-term memory. Call list_collections when scope is unclear. For GitHub/Notion synced content use collection project:<slug> (unified per project) or tags github/notion. Connect at dashboard.memxus.com/integrations.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -177,7 +186,8 @@ export const MCP_TOOLS: Tool[] = [
         ...SCOPE_FIELDS,
         visibility: {
           ...GROUP_VISIBILITY_FIELDS.visibility,
-          default: 'all',
+          description:
+            'Optional. Defaults to user dashboard preference (private unless include_group_memories_in_context is on).',
         },
         group_id: GROUP_VISIBILITY_FIELDS.group_id,
         group_name: GROUP_VISIBILITY_FIELDS.group_name,
@@ -220,7 +230,8 @@ export const MCP_TOOLS: Tool[] = [
         ...SCOPE_FIELDS,
         visibility: {
           ...GROUP_VISIBILITY_FIELDS.visibility,
-          default: 'all',
+          description:
+            'Optional. Defaults to user dashboard preference (private unless include_group_memories_in_context is on).',
         },
         group_id: GROUP_VISIBILITY_FIELDS.group_id,
         group_name: GROUP_VISIBILITY_FIELDS.group_name,
@@ -267,7 +278,8 @@ export const MCP_TOOLS: Tool[] = [
         ...SCOPE_FIELDS,
         visibility: {
           ...GROUP_VISIBILITY_FIELDS.visibility,
-          default: 'all',
+          description:
+            'Optional. Defaults to user dashboard preference (private unless include_group_memories_in_context is on).',
         },
         group_id: GROUP_VISIBILITY_FIELDS.group_id,
         group_name: GROUP_VISIBILITY_FIELDS.group_name,
@@ -311,7 +323,7 @@ export const MCP_TOOLS: Tool[] = [
     name: 'list_collections',
     ...toolMeta('List collections', { readOnly: true, idempotent: true }),
     description:
-      'List memory collections (folders/scopes) for this user. Call before scoped recall/get_context when the user mentions a project or approximate folder name.',
+      'List memory collections (folders/scopes) for this user. GitHub/Notion syncs appear under project:<slug> when unified collections are enabled. Call before scoped recall/get_context when the user mentions a project name.',
     inputSchema: { type: 'object', properties: {} },
     outputSchema: {
       type: 'object',
@@ -383,4 +395,241 @@ export const MCP_TOOLS: Tool[] = [
       required: ['total', 'by_type', 'by_collection', 'message'],
     },
   },
+  {
+    name: 'update',
+    ...toolMeta('Update memory', { openWorld: true, idempotent: true }),
+    description:
+      'Update an existing memory by ID. Use mode replace (default) to patch fields, or append to extend content. Re-embeds only when content changes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'UUID of the memory to update.' },
+        content: { type: 'string', description: 'New or appended content.' },
+        type: MEMORY_TYPE_PROPERTY,
+        ...SCOPE_FIELDS,
+        importance: {
+          type: 'number',
+          minimum: 0,
+          maximum: 1,
+          description: 'Relevance weight from 0 to 1.',
+        },
+        mode: {
+          type: 'string',
+          enum: ['replace', 'append'],
+          default: 'replace',
+          description: 'replace = patch fields; append = extend content with revision history.',
+        },
+      },
+      required: ['id'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        memory_id: { type: 'string', description: 'UUID of the updated memory.' },
+        memory_type: { type: 'string', description: 'Stored memory category.' },
+        collection: { type: 'string', description: 'Collection slug, or empty string if none.' },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Tags attached to the memory.',
+        },
+        importance: { type: 'number', description: 'Stored importance (0–1).' },
+        message: { type: 'string', description: 'Human-readable confirmation.' },
+      },
+      required: ['memory_id', 'memory_type', 'message'],
+    },
+  },
 ];
+
+const MCP_INAPP_CONNECT_TOOLS: Tool[] = [
+  {
+    name: 'connect_source',
+    ...toolMeta('Connect source', { openWorld: true, idempotent: false }),
+    description:
+      'Start GitHub App install or Notion OAuth from chat. Returns authUrl to open in browser and pollToken to check connection status.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        provider: {
+          type: 'string',
+          enum: ['github', 'notion'],
+          description: 'Source to connect.',
+        },
+        project_slug: {
+          type: 'string',
+          description: 'Optional project slug for unified project:<slug> collection.',
+        },
+      },
+      required: ['provider'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        authUrl: { type: 'string', description: 'URL to authorize the connection.' },
+        pollToken: { type: 'string', description: 'Token to poll connection status.' },
+        message: { type: 'string', description: 'Human-readable instructions.' },
+      },
+      required: ['authUrl', 'pollToken', 'message'],
+    },
+  },
+  {
+    name: 'list_syncable_items',
+    ...toolMeta('List syncable items', { readOnly: true, idempotent: true }),
+    description:
+      'List GitHub repositories or Notion pages available to sync after connect_source. Requires sources:read scope.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        provider: {
+          type: 'string',
+          enum: ['github', 'notion'],
+          description: 'Connected source provider.',
+        },
+      },
+      required: ['provider'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        count: { type: 'number', description: 'Number of items.' },
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              label: { type: 'string' },
+              meta: { type: 'object', additionalProperties: true },
+            },
+            required: ['id', 'label'],
+          },
+        },
+        message: { type: 'string', description: 'Human-readable listing.' },
+      },
+      required: ['count', 'items', 'message'],
+    },
+  },
+  {
+    name: 'set_sync_selection',
+    ...toolMeta('Set sync selection', { openWorld: true, idempotent: true }),
+    description:
+      'Save which repos or Notion pages to sync, then trigger initial sync. GitHub ids are full_name; Notion ids are page UUIDs.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        provider: {
+          type: 'string',
+          enum: ['github', 'notion'],
+          description: 'Source provider.',
+        },
+        itemIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Selected item identifiers from list_syncable_items.',
+        },
+        project_slug: {
+          type: 'string',
+          description: 'Optional project slug for project:<slug> collection.',
+        },
+      },
+      required: ['provider', 'itemIds'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        ok: { type: 'boolean' },
+        selected: { type: 'number' },
+        sync_ok: { type: 'boolean' },
+        message: { type: 'string' },
+      },
+      required: ['ok', 'selected', 'message'],
+    },
+  },
+  {
+    name: 'check_connect_status',
+    ...toolMeta('Check connect status', { readOnly: true, idempotent: true }),
+    description:
+      'Poll whether GitHub or Notion finished connecting after connect_source. Pass the pollToken from connect_source.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        poll_token: {
+          type: 'string',
+          description: 'pollToken returned by connect_source.',
+        },
+      },
+      required: ['poll_token'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        connected: { type: 'boolean' },
+        provider: { type: 'string' },
+        message: { type: 'string' },
+      },
+      required: ['connected', 'message'],
+    },
+  },
+];
+
+const MCP_SKILL_ROUTING_TOOLS: Tool[] = [
+  {
+    name: 'get_context_with_skills',
+    ...toolMeta('Get context with skills', { readOnly: true, openWorld: true, idempotent: true }),
+    description:
+      'Build context for a topic and suggest verified official Agent Skills. Skills require user approval before use — they are suggestions only.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        topic: {
+          type: 'string',
+          description: 'Subject to build context for.',
+        },
+        max_memories: {
+          type: 'number',
+          description: 'Max memories in context block.',
+        },
+        type: MEMORY_TYPE_PROPERTY,
+        ...SCOPE_FIELDS,
+        visibility: {
+          ...GROUP_VISIBILITY_FIELDS.visibility,
+          description:
+            'Optional. Defaults to user dashboard preference (private unless include_group_memories_in_context is on).',
+        },
+        group_id: GROUP_VISIBILITY_FIELDS.group_id,
+        group_name: GROUP_VISIBILITY_FIELDS.group_name,
+      },
+      required: ['topic'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        topic: { type: 'string' },
+        count: { type: 'number' },
+        context_block: { type: 'string' },
+        profile: { type: 'object', additionalProperties: true },
+        intent: { type: 'object', additionalProperties: true },
+        active_skills: { type: 'array', items: { type: 'object', additionalProperties: true } },
+        requires_approval: { type: 'boolean' },
+        message: { type: 'string' },
+      },
+      required: ['topic', 'count', 'context_block', 'requires_approval', 'message'],
+    },
+  },
+];
+
+export function getActiveMcpTools(opts?: { prefs?: UserMcpPreferences }): Tool[] {
+  const tools = [...MCP_CORE_TOOLS];
+  const prefs = opts?.prefs;
+  if (prefs) {
+    if (isInAppConnectActiveForUser(prefs)) tools.push(...MCP_INAPP_CONNECT_TOOLS);
+    if (isSkillRoutingActiveForUser(prefs)) tools.push(...MCP_SKILL_ROUTING_TOOLS);
+  } else {
+    if (isInAppConnectEnabled()) tools.push(...MCP_INAPP_CONNECT_TOOLS);
+    if (isSkillRoutingEnabled()) tools.push(...MCP_SKILL_ROUTING_TOOLS);
+  }
+  return tools;
+}
+
+/** Active tool list (respects feature flags at process start). */
+export const MCP_TOOLS = getActiveMcpTools();

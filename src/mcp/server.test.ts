@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { MCP_TOOLS } from './tool-schemas.js';
+import { MCP_TOOLS, MCP_CORE_TOOLS, getActiveMcpTools } from './tool-schemas.js';
 import { createMCPServer } from './server.js';
 
 async function withTestClient(fn: (client: Client) => Promise<void>): Promise<void> {
@@ -19,7 +19,7 @@ async function withTestClient(fn: (client: Client) => Promise<void>): Promise<vo
   }
 }
 
-const TOOL_NAMES = [
+const CORE_TOOL_NAMES = [
   'remember',
   'recall',
   'get_context',
@@ -28,6 +28,7 @@ const TOOL_NAMES = [
   'list_collections',
   'forget',
   'memory_stats',
+  'update',
 ] as const;
 
 const LEGACY_INPUT_KEYS: Record<string, string[]> = {
@@ -67,6 +68,7 @@ const LEGACY_INPUT_KEYS: Record<string, string[]> = {
   list_collections: [],
   forget: ['memory_id'],
   memory_stats: [],
+  update: ['id', 'content', 'type', 'collection', 'tags', 'importance', 'mode'],
 };
 
 const LEGACY_REQUIRED: Record<string, string[]> = {
@@ -78,6 +80,7 @@ const LEGACY_REQUIRED: Record<string, string[]> = {
   list_collections: [],
   forget: ['memory_id'],
   memory_stats: [],
+  update: ['id'],
 };
 
 function inputProps(tool: (typeof MCP_TOOLS)[number]): Record<string, unknown> {
@@ -85,10 +88,17 @@ function inputProps(tool: (typeof MCP_TOOLS)[number]): Record<string, unknown> {
   return schema.properties ?? {};
 }
 
-test('MCP_TOOLS exposes 8 tools with marketplace annotations', () => {
-  assert.equal(MCP_TOOLS.length, 8);
-  const names = MCP_TOOLS.map((t) => t.name);
-  assert.deepEqual(names, [...TOOL_NAMES]);
+test('MCP_CORE_TOOLS exposes 9 core tools with marketplace annotations', () => {
+  assert.equal(MCP_CORE_TOOLS.length, 9);
+  const names = MCP_CORE_TOOLS.map((t) => t.name);
+  assert.deepEqual(names, [...CORE_TOOL_NAMES]);
+});
+
+test('getActiveMcpTools matches MCP_TOOLS export', () => {
+  assert.deepEqual(
+    getActiveMcpTools().map((t) => t.name),
+    MCP_TOOLS.map((t) => t.name)
+  );
 });
 
 test('every tool has outputSchema with object type', () => {
@@ -110,7 +120,7 @@ test('every input property has description', () => {
 });
 
 test('inputSchema preserves legacy property keys and required fields', () => {
-  for (const tool of MCP_TOOLS) {
+  for (const tool of MCP_CORE_TOOLS) {
     const props = Object.keys(inputProps(tool)).sort();
     const expected = [...(LEGACY_INPUT_KEYS[tool.name] ?? [])].sort();
     assert.deepEqual(props, expected, `${tool.name} property keys`);
@@ -189,13 +199,13 @@ test('listResources still exposes memory://recent', async () => {
   });
 });
 
-test('listTools still exposes 8 tools', async () => {
+test('listTools exposes core tools (9 by default)', async () => {
   await withTestClient(async (client) => {
     const result = await client.listTools();
-    assert.equal(result.tools.length, 8);
+    assert.equal(result.tools.length, 9);
     assert.deepEqual(
       result.tools.map((tool) => tool.name),
-      [...TOOL_NAMES]
+      [...CORE_TOOL_NAMES]
     );
   });
 });
