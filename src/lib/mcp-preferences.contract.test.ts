@@ -10,8 +10,9 @@ import {
 } from './mcp-preferences.js';
 
 const fixtureDir = dirname(fileURLToPath(import.meta.url));
+// SYNC: API-IAMemory/test-fixtures/mcp-preferences.contract.json
 const contract = JSON.parse(
-  readFileSync(join(fixtureDir, '../../../API-IAMemory/test-fixtures/mcp-preferences.contract.json'), 'utf8')
+  readFileSync(join(fixtureDir, '../../test-fixtures/mcp-preferences.contract.json'), 'utf8')
 ) as {
   defaults: typeof DEFAULT_USER_MCP_PREFERENCES;
   parseCases: Array<{ input: unknown; expected: string | typeof DEFAULT_USER_MCP_PREFERENCES }>;

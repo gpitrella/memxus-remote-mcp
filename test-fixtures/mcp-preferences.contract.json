@@ -1,0 +1,38 @@
+{
+  "defaults": {
+    "in_app_connect_enabled": false,
+    "skill_routing_enabled": false,
+    "default_memory_visibility": "private",
+    "include_group_memories_in_context": false
+  },
+  "parseCases": [
+    {
+      "input": null,
+      "expected": "defaults"
+    },
+    {
+      "input": {
+        "in_app_connect_enabled": true,
+        "default_memory_visibility": "shared"
+      },
+      "expected": {
+        "in_app_connect_enabled": true,
+        "skill_routing_enabled": false,
+        "default_memory_visibility": "shared",
+        "include_group_memories_in_context": false
+      }
+    }
+  ],
+  "mergeCases": [
+    {
+      "current": "defaults",
+      "patch": { "skill_routing_enabled": true },
+      "expected": {
+        "in_app_connect_enabled": false,
+        "skill_routing_enabled": true,
+        "default_memory_visibility": "private",
+        "include_group_memories_in_context": false
+      }
+    }
+  ]
+}
