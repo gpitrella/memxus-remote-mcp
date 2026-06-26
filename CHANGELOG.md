@@ -12,16 +12,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - MCP Registry repositioning: "Memxus — AI Context Engine"
 - Updated registry descriptions, tags, categories, and tool metadata for GitHub/Notion/skills positioning
-- Added server.json schema validation in CI
-- README rewritten for public discovery: hero, demo video, connect guides, architecture, roadmap
+- Added `server.json` schema validation in CI
+- README aligned with context-engine positioning (hero, problem statement, product description)
+- Production smoke test validates full 15-tool manifest (`SMOKE_MANIFEST=full`)
 
 ### Added
 
 - `_meta.extendedDescription` and support link in registry manifest
+- `scripts/mcp-tool-manifest.mjs` for layered tool manifest validation (core 9 / full 15)
+- `scripts/validate-server-json.mjs` — AJV schema + custom checks for registry manifest
+- Vendored `test-fixtures/mcp-preferences.contract.json` for standalone CI (no monorepo dependency)
 
 ### Fixed
 
 - README: inline demo video via GitHub user-attachments (Glama badge already fixed)
+- CI: contract test no longer depends on sibling `API-IAMemory` repo
+- CI smoke: tool manifest mismatch after v1.1.0 production rollout (expected 9 vs got 15)
 
 ## [1.0.3] - 2026-06-19
 

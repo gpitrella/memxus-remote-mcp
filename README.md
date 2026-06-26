@@ -1,18 +1,19 @@
-# Memxus — One memory for every AI tool
+# Memxus — AI Context Engine
 
 <div align="center">
 
-**Your memory travels with you.**
+**One context engine. Every AI.**
 
-Save context once. Recall it instantly across Claude, Cursor, ChatGPT, VS Code and any MCP-compatible client.
+Builds persistent context from GitHub, Notion, and your saved decisions — delivered to Claude, Cursor, ChatGPT, VS Code, and any MCP-compatible client.
 
 [![Glama MCP Connector](https://img.shields.io/badge/Glama-MCP_Connector-6366f1?style=flat)](https://glama.ai/mcp/connectors/com.memxus/memxus)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 [![Node 20+](https://img.shields.io/badge/Node-20%2B-brightgreen)](https://nodejs.org)
 [![Railway](https://img.shields.io/badge/Deployed%20on-Railway-purple)](https://railway.app)
 [![MCP](https://img.shields.io/badge/Protocol-MCP%202.0-orange)](https://modelcontextprotocol.io)
+[![Registry v1.1.0](https://img.shields.io/badge/Registry-v1.1.0-blue)](https://registry.modelcontextprotocol.io)
 
-[Website](https://www.memxus.com) · [Connect your first AI](https://www.memxus.com/install) · [Glama Inspector](https://glama.ai/mcp/connectors/com.memxus/memxus)
+[Website](https://memxus.com) · [Docs](https://memxus.com/docs/mcp) · [Connect your first AI](https://memxus.com/install) · [Glama Inspector](https://glama.ai/mcp/connectors/com.memxus/memxus)
 
 </div>
 
@@ -35,15 +36,17 @@ Every AI tool starts from zero.
 Claude doesn't know what Cursor knows. Cursor doesn't know what ChatGPT knows.  
 Your stack, project decisions, coding preferences and workflow context get repeated again and again.
 
-**Memxus fixes that with a shared long-term memory layer for your AI tools.**
+**Memxus fixes that with a shared context engine for your AI tools** — not another chatbot, but persistent context built from your real work sources.
 
-> Save a decision in Claude → recall it in Cursor → reference it in ChatGPT → reuse it anywhere.
+> Sync GitHub once → every AI knows your stack. Save a decision in Claude → recall it in Cursor → reuse it in ChatGPT.
 
 ---
 
 ## What is Memxus?
 
-Memxus is a hosted remote MCP server that gives every AI client access to the same user-controlled long-term memory.
+Memxus is the **AI context engine** — a hosted remote MCP server that automatically builds and delivers persistent project context to every AI client you use.
+
+GitHub repos, Notion docs, commits, PRs, and saved decisions become searchable context. Optional v2 tools add in-app GitHub/Notion connect and official AI skill suggestions matched to your stack.
 
 No local setup.  
 No file syncing.  
@@ -55,11 +58,12 @@ Connect once with OAuth and your context becomes portable across your entire AI 
 
 ## Why developers use Memxus
 
-- Keep project architecture decisions available across Claude, Cursor and ChatGPT
-- Store stack decisions, coding conventions and implementation notes once
+- Keep project architecture and stack context available across Claude, Cursor, and ChatGPT
+- Sync GitHub and Notion into unified project collections — one context per repo
 - Stop pasting the same context into every new AI session
-- Share team memory across agents and workflows
-- Build AI apps with persistent memory through MCP or API
+- Get official AI skill suggestions matched to your stack (`get_context_with_skills`)
+- Share team context across agents and workflows
+- Build AI apps with persistent context through MCP or API
 
 ---
 
@@ -240,7 +244,7 @@ npm run build      # compile → dist/
 npm start          # node dist/index.js
 ```
 
-Marketplace reviewers: [REVIEWER.md](REVIEWER.md) · MCP docs: [memxus.com/docs/mcp](https://www.memxus.com/docs/mcp)
+Marketplace reviewers: [REVIEWER.md](REVIEWER.md) · MCP docs: [memxus.com/docs/mcp](https://memxus.com/docs/mcp) · Registry: `com.memxus/memxus` v1.1.0
 
 ---
 
