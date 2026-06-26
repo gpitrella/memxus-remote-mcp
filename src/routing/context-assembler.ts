@@ -1,27 +1,27 @@
-import type { FormattableMemory } from '../mcp/format-memory.js';
-import { formatContextBlock } from '../mcp/format-memory.js';
 import type { SkillRoutingResult } from './types.js';
 import { getCachedProjectProfile } from './project-profile-cache.js';
 import { profileProject } from './project-profiler.js';
 import { classifyIntent } from './intent-classifier.js';
 import { routeSkills } from './routing-engine.js';
+import { formatSkillsBlock } from './skill-discovery.js';
 
-export function assembleContextWithSkills(input: {
+export async function assembleContextWithSkills(input: {
   userId?: string;
   topic: string;
   collection?: string | null;
-  memories: FormattableMemory[];
-}): {
+  memories: Array<{ content: string }>;
+}): Promise<{
   contextBlock: string;
   routing: SkillRoutingResult;
   approvalNotice: string;
-} {
+}> {
   const snippets = input.memories.map((m) => m.content.slice(0, 500));
   const profile = input.userId
     ? getCachedProjectProfile({
         userId: input.userId,
         topic: input.topic,
         collection: input.collection,
+        memorySnippets: snippets,
       })
     : profileProject({
         query: input.topic,
@@ -29,35 +29,32 @@ export function assembleContextWithSkills(input: {
         memorySnippets: snippets,
       });
   const intent = classifyIntent(input.topic);
-  const activeSkills = routeSkills({ profile, intent, query: input.topic });
+  const activeSkills = await routeSkills({
+    profile,
+    intent,
+    query: input.topic,
+    memorySnippets: snippets,
+  });
 
-  const contextBlock = formatContextBlock(input.topic, input.collection, input.memories);
+  const collLine = input.collection ? `Collection: ${input.collection}\n` : '';
+  const contextBlock = [
+    '=== AI Memory Context ===',
+    `Topic: ${input.topic}`,
+    collLine + `Memories Retrieved: ${input.memories.length}`,
+    '',
+    ...input.memories.map((m, i) => `[${i + 1}] ${m.content}`),
+    '',
+    '=== End of Memory Context ===',
+  ].join('\n');
+
+  const approvalNotice = formatSkillsBlock(activeSkills);
   const routing: SkillRoutingResult = {
     profile,
     intent,
     activeSkills,
     requiresApproval: true,
+    discoveryDegraded: activeSkills.length < 2,
   };
-
-  const skillLines =
-    activeSkills.length === 0
-      ? 'No specific verified skills matched — use general engineering practices.'
-      : activeSkills
-          .map(
-            (s, i) =>
-              `[${i + 1}] ${s.name} (verified) — ${s.reason}\n    ${s.description}`
-          )
-          .join('\n');
-
-  const approvalNotice = [
-    '=== Suggested Official Skills (approval required) ===',
-    'These skills are SUGGESTED based on your project context. Confirm before the agent applies them.',
-    '',
-    skillLines,
-    '',
-    'Reply to approve which skill(s) to use, or continue without skills.',
-    '=== End Skills Suggestion ===',
-  ].join('\n');
 
   return {
     contextBlock: `${contextBlock}\n\n${approvalNotice}`,

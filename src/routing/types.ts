@@ -10,10 +10,20 @@ export type Intent = {
   confidence: number;
 };
 
-export type VerifiedSkill = {
+export type DiscoveredSkill = {
   id: string;
   name: string;
   description: string;
+  owner: string;
+  repo: string;
+  skillId: string;
+  sourceUrl: string;
+  installCommand: string;
+  official: boolean;
+};
+
+/** @deprecated Use DiscoveredSkill */
+export type VerifiedSkill = DiscoveredSkill & {
   instructions: string;
   verified: boolean;
   appliesTo: {
@@ -25,7 +35,7 @@ export type VerifiedSkill = {
   excludes?: string[];
 };
 
-export type RoutedSkill = VerifiedSkill & {
+export type RoutedSkill = DiscoveredSkill & {
   score: number;
   reason: string;
 };
@@ -35,4 +45,5 @@ export type SkillRoutingResult = {
   intent: Intent;
   activeSkills: RoutedSkill[];
   requiresApproval: true;
+  discoveryDegraded?: boolean;
 };

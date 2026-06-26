@@ -46,8 +46,13 @@ import {
   listSyncableItems,
   setSyncSelection,
   checkConnectStatus,
+  mapActiveSkillsForResponse,
 } from './connector-tools.js';
 import { assembleContextWithSkills } from '../routing/context-assembler.js';
+import {
+  shouldAppendSkillsForRecall,
+  surfaceSkills,
+} from '../routing/skill-surfacing.js';
 import {
   isInAppConnectEnabled,
   isSkillRoutingEnabled,
@@ -195,6 +200,7 @@ export function createMCPServer(ctx: McpContext): Server {
               visibility: z.enum(['private', 'shared', 'all']).optional(),
               group_id: z.string().uuid().optional(),
               group_name: z.string().optional(),
+              include_skills: z.boolean().optional(),
             })
             .parse(a);
           const visibility = resolveDefaultReadVisibility(prefs, input.visibility);
@@ -222,11 +228,30 @@ export function createMCPServer(ctx: McpContext): Server {
             });
           } else {
             const formatted = ms.map((m, i) => formatMemoryLine(m, i)).join('\n\n---\n\n');
-            const text = `Found ${ms.length}:\n\n${formatted}`;
+            let text = `Found ${ms.length}:\n\n${formatted}`;
+            const skillPrefs = await resolvePrefs();
+            let suggestedSkills: ReturnType<typeof mapActiveSkillsForResponse> | undefined;
+            let skillsMessage: string | undefined;
+            if (
+              isSkillRoutingActiveForUser(skillPrefs) &&
+              shouldAppendSkillsForRecall(input.query, input.include_skills)
+            ) {
+              const snippets = ms.map((m) => m.content);
+              const surfaced = await surfaceSkills({
+                trigger: 'recall',
+                topic: input.query,
+                collection: input.collection,
+                memorySnippets: snippets,
+              });
+              suggestedSkills = mapActiveSkillsForResponse(surfaced.skills);
+              skillsMessage = surfaced.skillsMessage;
+              text = `${text}\n\n${surfaced.skillsMessage}`;
+            }
             result = toolSuccess(text, {
               count: ms.length,
               memories: toStructuredMemories(ms),
               message: text,
+              ...(suggestedSkills ? { suggested_skills: suggestedSkills, skills_message: skillsMessage } : {}),
             });
           }
           break;
@@ -501,14 +526,20 @@ export function createMCPServer(ctx: McpContext): Server {
             itemIds: input.itemIds,
             projectSlug: input.project_slug,
           });
-          const text = `Saved ${out.selected} ${input.provider} item(s) for sync.${
+          let text = `Saved ${out.selected} ${input.provider} item(s) for sync.${
             out.sync?.ok ? ' Initial sync started.' : out.sync?.detail ? ` Sync note: ${out.sync.detail}` : ''
           }`;
+          if (out.skills_message) {
+            text = `${text}\n\n${out.skills_message}`;
+          }
           result = toolSuccess(text, {
             ok: out.ok,
             selected: out.selected,
             sync_ok: out.sync?.ok ?? false,
             message: text,
+            ...(out.suggested_skills ? { suggested_skills: out.suggested_skills } : {}),
+            ...(out.skills_message ? { skills_message: out.skills_message } : {}),
+            ...(out.discovery_degraded != null ? { discovery_degraded: out.discovery_degraded } : {}),
           });
           break;
         }
@@ -566,7 +597,7 @@ export function createMCPServer(ctx: McpContext): Server {
             group_id: input.group_id,
             group_name: input.group_name,
           });
-          const assembled = assembleContextWithSkills({
+          const assembled = await assembleContextWithSkills({
             userId,
             topic: input.topic,
             collection: input.collection,
@@ -578,18 +609,57 @@ export function createMCPServer(ctx: McpContext): Server {
             context_block: assembled.contextBlock,
             profile: assembled.routing.profile,
             intent: assembled.routing.intent,
-            active_skills: assembled.routing.activeSkills.map((s) => ({
-              id: s.id,
-              name: s.name,
-              description: s.description,
-              instructions: s.instructions,
-              verified: s.verified,
-              score: s.score,
-              reason: s.reason,
-            })),
+            active_skills: mapActiveSkillsForResponse(assembled.routing.activeSkills),
+            discovery_degraded: assembled.routing.discoveryDegraded ?? false,
             requires_approval: true,
             memories: toStructuredMemories(ms),
             message: assembled.contextBlock,
+          });
+          break;
+        }
+        case 'suggest_skills': {
+          assertMemoryReadScope(oauthScope, oauthOpts);
+          if (!isSkillRoutingEnabled()) {
+            throw new Error('Skill routing is not enabled on this server');
+          }
+          const skillPrefs = await resolvePrefs();
+          if (!isSkillRoutingActiveForUser(skillPrefs)) {
+            throw new Error(
+              'Skill routing is disabled in your dashboard settings. Enable it under Settings → AI & MCP.'
+            );
+          }
+          const input = z
+            .object({
+              topic: z.string().min(1),
+              collection: z.string().optional().nullable(),
+              max_memories: z.number().int().optional(),
+            })
+            .parse(a);
+          const contextLimit = resolveSearchLimit(limits, input.max_memories ?? 5);
+          const ms = await searchMemories({
+            userId,
+            workforceWorkspaceId,
+            query: input.topic,
+            limit: contextLimit,
+            planLimits: limits,
+            collection: input.collection,
+            visibility: resolveDefaultReadVisibility(skillPrefs),
+          });
+          const surfaced = await surfaceSkills({
+            trigger: 'suggest',
+            topic: input.topic,
+            collection: input.collection,
+            memorySnippets: ms.map((m) => m.content),
+          });
+          result = toolSuccess(surfaced.skillsMessage, {
+            topic: input.topic,
+            active_skills: mapActiveSkillsForResponse(surfaced.skills),
+            skills_message: surfaced.skillsMessage,
+            profile: surfaced.profile,
+            intent: surfaced.intent,
+            discovery_degraded: surfaced.discoveryDegraded,
+            requires_approval: true,
+            message: surfaced.skillsMessage,
           });
           break;
         }

@@ -54,6 +54,7 @@ async function main() {
     'get_context_with_skills',
     'list_syncable_items',
     'set_sync_selection',
+    'suggest_skills',
   ].sort();
 
   const expectV2 = process.env.V2_SMOKE === 'true';

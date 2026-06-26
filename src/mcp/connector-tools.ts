@@ -1,8 +1,64 @@
 import { createSign } from 'crypto';
 import { supabase } from '../lib/supabase.js';
 import { config } from '../config.js';
+import {
+  getUserMcpPreferences,
+  isSkillRoutingActiveForUser,
+} from '../lib/mcp-preferences.js';
+import { surfaceSkills } from '../routing/skill-surfacing.js';
+import type { RoutedSkill } from '../routing/types.js';
+
+export function mapActiveSkillsForResponse(skills: RoutedSkill[]) {
+  return skills.map((s) => ({
+    id: s.id,
+    name: s.name,
+    description: s.description,
+    installCommand: s.installCommand,
+    sourceUrl: s.sourceUrl,
+    official: s.official,
+    score: s.score,
+    reason: s.reason,
+  }));
+}
+
+async function maybeSurfaceSkills(p: {
+  userId: string;
+  trigger: 'post_sync' | 'onboarding' | 'assign_project';
+  topic: string;
+  collection?: string | null;
+  memorySnippets?: string[];
+}): Promise<{ skills: RoutedSkill[]; skillsMessage: string; discoveryDegraded: boolean } | null> {
+  const prefs = await getUserMcpPreferences(p.userId);
+  if (!isSkillRoutingActiveForUser(prefs)) return null;
+  const surfaced = await surfaceSkills({
+    trigger: p.trigger,
+    topic: p.topic,
+    collection: p.collection,
+    memorySnippets: p.memorySnippets,
+  });
+  return {
+    skills: surfaced.skills,
+    skillsMessage: surfaced.skillsMessage,
+    discoveryDegraded: surfaced.discoveryDegraded,
+  };
+}
 
 export type ConnectorProvider = 'github' | 'notion';
+
+function buildSyncSkillTopic(
+  provider: ConnectorProvider,
+  projectSlug?: string,
+  itemIds?: string[],
+): string {
+  if (projectSlug?.trim()) {
+    const slug = projectSlug.trim().toLowerCase().replace(/^project:/, '');
+    return `project:${slug}`;
+  }
+  if (itemIds?.length) {
+    return itemIds.join(' ');
+  }
+  return provider === 'github' ? 'github repository typescript node' : 'notion documentation';
+}
 
 type ConnectorInstallRow = {
   id: string;
@@ -352,7 +408,14 @@ export async function setSyncSelection(p: {
   provider: ConnectorProvider;
   itemIds: string[];
   projectSlug?: string;
-}): Promise<{ ok: boolean; selected: number; sync?: { ok: boolean; detail?: string } }> {
+}): Promise<{
+  ok: boolean;
+  selected: number;
+  sync?: { ok: boolean; detail?: string };
+  suggested_skills?: ReturnType<typeof mapActiveSkillsForResponse>;
+  skills_message?: string;
+  discovery_degraded?: boolean;
+}> {
   if (!p.itemIds.length) throw new Error('itemIds must not be empty');
 
   const install = await getUserInstall(p.userId, p.provider);
@@ -397,7 +460,32 @@ export async function setSyncSelection(p: {
     projectSlug: p.projectSlug,
   });
 
-  return { ok: true, selected: p.itemIds.length, sync };
+  let skillPayload: {
+    suggested_skills?: ReturnType<typeof mapActiveSkillsForResponse>;
+    skills_message?: string;
+    discovery_degraded?: boolean;
+  } = {};
+
+  if (sync.ok) {
+    const collection = p.projectSlug?.trim()
+      ? `project:${p.projectSlug.trim().toLowerCase().replace(/^project:/, '')}`
+      : null;
+    const surfaced = await maybeSurfaceSkills({
+      userId: p.userId,
+      trigger: 'post_sync',
+      topic: buildSyncSkillTopic(p.provider, p.projectSlug, p.itemIds),
+      collection,
+    });
+    if (surfaced) {
+      skillPayload = {
+        suggested_skills: mapActiveSkillsForResponse(surfaced.skills),
+        skills_message: surfaced.skillsMessage,
+        discovery_degraded: surfaced.discoveryDegraded,
+      };
+    }
+  }
+
+  return { ok: true, selected: p.itemIds.length, sync, ...skillPayload };
 }
 
 export async function isSourceConnected(
@@ -420,14 +508,56 @@ export function parseConnectPollToken(
 export async function checkConnectStatus(p: {
   userId: string;
   pollToken: string;
-}): Promise<{ connected: boolean; provider: ConnectorProvider; message: string }> {
+}): Promise<{
+  connected: boolean;
+  provider: ConnectorProvider;
+  message: string;
+  suggested_skills?: ReturnType<typeof mapActiveSkillsForResponse>;
+  skills_message?: string;
+  discovery_degraded?: boolean;
+}> {
   const parsed = parseConnectPollToken(p.pollToken, p.userId);
   if (!parsed) {
     throw new Error('Invalid poll_token for this user');
   }
   const connected = await isSourceConnected(p.userId, parsed.provider);
-  const message = connected
+  let message = connected
     ? `${parsed.provider} is connected and ready.`
     : `Waiting for ${parsed.provider} authorization — open the connect link in your browser.`;
-  return { connected, provider: parsed.provider, message };
+
+  let skillPayload: {
+    suggested_skills?: ReturnType<typeof mapActiveSkillsForResponse>;
+    skills_message?: string;
+    discovery_degraded?: boolean;
+  } = {};
+
+  if (connected) {
+    const install = await getUserInstall(p.userId, parsed.provider);
+    const onboardingShown = install?.metadata?.skills_onboarding_shown_at;
+    if (!onboardingShown && install) {
+      const surfaced = await maybeSurfaceSkills({
+        userId: p.userId,
+        trigger: 'onboarding',
+        topic: buildSyncSkillTopic(parsed.provider),
+        collection: typeof install.metadata?.project_slug === 'string'
+          ? `project:${String(install.metadata.project_slug).replace(/^project:/, '')}`
+          : null,
+      });
+      if (surfaced) {
+        skillPayload = {
+          suggested_skills: mapActiveSkillsForResponse(surfaced.skills),
+          skills_message: surfaced.skillsMessage,
+          discovery_degraded: surfaced.discoveryDegraded,
+        };
+        message = `${message}\n\n${surfaced.skillsMessage}`;
+        const meta = { ...(install.metadata ?? {}), skills_onboarding_shown_at: new Date().toISOString() };
+        await supabase
+          .from('connector_installs')
+          .update({ metadata: meta, updated_at: new Date().toISOString() })
+          .eq('id', install.id);
+      }
+    }
+  }
+
+  return { connected, provider: parsed.provider, message, ...skillPayload };
 }

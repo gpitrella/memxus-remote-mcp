@@ -191,6 +191,11 @@ export const MCP_CORE_TOOLS: Tool[] = [
         },
         group_id: GROUP_VISIBILITY_FIELDS.group_id,
         group_name: GROUP_VISIBILITY_FIELDS.group_name,
+        include_skills: {
+          type: 'boolean',
+          description:
+            'When skill routing is enabled, append official skill suggestions for work intents (build/review/fix/test). Default: auto-detect from query.',
+        },
       },
       required: ['query'],
     },
@@ -577,7 +582,7 @@ const MCP_SKILL_ROUTING_TOOLS: Tool[] = [
     name: 'get_context_with_skills',
     ...toolMeta('Get context with skills', { readOnly: true, openWorld: true, idempotent: true }),
     description:
-      'Build context for a topic and suggest verified official Agent Skills. Skills require user approval before use — they are suggestions only.',
+      'Build context for a topic and suggest official Agent Skills from skills.sh. Skills require user approval before use — they are suggestions only.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -614,6 +619,44 @@ const MCP_SKILL_ROUTING_TOOLS: Tool[] = [
         message: { type: 'string' },
       },
       required: ['topic', 'count', 'context_block', 'requires_approval', 'message'],
+    },
+  },
+  {
+    name: 'suggest_skills',
+    ...toolMeta('Suggest skills', { readOnly: true, openWorld: true, idempotent: true }),
+    description:
+      'Discover official Agent Skills for a topic via skills.sh without building a full context block. Requires skill routing enabled in dashboard settings.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        topic: {
+          type: 'string',
+          description: 'Subject to find skills for (e.g. "nextjs testing", "mcp server").',
+        },
+        collection: {
+          type: 'string',
+          description: 'Optional collection scope (e.g. project:my-app).',
+        },
+        max_memories: {
+          type: 'number',
+          description: 'Optional memories to sample for stack detection (default 5).',
+        },
+      },
+      required: ['topic'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        topic: { type: 'string' },
+        active_skills: { type: 'array', items: { type: 'object', additionalProperties: true } },
+        skills_message: { type: 'string' },
+        profile: { type: 'object', additionalProperties: true },
+        intent: { type: 'object', additionalProperties: true },
+        discovery_degraded: { type: 'boolean' },
+        requires_approval: { type: 'boolean' },
+        message: { type: 'string' },
+      },
+      required: ['topic', 'active_skills', 'requires_approval', 'message'],
     },
   },
 ];

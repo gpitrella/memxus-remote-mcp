@@ -7,6 +7,7 @@ const INTENT_PATTERNS: Array<{ action: string; patterns: RegExp[] }> = [
   { action: 'refactor', patterns: [/\brefactor\b/i, /\bclean\b/i, /\brestructure\b/i] },
   { action: 'document', patterns: [/\bdocument\b/i, /\bspec\b/i, /\bwrite docs\b/i] },
   { action: 'design', patterns: [/\bdesign\b/i, /\barchitecture\b/i, /\bplan\b/i] },
+  { action: 'test', patterns: [/\btest\b/i, /\be2e\b/i, /\bplaywright\b/i, /\bjest\b/i] },
   { action: 'analyze', patterns: [/\banalyze\b/i, /\binvestigate\b/i, /\bunderstand\b/i] },
   { action: 'plan', patterns: [/\bplan\b/i, /\broadmap\b/i, /\bstrategy\b/i] },
 ];
