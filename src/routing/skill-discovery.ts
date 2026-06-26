@@ -6,6 +6,7 @@ export type SkillsShResult = {
   name: string;
   installs?: number;
   source: string;
+  fromGithub?: boolean;
 };
 
 type SkillsShResponse = {
@@ -13,20 +14,30 @@ type SkillsShResponse = {
   count?: number;
 };
 
-const DEFAULT_OFFICIAL_OWNERS = [
+type GitHubRepoResponse = { default_branch?: string };
+type GitHubTreeItem = { path?: string; type?: string };
+type GitHubTreeResponse = { tree?: GitHubTreeItem[] };
+
+const DEFAULT_OFFICIAL_REPOS = [
   'anthropics/skills',
   'vercel-labs/agent-skills',
   'vercel-labs/skills',
-  'cursor-skills',
 ];
 
 const OFFICIAL_BOOST = 0.25;
 const SEARCH_TIMEOUT_MS = 5000;
 
-function getOfficialOwners(): string[] {
-  const raw = process.env.OFFICIAL_SKILL_OWNERS?.trim();
-  if (!raw) return DEFAULT_OFFICIAL_OWNERS;
+const githubTreeCache = new Map<string, { expiresAt: number; skills: SkillsShResult[] }>();
+
+function getOfficialRepos(): string[] {
+  const raw =
+    process.env.OFFICIAL_SKILL_REPOS?.trim() || process.env.OFFICIAL_SKILL_OWNERS?.trim();
+  if (!raw) return DEFAULT_OFFICIAL_REPOS;
   return raw.split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+function getOfficialOwners(): string[] {
+  return getOfficialRepos();
 }
 
 function getSkillsShApiUrl(): string {
@@ -43,9 +54,21 @@ function getMaxResults(): number {
   return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : 2;
 }
 
+function getGithubTimeoutMs(): number {
+  const raw = Number(process.env.SKILL_GITHUB_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw >= 1000 ? Math.floor(raw) : SEARCH_TIMEOUT_MS;
+}
+
+function getGithubCacheTtlMs(): number {
+  const raw = Number(process.env.SKILL_GITHUB_CACHE_TTL_MS);
+  return Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : 3_600_000;
+}
+
 function isOfficialSource(source: string, owners: string[]): boolean {
   const normalized = source.toLowerCase();
-  return owners.some((o) => normalized === o.toLowerCase() || normalized.startsWith(`${o.toLowerCase()}/`));
+  return owners.some(
+    (o) => normalized === o.toLowerCase() || normalized.startsWith(`${o.toLowerCase()}/`),
+  );
 }
 
 function buildSearchQueries(input: {
@@ -64,13 +87,132 @@ function buildSearchQueries(input: {
   return [...new Set(queries.map((q) => q.trim()).filter(Boolean))];
 }
 
+function githubHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': 'memxus-skill-discovery',
+  };
+  const token = process.env.GITHUB_TOKEN?.trim();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
+async function fetchGitHubJson<T>(url: string): Promise<T | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), getGithubTimeoutMs());
+  try {
+    const res = await fetch(url, { signal: controller.signal, headers: githubHeaders() });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function skillFromTreePath(repo: string, skillPath: string): SkillsShResult {
+  let relativePath = skillPath.replace(/\/SKILL\.md$/i, '');
+  if (relativePath.startsWith('skills/')) {
+    relativePath = relativePath.slice('skills/'.length);
+  }
+  const skillId = relativePath.split('/').pop() ?? relativePath;
+  const displayName = skillId.replace(/-/g, ' ');
+  return {
+    id: `${repo}/${relativePath}`,
+    skillId,
+    name: displayName,
+    source: repo,
+    installs: 0,
+    fromGithub: true,
+  };
+}
+
+function matchesSearchQuery(skill: SkillsShResult, query: string): boolean {
+  const q = query.toLowerCase().trim();
+  if (!q) return true;
+  const haystack = `${skill.name} ${skill.skillId} ${skill.id} ${skill.source}`.toLowerCase();
+  const tokens = q.split(/\s+/).filter((t) => t.length > 2);
+  if (tokens.length === 0) return haystack.includes(q);
+  return tokens.some((t) => haystack.includes(t));
+}
+
+async function listRepoSkills(repo: string): Promise<SkillsShResult[]> {
+  const cached = githubTreeCache.get(repo);
+  if (cached && cached.expiresAt > Date.now()) return cached.skills;
+
+  const [owner, repoName] = repo.split('/');
+  if (!owner || !repoName) return [];
+
+  const meta = await fetchGitHubJson<GitHubRepoResponse>(
+    `https://api.github.com/repos/${owner}/${repoName}`,
+  );
+  const branch = meta?.default_branch ?? 'main';
+  const tree = await fetchGitHubJson<GitHubTreeResponse>(
+    `https://api.github.com/repos/${owner}/${repoName}/git/trees/${branch}?recursive=1`,
+  );
+  if (!tree?.tree) return [];
+
+  const skills = tree.tree
+    .filter((item) => item.type === 'blob' && item.path?.endsWith('/SKILL.md'))
+    .map((item) => skillFromTreePath(repo, item.path!));
+
+  githubTreeCache.set(repo, { expiresAt: Date.now() + getGithubCacheTtlMs(), skills });
+  return skills;
+}
+
+export async function fetchOfficialRepoSkills(
+  query: string,
+  limit: number,
+): Promise<SkillsShResult[]> {
+  const repos = getOfficialRepos();
+  const seen = new Set<string>();
+  const matched: SkillsShResult[] = [];
+
+  for (const repo of repos) {
+    const repoSkills = await listRepoSkills(repo);
+    for (const skill of repoSkills) {
+      if (seen.has(skill.id)) continue;
+      if (!matchesSearchQuery(skill, query)) continue;
+      seen.add(skill.id);
+      matched.push(skill);
+    }
+  }
+
+  if (matched.length < limit) {
+    for (const repo of repos) {
+      const repoSkills = await listRepoSkills(repo);
+      for (const skill of repoSkills) {
+        if (seen.has(skill.id)) continue;
+        seen.add(skill.id);
+        matched.push(skill);
+        if (matched.length >= limit) break;
+      }
+      if (matched.length >= limit) break;
+    }
+  }
+
+  return matched.slice(0, limit);
+}
+
+/** Clears in-memory GitHub skill tree cache (for tests). */
+export function resetGithubSkillCacheForTests(): void {
+  githubTreeCache.clear();
+}
+
 function mapSkill(raw: SkillsShResult, score: number, reason: string, official: boolean): RoutedSkill {
   const installCommand = `npx skills add ${raw.source}@${raw.skillId}`;
-  const sourceUrl = `https://skills.sh/${raw.id}`;
+  const sourceUrl = raw.fromGithub
+    ? `https://github.com/${raw.source}/tree/HEAD/${raw.id.replace(`${raw.source}/`, '')}`
+    : `https://skills.sh/${raw.id}`;
+  const installNote = raw.fromGithub
+    ? 'official GitHub skill registry'
+    : `${raw.installs ?? 0} installs on skills.sh`;
   const skill: DiscoveredSkill = {
     id: raw.id,
     name: raw.name,
-    description: `Agent skill from ${raw.source} (${raw.installs ?? 0} installs on skills.sh).`,
+    description: `Agent skill from ${raw.source} (${installNote}).`,
     owner: raw.source.split('/')[0] ?? raw.source,
     repo: raw.source,
     skillId: raw.skillId,
@@ -91,10 +233,10 @@ function scoreSkill(
   const q = searchQuery.toLowerCase();
   const name = raw.name.toLowerCase();
   const source = raw.source.toLowerCase();
-  let score = 0.35;
+  let score = raw.fromGithub ? 0.4 : 0.35;
   const reasons: string[] = [];
 
-  if (name.split(/[-_]/).some((part) => part.length > 2 && q.includes(part))) {
+  if (name.split(/[-_\s]/).some((part) => part.length > 2 && q.includes(part))) {
     score += 0.2;
     reasons.push('name match');
   }
@@ -108,12 +250,15 @@ function scoreSkill(
     score += OFFICIAL_BOOST;
     reasons.push('official source');
   }
+  if (raw.fromGithub) {
+    reasons.push('github registry');
+  }
   const installBoost = Math.min(0.15, Math.log10((raw.installs ?? 1) + 1) * 0.03);
   score += installBoost;
 
   return {
     score: Math.min(0.99, score),
-    reason: reasons.join(', ') || 'skills.sh match',
+    reason: reasons.join(', ') || (raw.fromGithub ? 'github match' : 'skills.sh match'),
     official,
   };
 }
@@ -157,11 +302,11 @@ export async function discoverSkills(input: {
   const queries = buildSearchQueries(input);
   const seen = new Set<string>();
   const scored: RoutedSkill[] = [];
-  let anyFetchOk = false;
+  let anySkillsShOk = false;
 
   for (const searchQuery of queries) {
     const rawSkills = await fetchSkillsSh(searchQuery, 20);
-    if (rawSkills.length > 0) anyFetchOk = true;
+    if (rawSkills.length > 0) anySkillsShOk = true;
 
     for (const raw of rawSkills) {
       if (seen.has(raw.id)) continue;
@@ -172,8 +317,25 @@ export async function discoverSkills(input: {
     if (scored.length >= minResults) break;
   }
 
+  let anyGithubOk = false;
+  if (scored.length < minResults || !anySkillsShOk) {
+    for (const searchQuery of queries) {
+      const githubSkills = await fetchOfficialRepoSkills(searchQuery, 40);
+      if (githubSkills.length > 0) anyGithubOk = true;
+
+      for (const raw of githubSkills) {
+        if (seen.has(raw.id)) continue;
+        seen.add(raw.id);
+        const { score, reason, official } = scoreSkill(raw, searchQuery, input.profile, officialOwners);
+        scored.push(mapSkill(raw, score, reason, official));
+      }
+      if (scored.length >= minResults) break;
+    }
+  }
+
   scored.sort((a, b) => b.score - a.score);
   const skills = scored.slice(0, maxResults);
+  const anyFetchOk = anySkillsShOk || anyGithubOk;
 
   return {
     skills,
