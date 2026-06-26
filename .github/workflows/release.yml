@@ -62,6 +62,8 @@ jobs:
         env:
           VERSION: ${{ steps.ver.outputs.version }}
 
+      - run: npm run validate:server-json
+
       - name: Extract release notes from CHANGELOG
         id: notes
         run: |

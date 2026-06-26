@@ -6,9 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-26
+
 ### Changed
 
+- MCP Registry repositioning: "Memxus — AI Context Engine"
+- Updated registry descriptions, tags, categories, and tool metadata for GitHub/Notion/skills positioning
+- Added server.json schema validation in CI
 - README rewritten for public discovery: hero, demo video, connect guides, architecture, roadmap
+
+### Added
+
+- `_meta.extendedDescription` and support link in registry manifest
 
 ### Fixed
 

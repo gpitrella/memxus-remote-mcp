@@ -89,7 +89,7 @@ export function createMCPServer(ctx: McpContext): Server {
   }
 
   const server = new Server(
-    { name: 'aimemory-remote', version: '1.0.3' },
+    { name: 'aimemory-remote', version: '1.1.0' },
     { capabilities: { tools: {}, resources: {}, prompts: {} } }
   );
 
