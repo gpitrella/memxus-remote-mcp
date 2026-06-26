@@ -2,12 +2,15 @@
 /**
  * Live MCP smoke test — requires MEMXUS_API_KEY (aimem_*).
  * Optional: MCP_SMOKE_URL (default https://mcp.memxus.com/mcp)
+ * Optional: SMOKE_MANIFEST=auto|full|core (default auto)
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { validateToolManifest } from './mcp-tool-manifest.mjs';
 
 const MCP_URL = process.env.MCP_SMOKE_URL ?? 'https://mcp.memxus.com/mcp';
 const API_KEY = process.env.MEMXUS_API_KEY;
+const SMOKE_MANIFEST = process.env.SMOKE_MANIFEST ?? 'auto';
 
 if (!API_KEY) {
   console.error('MEMXUS_API_KEY is required for smoke tests');
@@ -35,40 +38,9 @@ async function main() {
   await client.connect(transport);
 
   const tools = await client.listTools();
-  const names = tools.tools.map((t) => t.name).sort();
-  const coreExpected = [
-    'forget',
-    'get_context',
-    'get_memory',
-    'list_collections',
-    'list_memories',
-    'memory_stats',
-    'recall',
-    'remember',
-    'update',
-  ].sort();
-  const v2Expected = [
-    ...coreExpected,
-    'check_connect_status',
-    'connect_source',
-    'get_context_with_skills',
-    'list_syncable_items',
-    'set_sync_selection',
-    'suggest_skills',
-  ].sort();
-
-  const expectV2 = process.env.V2_SMOKE === 'true';
-  const expected = expectV2 ? v2Expected : coreExpected;
-
-  if (JSON.stringify(names) !== JSON.stringify(expected)) {
-    const hint = expectV2
-      ? ' (set ENABLE_* on RemoteMCP + user prefs + redeploy)'
-      : ' (core 9 expected when v2 flags off)';
-    throw new Error(
-      `Tool manifest mismatch${hint}.\nExpected: ${expected.join(', ')}\nGot: ${names.join(', ')}`
-    );
-  }
-  console.log(`OK list_tools (${names.length} tools)`);
+  const names = tools.tools.map((t) => t.name);
+  const { tier, count } = validateToolManifest(names, SMOKE_MANIFEST);
+  console.log(`OK list_tools (${count} tools, manifest=${tier})`);
 
   const stats1 = toolText(await client.callTool({ name: 'memory_stats', arguments: {} }));
   const total1 = Number(stats1.match(/Total:\s*(\d+)/)?.[1] ?? NaN);

@@ -235,6 +235,25 @@ After OAuth connect in ChatGPT preview, call `createMemory` / `searchMemories` a
 
 ## Tool smoke tests
 
+Automated production smoke: `MEMXUS_API_KEY=aimem_... npm run test:smoke` (see [`scripts/smoke-mcp.mjs`](scripts/smoke-mcp.mjs)).
+
+**Tool manifest tiers** (v1.1.0):
+
+| Tier | Count | Tools |
+|------|-------|-------|
+| Core | 9 | remember, recall, get_context, list_memories, get_memory, list_collections, forget, memory_stats, update |
+| Full | 15 | core + connect_source, list_syncable_items, set_sync_selection, check_connect_status, get_context_with_skills, suggest_skills |
+
+Full manifest requires `ENABLE_INAPP_CONNECT=true`, `ENABLE_SKILL_ROUTING=true` on RemoteMCP **and** v2 prefs enabled on the smoke user's `mcp_preferences` in dashboard.
+
+**`SMOKE_MANIFEST` env** (CI uses `full`):
+
+| Mode | Behavior |
+|------|----------|
+| `auto` (default) | Accept valid 9-tool core or 15-tool full manifest |
+| `full` | Require all 15 tools (production v1.1.0) |
+| `core` | Require exactly 9 tools (legacy/staging) |
+
 | Tool | Test prompt / args | Expected |
 |------|-------------------|----------|
 | `remember` | content: "Reviewer test: prefers TypeScript" | Success with memory ID |
