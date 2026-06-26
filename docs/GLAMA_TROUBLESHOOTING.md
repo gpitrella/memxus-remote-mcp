@@ -47,7 +47,7 @@ Common failures:
 3. `GET /mcp` SSE → **200** (second concurrent GET may return **409** — expected)
 4. Tool call e.g. `memory_stats` → success
 
-After Railway redeploy or idle timeout (default 1h; set `MCP_SESSION_TTL_MS=86400000` for 24h): clients must **re-initialize** (toggle MCP connection).
+After Railway redeploy or idle timeout (default 1h; set `MCP_SESSION_TTL_MS=86400000` for 24h): **`tools/call` auto-recovers** via stateless fallback when Bearer is valid. Clients may still need re-initialize for SSE (`GET /mcp`) or if the connector caches a broken session — toggle MCP connection if needed.
 
 ### Cursor (SSE / "Not connected")
 

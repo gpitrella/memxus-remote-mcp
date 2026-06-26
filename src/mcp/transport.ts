@@ -17,6 +17,15 @@ interface Session {
 
 const sessions = new Map<string, Session>();
 
+/** Methods safe to run as one-shot stateless POST when the stateful session was lost (deploy / TTL). */
+const STATELESS_POST_FALLBACK_METHODS = new Set([
+  'tools/call',
+  'tools/list',
+  'resources/list',
+  'resources/templates/list',
+  'prompts/list',
+]);
+
 const DEFAULT_SESSION_TTL_MS = 60 * 60 * 1000;
 
 let sessionTtlOverride: number | undefined;
@@ -90,6 +99,17 @@ function logMcpSessionMiss(
 ): void {
   // eslint-disable-next-line no-console
   console.info('mcp_session_miss', { method, userId, sessionId, reason });
+}
+
+function getJsonRpcMethod(body: unknown): string | undefined {
+  if (!body || typeof body !== 'object') return undefined;
+  const method = (body as Record<string, unknown>).method;
+  return typeof method === 'string' ? method : undefined;
+}
+
+function canStatelessPostFallback(body: unknown): boolean {
+  const method = getJsonRpcMethod(body);
+  return method !== undefined && STATELESS_POST_FALLBACK_METHODS.has(method);
 }
 
 function logMcpSseConflict(sessionId: string, userId: string): void {
@@ -174,6 +194,11 @@ async function handleStatefulPost(req: AuthedRequest, res: Response): Promise<vo
 
   if (!session) {
     if (!isInitializeRequest(req.body)) {
+      if (canStatelessPostFallback(req.body)) {
+        logMcpSessionMiss('POST', req.userId!, sessionId, 'stateless_fallback');
+        await handleStatelessPost(req, res);
+        return;
+      }
       logMcpSessionMiss('POST', req.userId!, sessionId, 'no_session_not_initialize');
       sessionJsonError(
         res,

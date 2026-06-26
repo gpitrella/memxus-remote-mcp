@@ -138,6 +138,25 @@ test('Bearer initialize without session passes through for session creation', as
   assert.equal(nextCalled, true);
 });
 
+test('Bearer initialize with stale session passes through for real session creation', async () => {
+  const { nextCalled } = await runMiddleware(
+    mockReq(
+      {
+        jsonrpc: '2.0',
+        method: 'initialize',
+        params: {
+          protocolVersion: '2024-11-05',
+          capabilities: {},
+          clientInfo: { name: 'claude', version: '1.0' },
+        },
+        id: 1,
+      },
+      { authorization: 'Bearer tok', 'mcp-session-id': 'stale-after-deploy' }
+    )
+  );
+  assert.equal(nextCalled, true);
+});
+
 test('tools/call without auth passes through to bearerAuth', async () => {
   const { nextCalled } = await runMiddleware(
     mockReq({

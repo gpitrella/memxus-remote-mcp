@@ -36,7 +36,7 @@ async function main() {
 
   const tools = await client.listTools();
   const names = tools.tools.map((t) => t.name).sort();
-  const expected = [
+  const coreExpected = [
     'forget',
     'get_context',
     'get_memory',
@@ -45,11 +45,29 @@ async function main() {
     'memory_stats',
     'recall',
     'remember',
-  ];
+    'update',
+  ].sort();
+  const v2Expected = [
+    ...coreExpected,
+    'check_connect_status',
+    'connect_source',
+    'get_context_with_skills',
+    'list_syncable_items',
+    'set_sync_selection',
+  ].sort();
+
+  const expectV2 = process.env.V2_SMOKE === 'true';
+  const expected = expectV2 ? v2Expected : coreExpected;
+
   if (JSON.stringify(names) !== JSON.stringify(expected)) {
-    throw new Error(`Tool manifest mismatch.\nExpected: ${expected.join(', ')}\nGot: ${names.join(', ')}`);
+    const hint = expectV2
+      ? ' (set ENABLE_* on RemoteMCP + user prefs + redeploy)'
+      : ' (core 9 expected when v2 flags off)';
+    throw new Error(
+      `Tool manifest mismatch${hint}.\nExpected: ${expected.join(', ')}\nGot: ${names.join(', ')}`
+    );
   }
-  console.log('OK list_tools (8 tools)');
+  console.log(`OK list_tools (${names.length} tools)`);
 
   const stats1 = toolText(await client.callTool({ name: 'memory_stats', arguments: {} }));
   const total1 = Number(stats1.match(/Total:\s*(\d+)/)?.[1] ?? NaN);

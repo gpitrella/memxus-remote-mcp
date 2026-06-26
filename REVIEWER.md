@@ -206,7 +206,7 @@ Set **`MCP_STATELESS=false`** (or unset) — Claude web, Smithery, and Glama req
 |---------|--------------|-----|
 | Connected but tools fail to reload | `MCP_STATELESS=true` on Railway (wrapper blocked multi-request flow) | Set **`MCP_STATELESS=false`**, redeploy, disconnect/reconnect Memxus in Claude |
 | `Couldn't register with sign-in service` | DCR rejected `client_secret_post` from Anthropic broker (metadata advertised ChatGPT auth) | Deploy current RemoteMCP: DCR always persists `none`; metadata lists only `none` |
-| `remember` fails after deploy while connector shows connected | Stale MCP session (in-memory, lost on redeploy) | Toggle Memxus connector off/on in Claude (stateful mode) |
+| `remember` fails after deploy while connector shows connected | Stale MCP session (in-memory, lost on redeploy) | **Usually self-heals:** `tools/call` uses stateless fallback when session is gone. If tools still fail, toggle Memxus off/on in Claude. |
 
 DCR smoke (Claude-like payload):
 

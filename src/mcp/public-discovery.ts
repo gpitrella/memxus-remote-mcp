@@ -126,7 +126,8 @@ export async function mcpPublicDiscovery(
   }
 
   if (method === 'initialize') {
-    if (hasBearer && !sessionId) {
+    // Always create a real session when Bearer is present (even if client sends a stale mcp-session-id).
+    if (hasBearer) {
       next();
       return;
     }

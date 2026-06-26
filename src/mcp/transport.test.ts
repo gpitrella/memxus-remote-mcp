@@ -122,10 +122,44 @@ test('stateful handleMcp rejects tools/list without session', async () => {
   });
   const res = mockRes();
   await handleMcp(req, res);
+  const err = (res.body as { error?: { message?: string } } | undefined)?.error;
+  assert.doesNotMatch(String(err?.message ?? ''), /no valid session/);
+});
+
+test('stateful handleMcp uses stateless fallback for tools/call without session', async () => {
+  _test.setStatelessMode(false);
+  const req = mockAuthedReq({
+    userId: 'user-1',
+    headers: { 'mcp-session-id': 'stale-session-after-deploy' },
+    body: {
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: { name: 'recall', arguments: { query: 'memxus' } },
+      id: 3,
+    },
+  });
+  const res = mockRes();
+  await handleMcp(req, res);
+  const err = (res.body as { error?: { message?: string } } | undefined)?.error;
+  assert.doesNotMatch(String(err?.message ?? ''), /no valid session/);
+});
+
+test('stateful handleMcp still rejects unknown methods without session', async () => {
+  _test.setStatelessMode(false);
+  const req = mockAuthedReq({
+    userId: 'user-1',
+    body: {
+      jsonrpc: '2.0',
+      method: 'completion/complete',
+      params: {},
+      id: 4,
+    },
+  });
+  const res = mockRes();
+  await handleMcp(req, res);
   assert.equal(res.statusCode, 400);
   const err = (res.body as { error?: { message?: string } }).error;
   assert.match(String(err?.message), /no valid session/);
-  assert.match(String(err?.message), /initialize/);
 });
 
 test('stateless handleMcp does not apply session wrapper gate on tools/list', async () => {
