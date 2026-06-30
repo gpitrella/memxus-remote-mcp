@@ -77,14 +77,46 @@ export function estimateTokensSaved(contextTokens: number, memxusOverhead = 120)
   return Math.max(0, contextTokens - memxusOverhead);
 }
 
-export function buildImpactPayload(tokensUsed: number): {
+export type ImpactPayload = {
   impact_summary: { rows: ImpactSummaryRow[]; metrics: ImpactMetrics };
   impact_summary_text: string;
-} | null {
+};
+
+export function buildImpactPayload(tokensUsed: number): ImpactPayload | null {
   if (!isImpactSummaryEnabled()) return null;
   const metrics = computeImpact(estimateTokensSaved(tokensUsed));
   return {
     impact_summary: { rows: buildImpactSummaryRows(metrics), metrics },
     impact_summary_text: formatImpactSummaryTable(metrics),
   };
+}
+
+export type ImpactContextResponse = {
+  contextBlock: string;
+  tokens_used: number;
+  truncated: boolean;
+  impact_summary?: ImpactPayload['impact_summary'];
+  impact_summary_text?: string;
+};
+
+export function applyImpactToContextResponse(
+  contextBlock: string,
+  tokensUsed: number,
+  truncated: boolean
+): ImpactContextResponse {
+  const base: ImpactContextResponse = { contextBlock, tokens_used: tokensUsed, truncated };
+  try {
+    const impact = buildImpactPayload(tokensUsed);
+    if (!impact) return base;
+    const text = `${contextBlock}\n\n${impact.impact_summary_text}`;
+    return {
+      contextBlock: text,
+      tokens_used: tokensUsed,
+      truncated,
+      impact_summary: impact.impact_summary,
+      impact_summary_text: impact.impact_summary_text,
+    };
+  } catch {
+    return base;
+  }
 }

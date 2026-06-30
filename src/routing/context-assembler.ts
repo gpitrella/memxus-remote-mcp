@@ -1,4 +1,4 @@
-import type { SkillRoutingResult } from './types.js';
+import type { SkillRoutingResult, SuggestSkillsResult } from './types.js';
 import { clampTokenBudget, trimMemoriesToTokenBudget } from '../lib/context-budget.js';
 import {
   buildAssemblerContextBlock,
@@ -23,9 +23,7 @@ export async function assembleContextWithSkills(input: {
   tokensUsed: number;
   truncated: boolean;
   includedMemories: MemorySnippet[];
-  suggestions: ReturnType<typeof suggestSkillsForCollection> extends Promise<infer R>
-    ? R['suggestions']
-    : never;
+  suggestions: SuggestSkillsResult['suggestions'];
   presentation_hint: string;
 }> {
   const snippets = input.memories.map((m) => m.content.slice(0, 500));

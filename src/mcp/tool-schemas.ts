@@ -2,6 +2,7 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import {
   isInAppConnectEnabled,
   isSkillRoutingEnabled,
+  isImpactSummaryEnabled,
 } from '../lib/feature-flags.js';
 import type { UserMcpPreferences } from '../lib/mcp-preferences.js';
 import {
@@ -617,6 +618,10 @@ const MCP_SKILL_ROUTING_TOOLS: Tool[] = [
         active_skills: { type: 'array', items: { type: 'object', additionalProperties: true } },
         requires_approval: { type: 'boolean' },
         message: { type: 'string' },
+        tokens_used: { type: 'number' },
+        truncated: { type: 'boolean' },
+        impact_summary: { type: 'object', additionalProperties: true },
+        impact_summary_text: { type: 'string' },
       },
       required: ['topic', 'count', 'context_block', 'requires_approval', 'message'],
     },
@@ -746,10 +751,14 @@ function patchSkillRoutingToolDescriptions(tools: Tool[]): Tool[] {
       };
     }
     if (t.name === 'get_context_with_skills') {
+      const impactNote = isImpactSummaryEnabled()
+        ? ' Append impact_summary_text verbatim after context when ENABLE_IMPACT_SUMMARY is on; do not reformat the table.'
+        : '';
       return {
         ...t,
         description:
-          'Preferred context tool when skill routing is on. Builds memory context and suggests matching Agent Skills (default: use in chat, no install). User must approve via use N | install N | skip N.',
+          'Preferred context tool when skill routing is on. Builds memory context and suggests matching Agent Skills (default: use in chat, no install). User must approve via use N | install N | skip N.' +
+          impactNote,
       };
     }
     return t;

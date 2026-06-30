@@ -51,7 +51,7 @@ import {
   mapActiveSkillsForResponse,
 } from './connector-tools.js';
 import { assembleContextWithSkills } from '../routing/context-assembler.js';
-import { buildImpactPayload } from '../lib/impact-summary.js';
+import { applyImpactToContextResponse } from '../lib/impact-summary.js';
 import { resetSkillDecision } from '../lib/skill-decisions.js';
 import {
   installSkillForUser,
@@ -310,10 +310,7 @@ export function createMCPServer(ctx: McpContext): Server {
             const trimmed = trimMemoriesToTokenBudget(
               ms.map((m) => ({
                 ...m,
-                similarity:
-                  typeof (m as Record<string, unknown>).similarity === 'number'
-                    ? ((m as Record<string, unknown>).similarity as number)
-                    : undefined,
+                similarity: m.similarity,
               })),
               MCP_CONTEXT_DEFAULTS.max_tokens_budget,
               formatMcpContextMemoryLine,
@@ -630,20 +627,21 @@ export function createMCPServer(ctx: McpContext): Server {
             collection: input.collection,
             memories: ms.map((m) => ({
               content: m.content,
-              similarity:
-                typeof (m as Record<string, unknown>).similarity === 'number'
-                  ? ((m as Record<string, unknown>).similarity as number)
-                  : undefined,
+              similarity: m.similarity,
             })),
             max_tokens_budget: MCP_CONTEXT_DEFAULTS.max_tokens_budget,
           });
           const includedContents = new Set(assembled.includedMemories.map((m) => m.content));
           const responseMs = ms.filter((m) => includedContents.has(m.content));
-          const impact = buildImpactPayload(assembled.tokensUsed);
-          result = toolSuccess(assembled.contextBlock, {
+          const withImpact = applyImpactToContextResponse(
+            assembled.contextBlock,
+            assembled.tokensUsed,
+            assembled.truncated
+          );
+          result = toolSuccess(withImpact.contextBlock, {
             topic: input.topic,
             count: responseMs.length,
-            context_block: assembled.contextBlock,
+            context_block: withImpact.contextBlock,
             profile: assembled.routing.profile,
             intent: assembled.routing.intent,
             active_skills: mapActiveSkillsForResponse(assembled.routing.activeSkills),
@@ -652,8 +650,15 @@ export function createMCPServer(ctx: McpContext): Server {
             discovery_degraded: assembled.routing.discoveryDegraded ?? false,
             requires_approval: true,
             memories: toStructuredMemories(responseMs),
-            message: assembled.contextBlock,
-            ...(impact ?? {}),
+            message: withImpact.contextBlock,
+            tokens_used: withImpact.tokens_used,
+            truncated: withImpact.truncated,
+            ...(withImpact.impact_summary
+              ? {
+                  impact_summary: withImpact.impact_summary,
+                  impact_summary_text: withImpact.impact_summary_text,
+                }
+              : {}),
           });
           break;
         }

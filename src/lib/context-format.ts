@@ -1,6 +1,17 @@
 import { estimateTokens } from './estimate-tokens.js';
 import type { FormattableMemory } from '../mcp/format-memory.js';
 
+export type RetrieveMemoryRow = {
+  id?: string;
+  content: string;
+  memory_type?: string;
+  collection?: string | null;
+  tags?: string[];
+  scope?: string | null;
+  groupName?: string | null;
+  similarity?: number;
+};
+
 export function formatMcpContextMemoryLine(m: FormattableMemory, index: number): string {
   const coll = m.collection ? ` [${m.collection}]` : '';
   return `[${index + 1}] [${m.memory_type.toUpperCase()}]${coll} ${m.content}`;

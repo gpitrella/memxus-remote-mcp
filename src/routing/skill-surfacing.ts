@@ -1,4 +1,4 @@
-import type { RoutedSkill } from './types.js';
+import type { RoutedSkill, SuggestSkillsResult } from './types.js';
 import { classifyIntent } from './intent-classifier.js';
 import {
   formatSuggestSkillsMessage,
@@ -21,9 +21,9 @@ export type SurfaceSkillsResult = {
   skills: RoutedSkill[];
   skillsMessage: string;
   discoveryDegraded: boolean;
-  profile: ReturnType<typeof suggestSkillsForCollection> extends Promise<infer R> ? R['stack_detected'] : never;
+  profile: SuggestSkillsResult['stack_detected'];
   intent: ReturnType<typeof classifyIntent>;
-  suggestions: ReturnType<typeof suggestSkillsForCollection> extends Promise<infer R> ? R['suggestions'] : never;
+  suggestions: SuggestSkillsResult['suggestions'];
   presentation_hint: string;
 };
 
