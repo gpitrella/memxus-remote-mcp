@@ -223,16 +223,27 @@ function mapSkill(raw: SkillsShResult, score: number, reason: string, official: 
   return { ...skill, score, reason };
 }
 
+function isBannedMatch(text: string, bannedTokens: string[]): boolean {
+  const lower = text.toLowerCase();
+  return bannedTokens.some((t) => t.length > 2 && lower.includes(t));
+}
+
 function scoreSkill(
   raw: SkillsShResult,
   searchQuery: string,
   profile: ProjectProfile,
   officialOwners: string[],
-): { score: number; reason: string; official: boolean } {
+  bannedTokens: string[] = [],
+): { score: number; reason: string; official: boolean } | null {
   const official = isOfficialSource(raw.source, officialOwners);
   const q = searchQuery.toLowerCase();
   const name = raw.name.toLowerCase();
   const source = raw.source.toLowerCase();
+
+  if (isBannedMatch(name, bannedTokens) && !profile.stack.some((t) => name.includes(t.toLowerCase()))) {
+    return null;
+  }
+
   let score = raw.fromGithub ? 0.4 : 0.35;
   const reasons: string[] = [];
 
@@ -295,10 +306,12 @@ export async function discoverSkills(input: {
   intent: Intent;
   query: string;
   memorySnippets?: string[];
+  bannedTokens?: string[];
 }): Promise<DiscoverSkillsResult> {
   const officialOwners = getOfficialOwners();
   const maxResults = getMaxResults();
   const minResults = getMinResults();
+  const bannedTokens = input.bannedTokens ?? [];
   const queries = buildSearchQueries(input);
   const seen = new Set<string>();
   const scored: RoutedSkill[] = [];
@@ -311,7 +324,9 @@ export async function discoverSkills(input: {
     for (const raw of rawSkills) {
       if (seen.has(raw.id)) continue;
       seen.add(raw.id);
-      const { score, reason, official } = scoreSkill(raw, searchQuery, input.profile, officialOwners);
+      const scoredSkill = scoreSkill(raw, searchQuery, input.profile, officialOwners, bannedTokens);
+      if (!scoredSkill) continue;
+      const { score, reason, official } = scoredSkill;
       scored.push(mapSkill(raw, score, reason, official));
     }
     if (scored.length >= minResults) break;
@@ -326,7 +341,9 @@ export async function discoverSkills(input: {
       for (const raw of githubSkills) {
         if (seen.has(raw.id)) continue;
         seen.add(raw.id);
-        const { score, reason, official } = scoreSkill(raw, searchQuery, input.profile, officialOwners);
+        const scoredSkill = scoreSkill(raw, searchQuery, input.profile, officialOwners, bannedTokens);
+        if (!scoredSkill) continue;
+        const { score, reason, official } = scoredSkill;
         scored.push(mapSkill(raw, score, reason, official));
       }
       if (scored.length >= minResults) break;

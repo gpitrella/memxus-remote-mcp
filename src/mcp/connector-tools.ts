@@ -35,6 +35,7 @@ async function maybeSurfaceSkills(p: {
     topic: p.topic,
     collection: p.collection,
     memorySnippets: p.memorySnippets,
+    userId: p.userId,
   });
   return {
     skills: surfaced.skills,

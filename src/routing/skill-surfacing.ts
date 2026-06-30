@@ -1,7 +1,9 @@
-import type { Intent, ProjectProfile, RoutedSkill } from './types.js';
+import type { RoutedSkill } from './types.js';
 import { classifyIntent } from './intent-classifier.js';
-import { profileProject } from './project-profiler.js';
-import { discoverSkills, formatSkillsBlock } from './skill-discovery.js';
+import {
+  formatSuggestSkillsMessage,
+  suggestSkillsForCollection,
+} from './skill-suggest-service.js';
 
 export const WORK_INTENTS = new Set(['build', 'review', 'fix', 'test']);
 
@@ -12,21 +14,24 @@ export type SurfaceSkillsInput = {
   topic: string;
   collection?: string | null;
   memorySnippets?: string[];
+  userId?: string;
 };
 
 export type SurfaceSkillsResult = {
   skills: RoutedSkill[];
   skillsMessage: string;
   discoveryDegraded: boolean;
-  profile: ReturnType<typeof profileProject>;
+  profile: ReturnType<typeof suggestSkillsForCollection> extends Promise<infer R> ? R['stack_detected'] : never;
   intent: ReturnType<typeof classifyIntent>;
+  suggestions: ReturnType<typeof suggestSkillsForCollection> extends Promise<infer R> ? R['suggestions'] : never;
+  presentation_hint: string;
 };
 
 export function rankSkillsForSurfacing(
   skills: RoutedSkill[],
-  profile: ProjectProfile,
-  intent: Intent,
-  topN = 3
+  profile: { domain: string; stack: string[] },
+  intent: { action: string },
+  topN = 3,
 ): RoutedSkill[] {
   const scored = skills.map((skill) => {
     let score = 0;
@@ -57,22 +62,16 @@ export function rankSkillsForSurfacing(
 
 export async function surfaceSkills(input: SurfaceSkillsInput): Promise<SurfaceSkillsResult> {
   const snippets = (input.memorySnippets ?? []).map((s) => s.slice(0, 500));
-  const profile = profileProject({
-    query: input.topic,
+  const suggested = await suggestSkillsForCollection({
+    userId: input.userId,
+    topic: input.topic,
     collection: input.collection,
-    memorySnippets: snippets,
-  });
-  const intent = classifyIntent(input.topic);
-  const { skills: discovered, discoveryDegraded } = await discoverSkills({
-    profile,
-    intent,
-    query: input.topic,
     memorySnippets: snippets,
   });
 
   const skills = SURFACE_CAP_TRIGGERS.has(input.trigger)
-    ? rankSkillsForSurfacing(discovered, profile, intent)
-    : discovered;
+    ? suggested.skills.slice(0, 3)
+    : suggested.skills;
 
   const triggerNote =
     input.trigger === 'post_sync'
@@ -83,9 +82,20 @@ export async function surfaceSkills(input: SurfaceSkillsInput): Promise<SurfaceS
           ? 'For your project collection:'
           : 'Based on your context:';
 
-  const skillsMessage = formatSkillsBlock(skills, `=== Suggested Official Skills (approval required) ===\n${triggerNote}`);
+  const skillsMessage = formatSuggestSkillsMessage(
+    { ...suggested, skills },
+    `=== Suggested Skills ===\n${triggerNote}`,
+  );
 
-  return { skills, skillsMessage, discoveryDegraded, profile, intent };
+  return {
+    skills,
+    skillsMessage,
+    discoveryDegraded: suggested.discovery_degraded,
+    profile: suggested.stack_detected,
+    intent: suggested.intent,
+    suggestions: suggested.suggestions,
+    presentation_hint: suggested.presentation_hint,
+  };
 }
 
 export function shouldAppendSkillsForRecall(query: string, includeSkills?: boolean): boolean {

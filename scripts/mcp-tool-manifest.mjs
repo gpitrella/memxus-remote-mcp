@@ -21,9 +21,12 @@ export const V2_TOOL_NAMES = [
   'check_connect_status',
   'connect_source',
   'get_context_with_skills',
+  'install_skill',
   'list_syncable_items',
+  'reset_skill_decision',
   'set_sync_selection',
   'suggest_skills',
+  'use_skill_in_chat',
 ];
 
 export const ALL_KNOWN_TOOL_NAMES = [...CORE_TOOL_NAMES, ...V2_TOOL_NAMES];
@@ -57,7 +60,7 @@ export function validateToolManifest(names, mode = 'auto') {
 
   if (count !== CORE_TOOL_NAMES.length && count !== ALL_KNOWN_TOOL_NAMES.length) {
     throw new Error(
-      `Partial v2 manifest: got ${count} tools (expected 9 core or 15 full). ` +
+      `Partial v2 manifest: got ${count} tools (expected 9 core or 18 full). ` +
         `Present v2: ${presentV2.join(', ') || '(none)'}. ` +
         'Enable both ENABLE_INAPP_CONNECT and ENABLE_SKILL_ROUTING plus user mcp_preferences, or expect core-only.'
     );
@@ -65,14 +68,14 @@ export function validateToolManifest(names, mode = 'auto') {
 
   if (tier === 'core' && presentV2.length > 0) {
     throw new Error(
-      `Inconsistent manifest: ${presentV2.length} v2 tools present but not all 6. ` +
+      `Inconsistent manifest: ${presentV2.length} v2 tools present but not all ${V2_TOOL_NAMES.length}. ` +
         `Partial v2: ${presentV2.join(', ')}`
     );
   }
 
   if (mode === 'full' && tier !== 'full') {
     throw new Error(
-      `SMOKE_MANIFEST=full requires all 15 tools. Got ${count} (core-only). ` +
+      `SMOKE_MANIFEST=full requires all 18 tools. Got ${count} (core-only). ` +
         'Enable ENABLE_* flags and v2 mcp_preferences on the smoke user.'
     );
   }

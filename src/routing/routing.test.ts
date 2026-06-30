@@ -5,13 +5,18 @@ import { profileProject } from './project-profiler.js';
 import { routeSkills } from './routing-engine.js';
 import { shouldAppendSkillsForRecall } from './skill-surfacing.js';
 
-test('profileProject detects web stack from query', () => {
+test('profileProject detects web stack from project memory', () => {
   const profile = profileProject({
     query: 'Next.js Supabase MCP integration',
     collection: 'project:memxus',
+    memorySnippets: [
+      'package.json dependencies: next.js, @supabase/supabase-js, typescript',
+      'Next.js app router pages and API routes for memxus context engine',
+      'MCP server in src/mcp with modelcontextprotocol SDK',
+    ],
   });
   assert.equal(profile.domain, 'web');
-  assert.ok(profile.confidence > 0.3);
+  assert.ok(profile.confidence >= 0.7);
 });
 
 test('classifyIntent detects review action', () => {

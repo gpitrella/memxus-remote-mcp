@@ -51,6 +51,12 @@ import {
   mapActiveSkillsForResponse,
 } from './connector-tools.js';
 import { assembleContextWithSkills } from '../routing/context-assembler.js';
+import { buildImpactPayload } from '../lib/impact-summary.js';
+import { resetSkillDecision } from '../lib/skill-decisions.js';
+import {
+  installSkillForUser,
+  useSkillInChat,
+} from '../routing/skill-suggest-service.js';
 import {
   shouldAppendSkillsForRecall,
   surfaceSkills,
@@ -633,6 +639,7 @@ export function createMCPServer(ctx: McpContext): Server {
           });
           const includedContents = new Set(assembled.includedMemories.map((m) => m.content));
           const responseMs = ms.filter((m) => includedContents.has(m.content));
+          const impact = buildImpactPayload(assembled.tokensUsed);
           result = toolSuccess(assembled.contextBlock, {
             topic: input.topic,
             count: responseMs.length,
@@ -640,10 +647,13 @@ export function createMCPServer(ctx: McpContext): Server {
             profile: assembled.routing.profile,
             intent: assembled.routing.intent,
             active_skills: mapActiveSkillsForResponse(assembled.routing.activeSkills),
+            suggestions: assembled.suggestions,
+            presentation_hint: assembled.presentation_hint,
             discovery_degraded: assembled.routing.discoveryDegraded ?? false,
             requires_approval: true,
             memories: toStructuredMemories(responseMs),
             message: assembled.contextBlock,
+            ...(impact ?? {}),
           });
           break;
         }
@@ -680,10 +690,13 @@ export function createMCPServer(ctx: McpContext): Server {
             topic: input.topic,
             collection: input.collection,
             memorySnippets: ms.map((m) => m.content),
+            userId,
           });
           result = toolSuccess(surfaced.skillsMessage, {
             topic: input.topic,
             active_skills: mapActiveSkillsForResponse(surfaced.skills),
+            suggestions: surfaced.suggestions,
+            presentation_hint: surfaced.presentation_hint,
             skills_message: surfaced.skillsMessage,
             profile: surfaced.profile,
             intent: surfaced.intent,
@@ -691,6 +704,95 @@ export function createMCPServer(ctx: McpContext): Server {
             requires_approval: true,
             message: surfaced.skillsMessage,
           });
+          break;
+        }
+        case 'use_skill_in_chat': {
+          assertMemoryReadScope(oauthScope, oauthOpts);
+          if (!isSkillRoutingEnabled()) {
+            throw new Error('Skill routing is not enabled on this server');
+          }
+          const skillPrefs = await resolvePrefs();
+          if (!isSkillRoutingActiveForUser(skillPrefs)) {
+            throw new Error(
+              'Skill routing is disabled in your dashboard settings. Enable it under Settings → AI & MCP.'
+            );
+          }
+          const input = z
+            .object({
+              skill_id: z.string().min(1),
+              collection: z.string().min(1),
+              chat_session_id: z.string().optional(),
+            })
+            .parse(a);
+          const loaded = await useSkillInChat({
+            userId,
+            collection: input.collection,
+            skillId: input.skill_id,
+            chatSessionId: input.chat_session_id,
+          });
+          result = toolSuccess(loaded.instructions, {
+            ...loaded,
+            message: loaded.instructions,
+          });
+          break;
+        }
+        case 'install_skill': {
+          assertMemoryReadScope(oauthScope, oauthOpts);
+          if (!isSkillRoutingEnabled()) {
+            throw new Error('Skill routing is not enabled on this server');
+          }
+          const skillPrefs = await resolvePrefs();
+          if (!isSkillRoutingActiveForUser(skillPrefs)) {
+            throw new Error(
+              'Skill routing is disabled in your dashboard settings. Enable it under Settings → AI & MCP.'
+            );
+          }
+          const input = z
+            .object({
+              skill_id: z.string().min(1),
+              collection: z.string().min(1),
+              install_command: z.string().min(1),
+              confirmed: z.boolean().optional(),
+              chat_session_id: z.string().optional(),
+            })
+            .parse(a);
+          const out = await installSkillForUser({
+            userId,
+            collection: input.collection,
+            skillId: input.skill_id,
+            installCommand: input.install_command,
+            confirmed: input.confirmed,
+            chatSessionId: input.chat_session_id,
+          });
+          result = toolSuccess(out.message, { ...out, message: out.message });
+          break;
+        }
+        case 'reset_skill_decision': {
+          assertMemoryReadScope(oauthScope, oauthOpts);
+          if (!isSkillRoutingEnabled()) {
+            throw new Error('Skill routing is not enabled on this server');
+          }
+          const skillPrefs = await resolvePrefs();
+          if (!isSkillRoutingActiveForUser(skillPrefs)) {
+            throw new Error(
+              'Skill routing is disabled in your dashboard settings. Enable it under Settings → AI & MCP.'
+            );
+          }
+          const input = z
+            .object({
+              skill_id: z.string().min(1),
+              collection: z.string().min(1),
+            })
+            .parse(a);
+          const reset = await resetSkillDecision({
+            userId,
+            collection: input.collection,
+            skillId: input.skill_id,
+          });
+          const message = reset
+            ? `Skip cleared for ${input.skill_id}`
+            : `No skip record found for ${input.skill_id}`;
+          result = toolSuccess(message, { reset, skill_id: input.skill_id, message });
           break;
         }
         default:

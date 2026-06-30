@@ -120,11 +120,23 @@
         },
         {
           "name": "get_context_with_skills",
-          "description": "Build complete project context + suggest official AI skills matched to your stack. Analyzes project profile (GitHub, Notion, stack) and suggests verified skills to activate. Intent-aware: provide current task for better recommendations."
+          "description": "Preferred when skill routing is on: memory context plus ranked skill suggestions (default use in chat). User approves via use N | install N | skip N."
         },
         {
           "name": "suggest_skills",
-          "description": "Discover official Agent Skills for a topic via skills.sh without building a full context block. Matches skills to your stack and current task."
+          "description": "Discover Agent Skills for a topic from project memory stack signals. Returns up to 2 suggestions with use/install/skip hints."
+        },
+        {
+          "name": "use_skill_in_chat",
+          "description": "Load a suggested skill into the chat session without local install. Call after user replies use N."
+        },
+        {
+          "name": "install_skill",
+          "description": "Return install command for a skill; set confirmed after user runs it in terminal."
+        },
+        {
+          "name": "reset_skill_decision",
+          "description": "Clear a skip decision so a skill can be suggested again for a collection."
         }
       ],
       "links": {

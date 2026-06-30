@@ -2,6 +2,32 @@ export type ProjectProfile = {
   domain: string;
   stack: string[];
   confidence: number;
+  framework?: string | null;
+  language?: string | null;
+  db?: string | null;
+  cms?: string | null;
+  infra?: string | null;
+  testing?: string | null;
+  evidence?: string[];
+};
+
+export type SkillSuggestion = {
+  id: string;
+  name: string;
+  reason: string;
+  source: 'official' | 'community';
+  install_command: string;
+  source_url: string;
+};
+
+export type SuggestSkillsResult = {
+  stack_detected: ProjectProfile;
+  suggestions: SkillSuggestion[];
+  skills: RoutedSkill[];
+  requires_approval: true;
+  presentation_hint: string;
+  discovery_degraded: boolean;
+  intent: Intent;
 };
 
 export type Intent = {

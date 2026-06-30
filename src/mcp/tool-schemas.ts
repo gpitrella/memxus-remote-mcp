@@ -661,17 +661,119 @@ const MCP_SKILL_ROUTING_TOOLS: Tool[] = [
   },
 ];
 
+const MCP_SKILL_ACTION_TOOLS: Tool[] = [
+  {
+    name: 'use_skill_in_chat',
+    ...toolMeta('Use skill in chat', { readOnly: true, openWorld: true, idempotent: false }),
+    description:
+      'Load a suggested skill into the current chat session (no local install). Call after the user replies "use N" to a suggest_skills or get_context_with_skills result.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        skill_id: { type: 'string', description: 'Skill id from active_skills (e.g. anthropics/skills/supabase).' },
+        collection: { type: 'string', description: 'Collection scope (e.g. project:my-app).' },
+        chat_session_id: { type: 'string', description: 'Optional session id for analytics.' },
+      },
+      required: ['skill_id', 'collection'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        instructions: { type: 'string' },
+        source: { type: 'string', enum: ['official', 'community'] },
+        warning: { type: 'string' },
+        message: { type: 'string' },
+      },
+      required: ['instructions', 'source', 'message'],
+    },
+  },
+  {
+    name: 'install_skill',
+    ...toolMeta('Install skill', { readOnly: true, openWorld: true, idempotent: false }),
+    description:
+      'Return the install command for a suggested skill. Set confirmed=true after the user runs the command in their terminal.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        skill_id: { type: 'string' },
+        collection: { type: 'string' },
+        install_command: { type: 'string', description: 'From active_skills installCommand.' },
+        confirmed: { type: 'boolean', description: 'True after user ran the install command.' },
+        chat_session_id: { type: 'string' },
+      },
+      required: ['skill_id', 'collection', 'install_command'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        install_command: { type: 'string' },
+        confirmed: { type: 'boolean' },
+        message: { type: 'string' },
+      },
+      required: ['install_command', 'confirmed', 'message'],
+    },
+  },
+  {
+    name: 'reset_skill_decision',
+    ...toolMeta('Reset skill decision', { readOnly: false, idempotent: true }),
+    description: 'Clear a skip decision so a skill can be suggested again for a collection.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        skill_id: { type: 'string' },
+        collection: { type: 'string' },
+      },
+      required: ['skill_id', 'collection'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        reset: { type: 'boolean' },
+        skill_id: { type: 'string' },
+        message: { type: 'string' },
+      },
+      required: ['reset', 'skill_id', 'message'],
+    },
+  },
+];
+
+function patchSkillRoutingToolDescriptions(tools: Tool[]): Tool[] {
+  return tools.map((t) => {
+    if (t.name === 'get_context') {
+      return {
+        ...t,
+        description: `${t.description} When skill routing is enabled, prefer get_context_with_skills — same memory context plus ranked skill suggestions.`,
+      };
+    }
+    if (t.name === 'get_context_with_skills') {
+      return {
+        ...t,
+        description:
+          'Preferred context tool when skill routing is on. Builds memory context and suggests matching Agent Skills (default: use in chat, no install). User must approve via use N | install N | skip N.',
+      };
+    }
+    return t;
+  });
+}
+
 export function getActiveMcpTools(opts?: { prefs?: UserMcpPreferences }): Tool[] {
   const tools = [...MCP_CORE_TOOLS];
   const prefs = opts?.prefs;
+  const skillRoutingOn = prefs
+    ? isSkillRoutingActiveForUser(prefs)
+    : isSkillRoutingEnabled();
   if (prefs) {
     if (isInAppConnectActiveForUser(prefs)) tools.push(...MCP_INAPP_CONNECT_TOOLS);
-    if (isSkillRoutingActiveForUser(prefs)) tools.push(...MCP_SKILL_ROUTING_TOOLS);
+    if (isSkillRoutingActiveForUser(prefs)) {
+      tools.push(...MCP_SKILL_ROUTING_TOOLS, ...MCP_SKILL_ACTION_TOOLS);
+    }
   } else {
     if (isInAppConnectEnabled()) tools.push(...MCP_INAPP_CONNECT_TOOLS);
-    if (isSkillRoutingEnabled()) tools.push(...MCP_SKILL_ROUTING_TOOLS);
+    if (isSkillRoutingEnabled()) {
+      tools.push(...MCP_SKILL_ROUTING_TOOLS, ...MCP_SKILL_ACTION_TOOLS);
+    }
   }
-  return tools;
+  return skillRoutingOn ? patchSkillRoutingToolDescriptions(tools) : tools;
 }
 
 /** Active tool list (respects feature flags at process start). */
