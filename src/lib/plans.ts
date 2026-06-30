@@ -128,8 +128,8 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     id: 'team',
     name: 'Team',
     category: 'dashboard',
-    priceMonthly: 99,
-    priceLabel: '$99',
+    priceMonthly: 149,
+    priceLabel: '$149',
     description: 'For teams standardizing on shared memory',
     features: [
       'Everything in Pro',

@@ -1,9 +1,11 @@
-import type { RoutedSkill } from './types.js';
+import type { Intent, ProjectProfile, RoutedSkill } from './types.js';
 import { classifyIntent } from './intent-classifier.js';
 import { profileProject } from './project-profiler.js';
 import { discoverSkills, formatSkillsBlock } from './skill-discovery.js';
 
 export const WORK_INTENTS = new Set(['build', 'review', 'fix', 'test']);
+
+const SURFACE_CAP_TRIGGERS = new Set<SurfaceSkillsInput['trigger']>(['context', 'suggest']);
 
 export type SurfaceSkillsInput = {
   trigger: 'post_sync' | 'onboarding' | 'recall' | 'assign_project' | 'suggest' | 'context';
@@ -20,6 +22,39 @@ export type SurfaceSkillsResult = {
   intent: ReturnType<typeof classifyIntent>;
 };
 
+export function rankSkillsForSurfacing(
+  skills: RoutedSkill[],
+  profile: ProjectProfile,
+  intent: Intent,
+  topN = 3
+): RoutedSkill[] {
+  const scored = skills.map((skill) => {
+    let score = 0;
+    const domain = profile.domain.toLowerCase();
+    const name = skill.name.toLowerCase();
+    const reason = skill.reason.toLowerCase();
+    const repo = skill.repo.toLowerCase();
+
+    if (domain.length > 2 && (name.includes(domain) || reason.includes(domain))) {
+      score += 0.5;
+    }
+    if (intent.action.length > 0 && (name.includes(intent.action) || reason.includes(intent.action))) {
+      score += 0.4;
+    }
+    for (const token of profile.stack) {
+      const t = token.toLowerCase();
+      if (t.length > 2 && (name.includes(t) || reason.includes(t) || repo.includes(t))) {
+        score += 0.1;
+      }
+    }
+
+    return { skill, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score || b.skill.score - a.skill.score);
+  return scored.slice(0, topN).map((s) => s.skill);
+}
+
 export async function surfaceSkills(input: SurfaceSkillsInput): Promise<SurfaceSkillsResult> {
   const snippets = (input.memorySnippets ?? []).map((s) => s.slice(0, 500));
   const profile = profileProject({
@@ -28,12 +63,16 @@ export async function surfaceSkills(input: SurfaceSkillsInput): Promise<SurfaceS
     memorySnippets: snippets,
   });
   const intent = classifyIntent(input.topic);
-  const { skills, discoveryDegraded } = await discoverSkills({
+  const { skills: discovered, discoveryDegraded } = await discoverSkills({
     profile,
     intent,
     query: input.topic,
     memorySnippets: snippets,
   });
+
+  const skills = SURFACE_CAP_TRIGGERS.has(input.trigger)
+    ? rankSkillsForSurfacing(discovered, profile, intent)
+    : discovered;
 
   const triggerNote =
     input.trigger === 'post_sync'

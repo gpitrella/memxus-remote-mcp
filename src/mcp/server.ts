@@ -30,6 +30,9 @@ import {
   type UserPlanContext,
 } from '../lib/plan-enforcement.js';
 import { estimateTokens } from '../lib/estimate-tokens.js';
+import { MCP_CONTEXT_DEFAULTS } from '../lib/context-defaults.js';
+import { trimMemoriesToTokenBudget } from '../lib/context-budget.js';
+import { buildMcpContextBlock, formatMcpContextMemoryLine } from '../lib/context-format.js';
 import { sanitizeToolError } from '../lib/tool-errors.js';
 import { getActiveMcpTools } from './tool-schemas.js';
 import {
@@ -37,7 +40,6 @@ import {
   formatRememberText,
   formatGetMemoryText,
   formatUpdateText,
-  formatContextBlock,
   formatMemoryStatsText,
 } from './format-memory.js';
 import { updateMemoryRecord } from '../lib/memory-update.js';
@@ -285,6 +287,7 @@ export function createMCPServer(ctx: McpContext): Server {
             visibility,
             group_id: input.group_id,
             group_name: input.group_name,
+            min_similarity: MCP_CONTEXT_DEFAULTS.min_similarity,
           });
           if (ms.length === 0) {
             const scope = input.collection ? ` (collection: ${input.collection})` : '';
@@ -297,12 +300,29 @@ export function createMCPServer(ctx: McpContext): Server {
               message: text,
             });
           } else {
-            const block = formatContextBlock(input.topic, input.collection, ms);
+            const { overheadTokens } = buildMcpContextBlock(input.topic, input.collection, []);
+            const trimmed = trimMemoriesToTokenBudget(
+              ms.map((m) => ({
+                ...m,
+                similarity:
+                  typeof (m as Record<string, unknown>).similarity === 'number'
+                    ? ((m as Record<string, unknown>).similarity as number)
+                    : undefined,
+              })),
+              MCP_CONTEXT_DEFAULTS.max_tokens_budget,
+              formatMcpContextMemoryLine,
+              overheadTokens
+            );
+            const block = buildMcpContextBlock(
+              input.topic,
+              input.collection,
+              trimmed.memories
+            ).contextBlock;
             result = toolSuccess(block, {
               topic: input.topic,
-              count: ms.length,
+              count: trimmed.memories.length,
               context_block: block,
-              memories: toStructuredMemories(ms),
+              memories: toStructuredMemories(trimmed.memories),
               message: block,
             });
           }
@@ -596,23 +616,33 @@ export function createMCPServer(ctx: McpContext): Server {
             visibility,
             group_id: input.group_id,
             group_name: input.group_name,
+            min_similarity: MCP_CONTEXT_DEFAULTS.min_similarity,
           });
           const assembled = await assembleContextWithSkills({
             userId,
             topic: input.topic,
             collection: input.collection,
-            memories: ms,
+            memories: ms.map((m) => ({
+              content: m.content,
+              similarity:
+                typeof (m as Record<string, unknown>).similarity === 'number'
+                  ? ((m as Record<string, unknown>).similarity as number)
+                  : undefined,
+            })),
+            max_tokens_budget: MCP_CONTEXT_DEFAULTS.max_tokens_budget,
           });
+          const includedContents = new Set(assembled.includedMemories.map((m) => m.content));
+          const responseMs = ms.filter((m) => includedContents.has(m.content));
           result = toolSuccess(assembled.contextBlock, {
             topic: input.topic,
-            count: ms.length,
+            count: responseMs.length,
             context_block: assembled.contextBlock,
             profile: assembled.routing.profile,
             intent: assembled.routing.intent,
             active_skills: mapActiveSkillsForResponse(assembled.routing.activeSkills),
             discovery_degraded: assembled.routing.discoveryDegraded ?? false,
             requires_approval: true,
-            memories: toStructuredMemories(ms),
+            memories: toStructuredMemories(responseMs),
             message: assembled.contextBlock,
           });
           break;

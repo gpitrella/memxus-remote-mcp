@@ -69,6 +69,17 @@ export function resolveVectorThreshold(scope: MemoryScopeFilters): number {
   return 0.5;
 }
 
+/** Caller override for vector RPC match_threshold; falls back to legacy scope thresholds (Strategy A). */
+export function resolveMinSimilarity(
+  scope: MemoryScopeFilters,
+  override?: number
+): number {
+  if (override !== undefined && Number.isFinite(override)) {
+    return Math.max(0, Math.min(1, override));
+  }
+  return resolveVectorThreshold(scope);
+}
+
 export type TextSearchQuery = {
   or: (filters: string) => unknown;
 };

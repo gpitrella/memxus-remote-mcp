@@ -76,7 +76,7 @@
         },
         {
           "name": "get_context",
-          "description": "Build a formatted context block for the current topic — ideal for injecting relevant memory from GitHub, Notion, and saved decisions into agent prompts."
+          "description": "Build a formatted context block for the current topic — ideal for injecting relevant memory from GitHub, Notion, and saved decisions into agent prompts. If the user's first message appears to be a coding task, technical question, or project-related request, call get_context with the detected topic BEFORE responding."
         },
         {
           "name": "list_memories",

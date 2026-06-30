@@ -22,7 +22,7 @@ import {
 } from '../lib/memory-access.js';
 import {
   applyTextSearchOr,
-  resolveVectorThreshold,
+  resolveMinSimilarity,
 } from '../lib/memory-search.js';
 import { searchMemoriesWithScopeRetry } from '../lib/memory-search-run.js';
 import {
@@ -185,6 +185,7 @@ export async function searchMemories(p: {
   visibility?: VisibilityFilter;
   group_id?: string;
   group_name?: string;
+  min_similarity?: number;
 }): Promise<MemoryRow[]> {
   const searchStartedAt = Date.now();
   const limit = resolveSearchLimit(resolveLimits(p.planLimits), p.limit);
@@ -218,7 +219,7 @@ export async function searchMemories(p: {
     generateEmbedding: async () => embedding,
     vectorSearch: async (queryEmbedding, scope) => {
       if (!queryEmbedding) return [];
-      const threshold = resolveVectorThreshold(scope);
+      const threshold = resolveMinSimilarity(scope, p.min_similarity);
       const rpcParams = await buildAccessibleVectorRpcParams(
         p.userId,
         queryEmbedding,

@@ -217,7 +217,7 @@ export const MCP_CORE_TOOLS: Tool[] = [
     name: 'get_context',
     ...toolMeta('Get context', { readOnly: true, openWorld: true, idempotent: true }),
     description:
-      'Build a formatted context block for the current topic. Call list_collections when unsure of the exact slug. Partial collection names are resolved server-side.',
+      'Build a formatted context block for the current topic. Call list_collections when unsure of the exact slug. Partial collection names are resolved server-side. If the user\'s first message appears to be a coding task, technical question, or project-related request, call get_context with the detected topic BEFORE responding — do not wait for the user to ask.',
     inputSchema: {
       type: 'object',
       properties: {

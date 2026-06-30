@@ -46,7 +46,7 @@ Your stack, project decisions, coding preferences and workflow context get repea
 
 Memxus is the **AI context engine** — a hosted remote MCP server that automatically builds and delivers persistent project context to every AI client you use.
 
-GitHub repos, Notion docs, commits, PRs, and saved decisions become searchable context. Optional v2 tools add in-app GitHub/Notion connect and official AI skill suggestions matched to your stack.
+GitHub repos, Notion docs, commits, PRs, issues, and saved decisions become searchable context. **GitHub and Notion connectors are live in production (v1.1.0)** — connect from the dashboard or directly from chat via MCP connector tools. Skill routing suggests official AI skills matched to your stack.
 
 No local setup.  
 No file syncing.  
@@ -64,6 +64,41 @@ Connect once with OAuth and your context becomes portable across your entire AI 
 - Get official AI skill suggestions matched to your stack (`get_context_with_skills`)
 - Share team context across agents and workflows
 - Build AI apps with persistent context through MCP or API
+
+---
+
+## Real context from GitHub & Notion
+
+Memxus reads your **real work** — not generic memory snippets. Synced content lands in a unified collection per project: `project:<slug>`.
+
+**What gets synced**
+
+| Source | Content indexed into context |
+|--------|---------------------------|
+| **GitHub** | Repos, READMEs, commits, pull requests, issues |
+| **Notion** | Selected workspace pages and docs |
+| **Manual** | Decisions, preferences, and notes via `remember` |
+
+**How to connect**
+
+1. **Dashboard** — [dashboard.memxus.com/integrations](https://dashboard.memxus.com/integrations) (GitHub App + Notion OAuth)
+2. **From chat (MCP)** — `connect_source` → `check_connect_status` → `list_syncable_items` → `set_sync_selection`
+
+**How to use synced context**
+
+Call `recall`, `get_context`, or `get_context_with_skills` with `collection=project:<slug>` (or let semantic search find it). GitHub/Notion content is tagged and searchable alongside manual memories.
+
+```mermaid
+flowchart LR
+  GitHub[GitHub repos] --> Sync[Memxus sync]
+  Notion[Notion pages] --> Sync
+  Manual[Manual remember] --> Sync
+  Sync --> Collection["project:slug"]
+  Collection --> Tools["recall / get_context / get_context_with_skills"]
+  Tools --> Clients[Claude Cursor ChatGPT]
+```
+
+> **Context Engine tools (6):** visible when *In-app connect* and *Skill routing* are enabled in [dashboard settings](https://dashboard.memxus.com). Production ships the full 15-tool manifest for users with v2 prefs on.
 
 ---
 
@@ -120,44 +155,65 @@ For marketplace reviewers: see [REVIEWER.md](REVIEWER.md) for OAuth and Bearer t
 | ChatGPT | Custom GPT / API | ✅ Live |
 | Gemini | MCP-compatible workflow | ✅ Live |
 | Telegram | Bot connector | ✅ Live |
+| **GitHub** | Repo sync (commits, PRs, issues, README) | ✅ Live |
+| **Notion** | Workspace page sync | ✅ Live |
 | Discord | Bot connector | 🔜 Coming soon |
 | Slack | Bot connector | 🔜 Coming soon |
-| Notion | Connector | 🔜 Coming soon |
 | Any MCP-compatible client | Remote MCP | ✅ Live |
 
 ---
 
-## Available tools (8)
+## Available tools
+
+Registry `com.memxus/memxus` v1.1.0 — **9 core** tools always available, plus **6 Context Engine** tools when v2 prefs are enabled.
+
+### Core tools (9)
 
 | Tool | Description |
 |------|-------------|
-| `remember` | Save important information to long-term memory |
-| `recall` | Semantic search across your memories |
-| `get_context` | Build a formatted context block for a topic |
-| `list_memories` | Browse memories by collection, tags, or type |
-| `get_memory` | Retrieve a specific memory by ID |
-| `forget` | Delete a memory by ID |
-| `list_collections` | List all your memory collections |
+| `remember` | Save context — manual input, decisions, or notes; optional `project:<slug>` collection |
+| `recall` | Semantic search across memories; GitHub/Notion synced content via `project:<slug>` or tags |
+| `get_context` | Formatted context block from GitHub, Notion, and saved decisions for agent prompts |
+| `list_memories` | Browse memories by collection, tags, type, or visibility |
+| `get_memory` | Retrieve full content and metadata by memory ID |
+| `list_collections` | List scopes; GitHub/Notion syncs appear under `project:<slug>` |
+| `forget` | Delete a memory permanently |
 | `memory_stats` | Stats by type and collection |
+| `update` | Patch or append existing memory content, tags, or type |
+
+### Context Engine tools (6) — v1.1.0
+
+| Tool | Description |
+|------|-------------|
+| `connect_source` | Start GitHub App install or Notion OAuth from chat |
+| `list_syncable_items` | List repos or Notion pages available after connecting |
+| `set_sync_selection` | Choose what to sync and trigger initial sync into `project:<slug>` |
+| `check_connect_status` | Poll connection status after `connect_source` |
+| `get_context_with_skills` | Build context + suggest official AI skills for your stack and task |
+| `suggest_skills` | Discover skills from skills.sh without a full context block |
+
+Full tool reference: [memxus.com/docs/mcp](https://memxus.com/docs/mcp) · Marketplace reviewers: [REVIEWER.md](REVIEWER.md)
 
 ---
 
 ## Architecture
 
 ```
-MCP Client (Claude, Cursor, etc.)
+GitHub App ──┐
+Notion OAuth ┼──► sync (API + connector tools) ──► Supabase  project:<slug>
+Manual MCP   ┘                                              │
+                                                            │ pgvector
+MCP Client (Claude, Cursor, etc.)                           │
+        │                                                   │
+        │  POST /mcp   Bearer aimem_*                       │
+        ▼                                                   ▼
+  mcp.memxus.com  ← This repo (Railway) ──────────►  Supabase (Postgres + pgvector)
         │
-        │  POST /mcp   Bearer aimem_*
         ▼
-  mcp.memxus.com  ← This repo (Railway)
-        │
-        │  Supabase SDK
-        ▼
-  Supabase (Postgres + pgvector)
-        │
-        ▼
-  Dash-AIMemory (Dashboard)
+  Dash-AIMemory (Dashboard + integrations)
 ```
+
+Sync runs server-side via dashboard or MCP connector tools — no local files to manage.
 
 **Transport:** Streamable HTTP (MCP 2.0)  
 **Auth:** OAuth 2.1 + PKCE + Dynamic Client Registration (RFC 9728)
@@ -297,13 +353,15 @@ If commands 1 or 4 find real secrets, rotate keys immediately and run `git filte
 
 ## Roadmap
 
+- [x] GitHub connector (repo sync → `project:<slug>`)
+- [x] Notion connector (workspace page sync)
+- [x] MCP Registry v1.1.0 (`com.memxus/memxus` — AI Context Engine)
+- [x] Context Engine tools (connect + skills routing)
 - [ ] Discord bot connector
 - [ ] Slack bot connector
-- [ ] Notion connector
 - [ ] Refresh tokens
 - [ ] Multi-client OAuth UX
 - [ ] npm publish
-- [ ] MCP Registry submit
 
 ---
 
