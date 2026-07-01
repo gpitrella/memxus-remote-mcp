@@ -2,8 +2,8 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import {
   isInAppConnectEnabled,
   isSkillRoutingEnabled,
-  isImpactSummaryEnabled,
 } from '../lib/feature-flags.js';
+import { appendRenderingInstructions } from '../lib/rendering-instructions.js';
 import type { UserMcpPreferences } from '../lib/mcp-preferences.js';
 import {
   isInAppConnectActiveForUser,
@@ -168,8 +168,9 @@ export const MCP_CORE_TOOLS: Tool[] = [
   {
     name: 'recall',
     ...toolMeta('Recall memories', { readOnly: true, openWorld: true, idempotent: true }),
-    description:
+    description: appendRenderingInstructions(
       'Search long-term memory. Call list_collections when scope is unclear. For GitHub/Notion synced content use collection project:<slug> (unified per project) or tags github/notion. Connect at dashboard.memxus.com/integrations.',
+    ),
     inputSchema: {
       type: 'object',
       properties: {
@@ -210,6 +211,15 @@ export const MCP_CORE_TOOLS: Tool[] = [
           description: 'Matching memories, ordered by relevance.',
         },
         message: { type: 'string', description: 'Human-readable summary (same as content text).' },
+        suggested_skills: {
+          type: 'array',
+          items: { type: 'object', additionalProperties: true },
+          description: 'Optional skill suggestions when skill routing is active.',
+        },
+        skills_message: { type: 'string', description: 'Formatted skills block when skill routing is active.' },
+        tokens_used: { type: 'number', description: 'Estimated tokens in the injected response.' },
+        impact_summary: { type: 'object', additionalProperties: true },
+        impact_summary_text: { type: 'string', description: 'Token reuse line for the AHORRO block when ENABLE_IMPACT_SUMMARY is on.' },
       },
       required: ['count', 'memories', 'message'],
     },
@@ -217,8 +227,9 @@ export const MCP_CORE_TOOLS: Tool[] = [
   {
     name: 'get_context',
     ...toolMeta('Get context', { readOnly: true, openWorld: true, idempotent: true }),
-    description:
+    description: appendRenderingInstructions(
       'Build a formatted context block for the current topic. Call list_collections when unsure of the exact slug. Partial collection names are resolved server-side. If the user\'s first message appears to be a coding task, technical question, or project-related request, call get_context with the detected topic BEFORE responding — do not wait for the user to ask.',
+    ),
     inputSchema: {
       type: 'object',
       properties: {
@@ -259,6 +270,10 @@ export const MCP_CORE_TOOLS: Tool[] = [
           description: 'Memories used to build the context block.',
         },
         message: { type: 'string', description: 'Human-readable output (same as content text).' },
+        tokens_used: { type: 'number', description: 'Estimated tokens in the context block.' },
+        truncated: { type: 'boolean', description: 'True when memories were trimmed to the token budget.' },
+        impact_summary: { type: 'object', additionalProperties: true },
+        impact_summary_text: { type: 'string', description: 'Token reuse line for the AHORRO block when ENABLE_IMPACT_SUMMARY is on.' },
       },
       required: ['topic', 'count', 'context_block', 'message'],
     },
@@ -616,6 +631,10 @@ const MCP_SKILL_ROUTING_TOOLS: Tool[] = [
         profile: { type: 'object', additionalProperties: true },
         intent: { type: 'object', additionalProperties: true },
         active_skills: { type: 'array', items: { type: 'object', additionalProperties: true } },
+        suggestions: { type: 'array', items: { type: 'object', additionalProperties: true } },
+        presentation_hint: { type: 'string' },
+        discovery_degraded: { type: 'boolean' },
+        memories: { type: 'array', items: MEMORY_ITEM_SCHEMA },
         requires_approval: { type: 'boolean' },
         message: { type: 'string' },
         tokens_used: { type: 'number' },
@@ -629,8 +648,9 @@ const MCP_SKILL_ROUTING_TOOLS: Tool[] = [
   {
     name: 'suggest_skills',
     ...toolMeta('Suggest skills', { readOnly: true, openWorld: true, idempotent: true }),
-    description:
+    description: appendRenderingInstructions(
       'Discover official Agent Skills for a topic via skills.sh without building a full context block. Requires skill routing enabled in dashboard settings.',
+    ),
     inputSchema: {
       type: 'object',
       properties: {
@@ -688,6 +708,8 @@ const MCP_SKILL_ACTION_TOOLS: Tool[] = [
         source: { type: 'string', enum: ['official', 'community'] },
         warning: { type: 'string' },
         message: { type: 'string' },
+        skill_tokens_used: { type: 'number' },
+        skill_impact_text: { type: 'string' },
       },
       required: ['instructions', 'source', 'message'],
     },
@@ -751,14 +773,11 @@ function patchSkillRoutingToolDescriptions(tools: Tool[]): Tool[] {
       };
     }
     if (t.name === 'get_context_with_skills') {
-      const impactNote = isImpactSummaryEnabled()
-        ? ' Append impact_summary_text verbatim after context when ENABLE_IMPACT_SUMMARY is on; do not reformat the table.'
-        : '';
       return {
         ...t,
-        description:
-          'Preferred context tool when skill routing is on. Builds memory context and suggests matching Agent Skills (default: use in chat, no install). User must approve via use N | install N | skip N.' +
-          impactNote,
+        description: appendRenderingInstructions(
+          'Preferred context tool when skill routing is on. Builds memory context and suggests matching Agent Skills (default: use in chat, no install). User must approve via use N | install N | skip N.',
+        ),
       };
     }
     return t;

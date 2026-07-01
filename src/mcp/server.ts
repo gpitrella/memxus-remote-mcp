@@ -51,7 +51,7 @@ import {
   mapActiveSkillsForResponse,
 } from './connector-tools.js';
 import { assembleContextWithSkills } from '../routing/context-assembler.js';
-import { applyImpactToContextResponse } from '../lib/impact-summary.js';
+import { buildImpactPayload, buildSkillImpactFields } from '../lib/impact-summary.js';
 import { resetSkillDecision } from '../lib/skill-decisions.js';
 import {
   installSkillForUser,
@@ -255,11 +255,15 @@ export function createMCPServer(ctx: McpContext): Server {
               skillsMessage = surfaced.skillsMessage;
               text = `${text}\n\n${surfaced.skillsMessage}`;
             }
+            const tokensUsed = estimateTokens(text);
+            const impact = buildImpactPayload(tokensUsed);
             result = toolSuccess(text, {
               count: ms.length,
               memories: toStructuredMemories(ms),
               message: text,
+              tokens_used: tokensUsed,
               ...(suggestedSkills ? { suggested_skills: suggestedSkills, skills_message: skillsMessage } : {}),
+              ...(impact ?? {}),
             });
           }
           break;
@@ -321,12 +325,16 @@ export function createMCPServer(ctx: McpContext): Server {
               input.collection,
               trimmed.memories
             ).contextBlock;
+            const impact = buildImpactPayload(trimmed.tokensUsed);
             result = toolSuccess(block, {
               topic: input.topic,
               count: trimmed.memories.length,
               context_block: block,
               memories: toStructuredMemories(trimmed.memories),
               message: block,
+              tokens_used: trimmed.tokensUsed,
+              truncated: trimmed.truncated,
+              ...(impact ?? {}),
             });
           }
           break;
@@ -633,21 +641,11 @@ export function createMCPServer(ctx: McpContext): Server {
           });
           const includedContents = new Set(assembled.includedMemories.map((m) => m.content));
           const responseMs = ms.filter((m) => includedContents.has(m.content));
-          const memoryBankTokens = ms.reduce((sum, m) => sum + estimateTokens(m.content), 0);
-          const skillsIncluded =
-            assembled.suggestions.length > 0 ||
-            assembled.routing.activeSkills.length > 0 ||
-            assembled.approvalNotice.includes('Suggested Skills');
-          const withImpact = applyImpactToContextResponse(
-            assembled.contextBlock,
-            assembled.tokensUsed,
-            assembled.truncated,
-            { memoryBankTokens, skillsIncluded }
-          );
-          result = toolSuccess(withImpact.contextBlock, {
+          const impact = buildImpactPayload(assembled.tokensUsed);
+          result = toolSuccess(assembled.contextBlock, {
             topic: input.topic,
             count: responseMs.length,
-            context_block: withImpact.contextBlock,
+            context_block: assembled.contextBlock,
             profile: assembled.routing.profile,
             intent: assembled.routing.intent,
             active_skills: mapActiveSkillsForResponse(assembled.routing.activeSkills),
@@ -656,15 +654,10 @@ export function createMCPServer(ctx: McpContext): Server {
             discovery_degraded: assembled.routing.discoveryDegraded ?? false,
             requires_approval: true,
             memories: toStructuredMemories(responseMs),
-            message: withImpact.contextBlock,
-            tokens_used: withImpact.tokens_used,
-            truncated: withImpact.truncated,
-            ...(withImpact.impact_summary
-              ? {
-                  impact_summary: withImpact.impact_summary,
-                  impact_summary_text: withImpact.impact_summary_text,
-                }
-              : {}),
+            message: assembled.contextBlock,
+            tokens_used: assembled.tokensUsed,
+            truncated: assembled.truncated,
+            ...(impact ?? {}),
           });
           break;
         }
@@ -741,9 +734,14 @@ export function createMCPServer(ctx: McpContext): Server {
             skillId: input.skill_id,
             chatSessionId: input.chat_session_id,
           });
+          const skillName = input.skill_id.split('/').pop() ?? input.skill_id;
+          const skillTokensUsed = estimateTokens(loaded.instructions);
+          const skillImpact = buildSkillImpactFields(skillName, skillTokensUsed);
           result = toolSuccess(loaded.instructions, {
             ...loaded,
             message: loaded.instructions,
+            skill_tokens_used: skillTokensUsed,
+            ...(skillImpact ?? {}),
           });
           break;
         }

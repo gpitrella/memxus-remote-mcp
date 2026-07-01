@@ -9,39 +9,33 @@ describe('impact-summary', () => {
     else process.env.ENABLE_IMPACT_SUMMARY = envBackup;
   });
 
-  it('estimateBaselineWithoutMemxus uses exploration floor and skills overhead', async () => {
-    const { estimateBaselineWithoutMemxus, EXPLORATION_OVERHEAD_TOKENS, SKILLS_DISCOVERY_OVERHEAD_TOKENS } =
-      await import('./impact-summary.js');
-    const withoutSkills = estimateBaselineWithoutMemxus(965, { memoryBankTokens: 800 });
-    assert.equal(withoutSkills.tokensWithoutMemxus, EXPLORATION_OVERHEAD_TOKENS);
-    assert.equal(withoutSkills.tokensSaved, EXPLORATION_OVERHEAD_TOKENS - 965);
-
-    const withSkills = estimateBaselineWithoutMemxus(965, {
-      memoryBankTokens: 800,
-      skillsIncluded: true,
-    });
-    assert.equal(
-      withSkills.tokensWithoutMemxus,
-      EXPLORATION_OVERHEAD_TOKENS + SKILLS_DISCOVERY_OVERHEAD_TOKENS
-    );
-    assert.equal(withSkills.tokensSaved, 3335);
+  it('formatContextReuseSummary uses approved copy with real token count', async () => {
+    const { formatContextReuseSummary } = await import('./impact-summary.js');
+    const text = formatContextReuseSummary(1509);
+    assert.match(text, /⚡ ~1,509 tokens de contexto reutilizados/);
+    assert.match(text, /no tuviste que reescribir/);
+    assert.doesNotMatch(text, /Sin Memxus/);
   });
 
-  it('formatImpactComparisonTable shows sin vs con columns without env metrics', async () => {
+  it('formatSkillInjectedSummary uses approved copy', async () => {
+    const { formatSkillInjectedSummary } = await import('./impact-summary.js');
+    const text = formatSkillInjectedSummary('find-skills', 420);
+    assert.match(text, /🧩 Skill 'find-skills' cargada/);
+    assert.match(text, /~420 tokens de guía inyectados/);
+  });
+
+  it('buildImpactPayload returns real-token summary when flag is on', async () => {
     process.env.ENABLE_IMPACT_SUMMARY = 'true';
     const { buildImpactPayload } = await import('./impact-summary.js');
-    const payload = buildImpactPayload(965, { memoryBankTokens: 800, skillsIncluded: true });
+    const payload = buildImpactPayload(965);
     assert.ok(payload);
-    const text = payload!.impact_summary_text;
-    assert.match(text, /## Esta sesión: Memxus vs sin Memxus/);
-    assert.match(text, /Sin Memxus \(est\.\)/);
-    assert.match(text, /Con Memxus/);
-    assert.match(text, /Ahorro/);
-    assert.doesNotMatch(text, /Agua/);
-    assert.doesNotMatch(text, /CO₂/);
-    assert.doesNotMatch(text, /Electricidad/);
-    assert.ok(payload!.impact_summary.comparison);
-    assert.equal(payload!.impact_summary.rows.length, 1);
+    assert.equal(payload!.impact_summary.metrics.tokensSaved, 965);
+    assert.equal(payload!.impact_summary.tokens_injected, 965);
+    assert.match(payload!.impact_summary_text, /~965 tokens de contexto reutilizados/);
+    assert.doesNotMatch(payload!.impact_summary_text, /Sin Memxus/);
+    assert.doesNotMatch(payload!.impact_summary_text, /Ahorro/);
+    assert.doesNotMatch(payload!.impact_summary_text, /Agua/);
+    assert.doesNotMatch(payload!.impact_summary_text, /CO₂/);
   });
 
   it('buildImpactPayload returns null when flag is off', async () => {
@@ -50,19 +44,16 @@ describe('impact-summary', () => {
     assert.equal(buildImpactPayload(1500), null);
   });
 
-  it('applyImpactToContextResponse appends comparison when enabled', async () => {
+  it('applyImpactToContextResponse does not mutate contextBlock', async () => {
     process.env.ENABLE_IMPACT_SUMMARY = 'true';
     const { applyImpactToContextResponse } = await import('./impact-summary.js');
     const block = '## Context\n\n- memory line';
-    const result = applyImpactToContextResponse(block, 965, false, {
-      memoryBankTokens: 800,
-      skillsIncluded: true,
-    });
-    assert.ok(result.contextBlock.startsWith(block));
-    assert.ok(result.contextBlock.includes('## Esta sesión: Memxus vs sin Memxus'));
+    const result = applyImpactToContextResponse(block, 965, false);
+    assert.equal(result.contextBlock, block);
     assert.equal(result.tokens_used, 965);
     assert.ok(result.impact_summary);
     assert.ok(result.impact_summary_text);
+    assert.doesNotMatch(result.contextBlock, /Sin Memxus/);
   });
 
   it('applyImpactToContextResponse omits impact when flag is off', async () => {
@@ -72,5 +63,11 @@ describe('impact-summary', () => {
     const result = applyImpactToContextResponse(block, 1500, true);
     assert.equal(result.contextBlock, block);
     assert.equal(result.impact_summary, undefined);
+  });
+
+  it('buildSkillImpactFields returns null when flag is off', async () => {
+    delete process.env.ENABLE_IMPACT_SUMMARY;
+    const { buildSkillImpactFields } = await import('./impact-summary.js');
+    assert.equal(buildSkillImpactFields('test-skill', 100), null);
   });
 });
