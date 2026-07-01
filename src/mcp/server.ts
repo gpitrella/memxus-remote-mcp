@@ -633,10 +633,16 @@ export function createMCPServer(ctx: McpContext): Server {
           });
           const includedContents = new Set(assembled.includedMemories.map((m) => m.content));
           const responseMs = ms.filter((m) => includedContents.has(m.content));
+          const memoryBankTokens = ms.reduce((sum, m) => sum + estimateTokens(m.content), 0);
+          const skillsIncluded =
+            assembled.suggestions.length > 0 ||
+            assembled.routing.activeSkills.length > 0 ||
+            assembled.approvalNotice.includes('Suggested Skills');
           const withImpact = applyImpactToContextResponse(
             assembled.contextBlock,
             assembled.tokensUsed,
-            assembled.truncated
+            assembled.truncated,
+            { memoryBankTokens, skillsIncluded }
           );
           result = toolSuccess(withImpact.contextBlock, {
             topic: input.topic,

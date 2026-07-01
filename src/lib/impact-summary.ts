@@ -1,18 +1,17 @@
 /**
- * Session impact estimates — conservative; UI always prefixes ~ .
+ * Session token savings — compares WITH Memxus vs estimated baseline WITHOUT.
  */
 
 export const ENABLE_IMPACT_SUMMARY = 'ENABLE_IMPACT_SUMMARY';
 
-const KWH_PER_1K_TOKENS = 0.0025;
-const L_WATER_PER_KWH = 1.8;
-const CO2_KG_PER_KWH = 0.4;
+/** Avg. cold-session cost without memory: re-explain topic, grep/read repo, orient agent. */
+export const EXPLORATION_OVERHEAD_TOKENS = 3_500;
+
+/** Manual skill discovery without routing (search, extra turns). */
+export const SKILLS_DISCOVERY_OVERHEAD_TOKENS = 800;
 
 export type ImpactMetrics = {
   tokensSaved: number;
-  kwh: number;
-  waterLiters: number;
-  co2Kg: number;
 };
 
 export type ImpactSummaryRow = {
@@ -22,40 +21,88 @@ export type ImpactSummaryRow = {
   unit: string;
 };
 
+export type ImpactSessionOptions = {
+  memoryBankTokens?: number;
+  skillsIncluded?: boolean;
+};
+
+export type ImpactSessionComparison = {
+  tokensWithMemxus: number;
+  tokensWithoutMemxus: number;
+  tokensSaved: number;
+  breakdown: {
+    contextOrExploration: number;
+    skillsDiscovery: number;
+    memoryBankTokens: number;
+  };
+};
+
 export function isImpactSummaryEnabled(): boolean {
   return process.env[ENABLE_IMPACT_SUMMARY]?.trim().toLowerCase() === 'true';
 }
 
-export function computeImpact(tokensSaved: number): ImpactMetrics {
-  const safe = Math.max(0, Math.round(tokensSaved));
-  const kwh = (safe / 1000) * KWH_PER_1K_TOKENS;
+export function estimateBaselineWithoutMemxus(
+  tokensWithMemxus: number,
+  options: ImpactSessionOptions = {}
+): ImpactSessionComparison {
+  const memoryBankTokens = Math.max(0, Math.round(options.memoryBankTokens ?? 0));
+  const contextOrExploration = Math.max(memoryBankTokens, EXPLORATION_OVERHEAD_TOKENS);
+  const skillsDiscovery = options.skillsIncluded ? SKILLS_DISCOVERY_OVERHEAD_TOKENS : 0;
+  const tokensWithoutMemxus = contextOrExploration + skillsDiscovery;
+  const tokensWith = Math.max(0, Math.round(tokensWithMemxus));
+  const tokensSaved = Math.max(0, tokensWithoutMemxus - tokensWith);
+
   return {
-    tokensSaved: safe,
-    kwh: round(kwh, 2),
-    waterLiters: round(kwh * L_WATER_PER_KWH, 2),
-    co2Kg: round(kwh * CO2_KG_PER_KWH, 2),
+    tokensWithMemxus: tokensWith,
+    tokensWithoutMemxus,
+    tokensSaved,
+    breakdown: {
+      contextOrExploration,
+      skillsDiscovery,
+      memoryBankTokens,
+    },
   };
 }
 
-function round(n: number, digits: number): number {
-  const f = 10 ** digits;
-  return Math.round(n * f) / f;
+/** @deprecated Use estimateBaselineWithoutMemxus; kept for legacy callers. */
+export function estimateTokensSaved(contextTokens: number, _memxusOverhead = 120): number {
+  return estimateBaselineWithoutMemxus(contextTokens).tokensSaved;
 }
 
-function formatNum(n: number): string {
+export function computeImpact(tokensSaved: number): ImpactMetrics {
+  return { tokensSaved: Math.max(0, Math.round(tokensSaved)) };
+}
+
+function formatTokenNum(n: number): string {
   if (n >= 1000) return `~${n.toLocaleString('en-US')}`;
   return `~${n}`;
 }
 
 export function buildImpactSummaryRows(impact: ImpactMetrics): ImpactSummaryRow[] {
-  return [
-    { icon: '⚡', label: 'Tokens reutilizados', value: formatNum(impact.tokensSaved), unit: '' },
-    { icon: '💧', label: 'Agua no evaporada', value: formatNum(impact.waterLiters), unit: 'L' },
-    { icon: '🌱', label: 'CO₂ no emitido', value: formatNum(impact.co2Kg), unit: 'kg' },
-    { icon: '🔋', label: 'Electricidad', value: formatNum(impact.kwh), unit: 'kWh' },
-  ];
+  return [{ icon: '⚡', label: 'Tokens', value: formatTokenNum(impact.tokensSaved), unit: '' }];
 }
 
+export function formatImpactComparisonTable(comparison: ImpactSessionComparison): string {
+  const { tokensWithMemxus, tokensWithoutMemxus, tokensSaved, breakdown } = comparison;
+  const skillsNote = breakdown.skillsDiscovery > 0 ? ` + ~${breakdown.skillsDiscovery} skills` : '';
+  const contextNote =
+    breakdown.memoryBankTokens >= EXPLORATION_OVERHEAD_TOKENS
+      ? `banco ~${breakdown.memoryBankTokens.toLocaleString('en-US')} tok`
+      : `exploración ~${EXPLORATION_OVERHEAD_TOKENS.toLocaleString('en-US')} tok`;
+
+  const lines = [
+    '## Esta sesión: Memxus vs sin Memxus',
+    '',
+    '| | Sin Memxus (est.) | Con Memxus | Ahorro |',
+    '|---|-------------------|------------|--------|',
+    `| ⚡ Tokens | ${formatTokenNum(tokensWithoutMemxus)} | ${formatTokenNum(tokensWithMemxus)} | ${formatTokenNum(tokensSaved)} |`,
+    '',
+    `_Sin Memxus: repetir contexto (${contextNote}${skillsNote}). Con Memxus: contexto recuperado + skills sugeridas inline._`,
+  ];
+  return lines.join('\n');
+}
+
+/** @deprecated Prefer formatImpactComparisonTable for session summaries. */
 export function formatImpactSummaryTable(impact: ImpactMetrics): string {
   const rows = buildImpactSummaryRows(impact);
   const lines = [
@@ -63,31 +110,34 @@ export function formatImpactSummaryTable(impact: ImpactMetrics): string {
     '',
     '| | Estimado |',
     '|---|----------|',
-    ...rows.map((r) => {
-      const val = r.unit ? `${r.value} ${r.unit}`.trim() : r.value;
-      return `| ${r.icon} ${r.label} | ${val} |`;
-    }),
-    '',
-    '_Estimación aproximada. [Ver metodología](https://memxus.com/docs#impact)_',
+    ...rows.map((r) => `| ${r.icon} ${r.label} | ${r.value} |`),
   ];
   return lines.join('\n');
 }
 
-export function estimateTokensSaved(contextTokens: number, memxusOverhead = 120): number {
-  return Math.max(0, contextTokens - memxusOverhead);
-}
-
 export type ImpactPayload = {
-  impact_summary: { rows: ImpactSummaryRow[]; metrics: ImpactMetrics };
+  impact_summary: {
+    rows: ImpactSummaryRow[];
+    metrics: ImpactMetrics;
+    comparison: ImpactSessionComparison;
+  };
   impact_summary_text: string;
 };
 
-export function buildImpactPayload(tokensUsed: number): ImpactPayload | null {
+export function buildImpactPayload(
+  tokensWithMemxus: number,
+  options: ImpactSessionOptions = {}
+): ImpactPayload | null {
   if (!isImpactSummaryEnabled()) return null;
-  const metrics = computeImpact(estimateTokensSaved(tokensUsed));
+  const comparison = estimateBaselineWithoutMemxus(tokensWithMemxus, options);
+  const metrics = computeImpact(comparison.tokensSaved);
   return {
-    impact_summary: { rows: buildImpactSummaryRows(metrics), metrics },
-    impact_summary_text: formatImpactSummaryTable(metrics),
+    impact_summary: {
+      rows: buildImpactSummaryRows(metrics),
+      metrics,
+      comparison,
+    },
+    impact_summary_text: formatImpactComparisonTable(comparison),
   };
 }
 
@@ -102,11 +152,12 @@ export type ImpactContextResponse = {
 export function applyImpactToContextResponse(
   contextBlock: string,
   tokensUsed: number,
-  truncated: boolean
+  truncated: boolean,
+  options: ImpactSessionOptions = {}
 ): ImpactContextResponse {
   const base: ImpactContextResponse = { contextBlock, tokens_used: tokensUsed, truncated };
   try {
-    const impact = buildImpactPayload(tokensUsed);
+    const impact = buildImpactPayload(tokensUsed, options);
     if (!impact) return base;
     const text = `${contextBlock}\n\n${impact.impact_summary_text}`;
     return {
