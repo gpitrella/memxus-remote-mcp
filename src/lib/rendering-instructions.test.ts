@@ -16,7 +16,7 @@ describe('rendering-instructions', () => {
     const base = 'Build context for a topic.';
     const out = appendRenderingInstructions(base);
     assert.ok(out.startsWith(base));
-    assert.match(out, /memxus-rendering-instructions/);
-    assert.match(out, /impact_summary_text/);
+    assert.match(out, /MEMXUS — Resumen para el usuario/);
+    assert.match(out, /server-rendered/);
   });
 });

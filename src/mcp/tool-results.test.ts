@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { toStructuredMemory, toolSuccess } from './tool-results.js';
+import { toStructuredMemory, toolSuccess, toolSuccessWithUserFacing } from './tool-results.js';
 import type { FormattableMemory } from './format-memory.js';
 
 const FIXTURE: FormattableMemory = {
@@ -27,4 +27,14 @@ test('toolSuccess preserves text and adds structuredContent', () => {
   const r = toolSuccess(text, { count: 1 });
   assert.equal(r.content[0].text, text);
   assert.deepEqual(r.structuredContent, { count: 1 });
+});
+
+test('toolSuccessWithUserFacing appends footer and sets message', () => {
+  const body = '=== context ===';
+  const footer = '━━━ MEMXUS — Resumen para el usuario ━━━';
+  const r = toolSuccessWithUserFacing(body, { context_block: body, count: 1 }, footer);
+  assert.equal(r.content[0].text, `${body}\n\n${footer}`);
+  assert.equal(r.structuredContent.message, `${body}\n\n${footer}`);
+  assert.equal(r.structuredContent.context_block, body);
+  assert.equal(r.structuredContent.user_facing_template, footer);
 });

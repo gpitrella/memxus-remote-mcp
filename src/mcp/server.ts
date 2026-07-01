@@ -52,6 +52,7 @@ import {
 } from './connector-tools.js';
 import { assembleContextWithSkills } from '../routing/context-assembler.js';
 import { buildImpactPayload, buildSkillImpactFields } from '../lib/impact-summary.js';
+import { buildUserFacingTemplate, toUserFacingSkills } from '../lib/user-facing-template.js';
 import { resetSkillDecision } from '../lib/skill-decisions.js';
 import {
   installSkillForUser,
@@ -73,7 +74,7 @@ import {
 } from '../lib/mcp-preferences.js';
 import { assertOAuthScopes, assertMemoryReadScope, assertMemoryWriteScope, assertMemoryDeleteScope } from '../lib/oauth-scopes.js';
 import { getCachedUserMcpPreferences } from '../lib/mcp-preferences-cache.js';
-import { toolSuccess, toStructuredMemory, toStructuredMemories, type ToolSuccessResult } from './tool-results.js';
+import { toolSuccess, toolSuccessWithUserFacing, toStructuredMemory, toStructuredMemories, type ToolSuccessResult } from './tool-results.js';
 
 export { MCP_TOOLS, getActiveMcpTools, MCP_CORE_TOOLS } from './tool-schemas.js';
 
@@ -257,14 +258,25 @@ export function createMCPServer(ctx: McpContext): Server {
             }
             const tokensUsed = estimateTokens(text);
             const impact = buildImpactPayload(tokensUsed);
-            result = toolSuccess(text, {
-              count: ms.length,
-              memories: toStructuredMemories(ms),
-              message: text,
-              tokens_used: tokensUsed,
-              ...(suggestedSkills ? { suggested_skills: suggestedSkills, skills_message: skillsMessage } : {}),
-              ...(impact ?? {}),
+            const userFacing = buildUserFacingTemplate({
+              topic: input.query,
+              collection: input.collection,
+              memoryCount: ms.length,
+              impactSummaryText: impact?.impact_summary_text,
+              skills: toUserFacingSkills(undefined, suggestedSkills),
             });
+            result = toolSuccessWithUserFacing(
+              text,
+              {
+                count: ms.length,
+                memories: toStructuredMemories(ms),
+                message: text,
+                tokens_used: tokensUsed,
+                ...(suggestedSkills ? { suggested_skills: suggestedSkills, skills_message: skillsMessage } : {}),
+                ...(impact ?? {}),
+              },
+              userFacing,
+            );
           }
           break;
         }
@@ -326,16 +338,26 @@ export function createMCPServer(ctx: McpContext): Server {
               trimmed.memories
             ).contextBlock;
             const impact = buildImpactPayload(trimmed.tokensUsed);
-            result = toolSuccess(block, {
+            const userFacing = buildUserFacingTemplate({
               topic: input.topic,
-              count: trimmed.memories.length,
-              context_block: block,
-              memories: toStructuredMemories(trimmed.memories),
-              message: block,
-              tokens_used: trimmed.tokensUsed,
-              truncated: trimmed.truncated,
-              ...(impact ?? {}),
+              collection: input.collection,
+              memoryCount: trimmed.memories.length,
+              impactSummaryText: impact?.impact_summary_text,
             });
+            result = toolSuccessWithUserFacing(
+              block,
+              {
+                topic: input.topic,
+                count: trimmed.memories.length,
+                context_block: block,
+                memories: toStructuredMemories(trimmed.memories),
+                message: block,
+                tokens_used: trimmed.tokensUsed,
+                truncated: trimmed.truncated,
+                ...(impact ?? {}),
+              },
+              userFacing,
+            );
           }
           break;
         }
@@ -642,23 +664,35 @@ export function createMCPServer(ctx: McpContext): Server {
           const includedContents = new Set(assembled.includedMemories.map((m) => m.content));
           const responseMs = ms.filter((m) => includedContents.has(m.content));
           const impact = buildImpactPayload(assembled.tokensUsed);
-          result = toolSuccess(assembled.contextBlock, {
+          const userFacing = buildUserFacingTemplate({
             topic: input.topic,
-            count: responseMs.length,
-            context_block: assembled.contextBlock,
-            profile: assembled.routing.profile,
-            intent: assembled.routing.intent,
-            active_skills: mapActiveSkillsForResponse(assembled.routing.activeSkills),
-            suggestions: assembled.suggestions,
-            presentation_hint: assembled.presentation_hint,
-            discovery_degraded: assembled.routing.discoveryDegraded ?? false,
-            requires_approval: true,
-            memories: toStructuredMemories(responseMs),
-            message: assembled.contextBlock,
-            tokens_used: assembled.tokensUsed,
-            truncated: assembled.truncated,
-            ...(impact ?? {}),
+            collection: input.collection,
+            memoryCount: responseMs.length,
+            impactSummaryText: impact?.impact_summary_text,
+            skills: toUserFacingSkills(assembled.suggestions),
+            stackConfidence: assembled.routing.profile.confidence,
           });
+          result = toolSuccessWithUserFacing(
+            assembled.contextBlock,
+            {
+              topic: input.topic,
+              count: responseMs.length,
+              context_block: assembled.contextBlock,
+              profile: assembled.routing.profile,
+              intent: assembled.routing.intent,
+              active_skills: mapActiveSkillsForResponse(assembled.routing.activeSkills),
+              suggestions: assembled.suggestions,
+              presentation_hint: assembled.presentation_hint,
+              discovery_degraded: assembled.routing.discoveryDegraded ?? false,
+              requires_approval: true,
+              memories: toStructuredMemories(responseMs),
+              message: assembled.contextBlock,
+              tokens_used: assembled.tokensUsed,
+              truncated: assembled.truncated,
+              ...(impact ?? {}),
+            },
+            userFacing,
+          );
           break;
         }
         case 'suggest_skills': {
@@ -737,12 +771,21 @@ export function createMCPServer(ctx: McpContext): Server {
           const skillName = input.skill_id.split('/').pop() ?? input.skill_id;
           const skillTokensUsed = estimateTokens(loaded.instructions);
           const skillImpact = buildSkillImpactFields(skillName, skillTokensUsed);
-          result = toolSuccess(loaded.instructions, {
-            ...loaded,
-            message: loaded.instructions,
-            skill_tokens_used: skillTokensUsed,
-            ...(skillImpact ?? {}),
+          const userFacing = buildUserFacingTemplate({
+            mode: 'skill_load',
+            topic: skillName,
+            skillImpactText: skillImpact?.skill_impact_text,
           });
+          result = toolSuccessWithUserFacing(
+            loaded.instructions,
+            {
+              ...loaded,
+              message: loaded.instructions,
+              skill_tokens_used: skillTokensUsed,
+              ...(skillImpact ?? {}),
+            },
+            userFacing,
+          );
           break;
         }
         case 'install_skill': {
@@ -810,13 +853,18 @@ export function createMCPServer(ctx: McpContext): Server {
 
       if (!isForget) {
         const responseText = result.content.map((c) => c.text).join('\n');
+        const structuredTokens =
+          'structuredContent' in result &&
+          typeof result.structuredContent.tokens_used === 'number'
+            ? result.structuredContent.tokens_used
+            : undefined;
         logUsage({
           userId,
           apiKeyId,
           endpoint,
           status: 'success',
           latencyMs: Date.now() - started,
-          tokensUsed: estimateTokens(responseText),
+          tokensUsed: structuredTokens ?? estimateTokens(responseText),
         });
 
         const warnState = planCtx?.planWarnings;

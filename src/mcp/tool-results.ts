@@ -27,3 +27,16 @@ export function toolSuccess(text: string, structured: Record<string, unknown>): 
     structuredContent: structured,
   };
 }
+
+export function toolSuccessWithUserFacing(
+  body: string,
+  structured: Record<string, unknown>,
+  userFacing: string | null,
+): ToolSuccessResult {
+  const displayText = userFacing ? `${body}\n\n${userFacing}` : body;
+  return toolSuccess(displayText, {
+    ...structured,
+    message: displayText,
+    ...(userFacing ? { user_facing_template: userFacing } : {}),
+  });
+}

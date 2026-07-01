@@ -27,7 +27,7 @@ function loadRenderingMarkdown(): string {
 export const RENDERING_INSTRUCTIONS_FULL = loadRenderingMarkdown();
 
 export const RENDERING_INSTRUCTIONS_BRIEF =
-  'After this tool returns, render per memxus-rendering-instructions: CONTEXT (1 line) → SKILLS (max 2) → AHORRO (use impact_summary_text verbatim when present) → actionable question. Do not dump raw context_block/message. Chat: use N|skip N. Editor: use N|install N|skip N.';
+  'After this tool returns, show the user the block "MEMXUS — Resumen para el usuario" at the end of the tool result verbatim (already server-rendered). Do not repeat the raw context_block above it. Chat: use N|skip N. Editor: use N|install N|skip N.';
 
 export function appendRenderingInstructions(description: string): string {
   return `${description} ${RENDERING_INSTRUCTIONS_BRIEF}`;
