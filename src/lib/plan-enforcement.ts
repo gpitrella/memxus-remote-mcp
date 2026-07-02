@@ -1,20 +1,26 @@
-// SYNC: Dash-AIMemory/lib/plan-enforcement.ts
-import { supabaseAdmin } from './supabase';
-import { getPlan, getEffectiveStorageLimit, normalizeLegacyPlanId, type PlanDefinition, type PlanId } from './plans';
+// SYNC logic with API-IAMemory — DO NOT copy file wholesale.
+// RemoteMCP uses: supabase (not supabaseAdmin), mcp-perf (not api-perf), .js imports.
+import { supabase } from './supabase.js';
+import {
+  getPlan,
+  getEffectiveStorageLimit,
+  normalizeLegacyPlanId,
+  type PlanDefinition,
+  type PlanId,
+} from './plans.js';
 import {
   getCachedPlanContext,
   isPlanContextCacheEnabled,
   setCachedPlanContext,
-} from './plan-context-cache';
-import { logPerfPhase } from './api-perf';
+} from './plan-context-cache.js';
+import { logPerfPhase } from './mcp-perf.js';
 import {
   getStorageBytesUsed,
   isOverStorageLimit,
   wouldExceedStorageLimit,
-} from './storage-bytes';
-import { isPricingV3RetentionEnabled } from './memory-retention';
+} from './storage-bytes.js';
 
-export { invalidatePlanContextCache } from './plan-context-cache';
+export { invalidatePlanContextCache } from './plan-context-cache.js';
 
 const DAILY_LIMIT_REFRESH_BUFFER = 5;
 
@@ -25,6 +31,10 @@ export const BILLING_UPGRADE_URL =
 
 export const PRICING_UPGRADE_URL =
   process.env.PRICING_UPGRADE_URL || 'https://memxus.com/pricing';
+
+function isPricingV3RetentionEnabled(): boolean {
+  return process.env.PRICING_V3_RETENTION === 'true';
+}
 
 export class PlanLimitError extends Error {
   readonly code: PlanLimitCode;
@@ -145,29 +155,6 @@ export async function getDailyRateLimitState(userId: string): Promise<DailyRateL
   return buildDailyRateLimitState(ctx.limits, dailyUsage);
 }
 
-export function setRateLimitHeaders(
-  res: { set(name: string, value: string | number): unknown },
-  state: DailyRateLimitState
-): void {
-  if (state.limit === -1) {
-    res.set('X-RateLimit-Limit', 'unlimited');
-    res.set('X-RateLimit-Remaining', 'unlimited');
-  } else {
-    res.set('X-RateLimit-Limit', String(state.limit));
-    res.set('X-RateLimit-Remaining', String(state.remaining));
-  }
-  res.set('X-RateLimit-Reset', String(state.resetUnix));
-  res.set('X-RateLimit-Increment', '1');
-}
-
-export function setRetryAfterUntilReset(
-  res: { set(name: string, value: string | number): unknown },
-  resetUnix: number
-): void {
-  const seconds = Math.max(1, resetUnix - Math.floor(Date.now() / 1000));
-  res.set('Retry-After', String(seconds));
-}
-
 export function isPlanWarningsEnabled(): boolean {
   return process.env.ENABLE_PLAN_WARNINGS === 'true';
 }
@@ -243,22 +230,6 @@ export function buildPlanWarningState(
   return { level, warnings, message };
 }
 
-export function setPlanWarnHeaders(
-  res: { set(name: string, value: string | number): unknown },
-  state: PlanWarningState
-): void {
-  if (!isPlanWarningsEnabled() || state.level === 'none') return;
-  res.set('X-Plan-Warn-Level', state.level);
-  if (state.message) {
-    res.set('X-Plan-Warn-Message', state.message);
-  }
-  for (const w of state.warnings) {
-    const header =
-      w.resource === 'memory' ? 'Memory' : w.resource === 'storage' ? 'Storage' : 'Daily';
-    res.set(`X-Plan-Warn-${header}`, w.level);
-  }
-}
-
 export function getRetentionCutoffIso(retentionDays: number): string | null {
   if (retentionDays === -1) return null;
   const d = new Date();
@@ -276,7 +247,7 @@ export function pruneExpiredMemoriesForUser(
   const cutoff = getRetentionCutoffIso(limits.retentionDays);
   if (!cutoff) return;
 
-  void supabaseAdmin
+  void supabase
     .from('memories')
     .delete()
     .eq('user_id', userId)
@@ -306,7 +277,7 @@ export function effectivePlanId(
 }
 
 export async function loadUserPlan(userId: string): Promise<UserPlanContext | null> {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await supabase
     .from('users')
     .select('id, plan, subscription_status')
     .eq('id', userId)
@@ -336,7 +307,7 @@ export async function getMemoryCount(
   userId: string,
   limits?: PlanDefinition['limits']
 ): Promise<number> {
-  let query = supabaseAdmin
+  let query = supabase
     .from('memories')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId)
@@ -356,7 +327,7 @@ export async function getMemoryCount(
 }
 
 export async function getDailyUsageCount(userId: string): Promise<number> {
-  const { count, error } = await supabaseAdmin
+  const { count, error } = await supabase
     .from('usage_logs')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId)
@@ -455,7 +426,7 @@ function enforcePlanLimits(ctx: UserPlanContext, opts: AssertPlanLimitsOptions):
     if (isOverMemoryLimit(memoryCount, ctx.limits)) {
       throw new PlanLimitError(
         'PLAN_LIMIT_MEMORY',
-        `Memory count limit reached (${ctx.limits.memories} on ${ctx.plan.name}). Delete memories or upgrade at ${BILLING_UPGRADE_URL}`,
+        `Memory count limit reached (${ctx.limits.memories} on ${ctx.plan.name}). Delete memories with forget or upgrade at ${BILLING_UPGRADE_URL}`,
         warnState
       );
     }
@@ -475,7 +446,7 @@ function enforcePlanLimits(ctx: UserPlanContext, opts: AssertPlanLimitsOptions):
   if (!opts.isForget && isOverMemoryLimit(memoryCount, ctx.limits)) {
     throw new PlanLimitError(
       'PLAN_LIMIT_MEMORY',
-      `You have ${memoryCount} memories but your ${ctx.plan.name} plan allows ${ctx.limits.memories}. Delete memories or upgrade at ${BILLING_UPGRADE_URL}`,
+      `You have ${memoryCount} memories but your ${ctx.plan.name} plan allows ${ctx.limits.memories}. Use forget to delete memories or upgrade at ${BILLING_UPGRADE_URL}`,
       warnState
     );
   }
@@ -545,6 +516,13 @@ export async function assertWithinPlanLimits(opts: AssertPlanLimitsOptions): Pro
   return result;
 }
 
+export function formatPlanLimitToolError(err: PlanLimitError): string {
+  if (!err.warnings?.message || err.warnings.level === 'none') {
+    return err.message;
+  }
+  return `${err.message}\n\n${err.warnings.message}`;
+}
+
 export interface LogUsageInput {
   userId: string;
   apiKeyId?: string | null;
@@ -556,7 +534,7 @@ export interface LogUsageInput {
 }
 
 export function logUsage(input: LogUsageInput): void {
-  void supabaseAdmin
+  void supabase
     .from('usage_logs')
     .insert({
       user_id: input.userId,

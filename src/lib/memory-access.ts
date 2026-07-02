@@ -3,16 +3,16 @@
  * SYNC: RemoteMCP-AIMemory/src/lib/memory-access.ts
  */
 
-import { supabaseAdmin } from './supabase';
-import { assertWorkforceMember, type WorkforceRole } from './workforce-access';
+import { supabase } from './supabase.js';
 import {
   canDeleteGroupMemory,
   canWriteToGroup,
   getGroupMemberRole,
   type GroupRole,
-} from './group-access';
-import type { AuthRequest } from '../middleware/auth';
-import type { MemoryScopeFilters } from './memory-scope';
+} from './group-access.js';
+import type { MemoryScopeFilters } from './memory-scope.js';
+
+type WorkforceRole = 'owner' | 'admin' | 'member';
 
 export type MemoryScopeValue = 'personal' | 'workforce' | 'group' | 'all';
 export type VisibilityFilter = 'private' | 'shared' | 'all';
@@ -81,7 +81,7 @@ export function applyActiveMemoryFilter(query: MemoryQueryBuilder): MemoryQueryB
 }
 
 export async function getAccessibleGroupIds(userId: string): Promise<string[]> {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await supabase
     .from('shared_group_members')
     .select('group_id')
     .eq('user_id', userId)
@@ -92,7 +92,7 @@ export async function getAccessibleGroupIds(userId: string): Promise<string[]> {
 }
 
 export async function getAccessibleWorkforceIds(userId: string): Promise<string[]> {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await supabase
     .from('workforce_workspace_members')
     .select('workspace_id')
     .eq('user_id', userId);
@@ -142,7 +142,7 @@ export async function resolveGroupIdFromName(
     return { error: 'No accessible groups found', status: 404, code: 'NOT_FOUND' };
   }
 
-  const { data: groups, error } = await supabaseAdmin
+  const { data: groups, error } = await supabase
     .from('shared_groups')
     .select('id, name')
     .in('id', groupIds)
@@ -272,7 +272,7 @@ async function getWorkforceMemberRoleSafe(
   userId: string,
   workspaceId: string
 ): Promise<WorkforceRole | null> {
-  const { data } = await supabaseAdmin
+  const { data } = await supabase
     .from('workforce_workspace_members')
     .select('role')
     .eq('workspace_id', workspaceId)
@@ -540,29 +540,13 @@ export async function buildAccessibleStatsRpcParams(
   };
 }
 
-export async function assertWorkforceMemberForRequest(
-  req: AuthRequest,
-  workspaceId: string
-): Promise<{ ok: true } | { ok: false; status: number; code: string; message: string }> {
-  const access = await assertWorkforceMember(req, workspaceId);
-  if (!access.ok) {
-    return {
-      ok: false,
-      status: access.status,
-      code: access.code,
-      message: access.message,
-    };
-  }
-  return { ok: true };
-}
-
 export async function fetchGroupNameMap(
   groupIds: string[]
 ): Promise<Map<string, string>> {
   const valid = filterValidUuids([...new Set(groupIds)]);
   if (valid.length === 0) return new Map();
 
-  const { data } = await supabaseAdmin
+  const { data } = await supabase
     .from('shared_groups')
     .select('id, name')
     .in('id', valid)

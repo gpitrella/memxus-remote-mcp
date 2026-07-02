@@ -3,10 +3,10 @@
  * SYNC: RemoteMCP-AIMemory/src/lib/storage-bytes.ts
  */
 
-import { supabaseAdmin } from './supabase';
-import type { PlanDefinition } from './plans';
-import { getEffectiveStorageLimit } from './plans';
-import { APPEND_SEPARATOR } from './memory-scope';
+import { supabase } from './supabase.js';
+import type { PlanDefinition } from './plans.js';
+import { getEffectiveStorageLimit } from './plans.js';
+import { APPEND_SEPARATOR } from './memory-scope.js';
 
 /** Projected embedding size when vector is missing (P90 from prod analysis). */
 export const PROJECTED_EMBEDDING_BYTES = 6144;
@@ -45,7 +45,7 @@ export async function getStorageBytesUsed(
 ): Promise<number> {
   const cutoff = limits ? retentionCutoffIso(limits.retentionDays) : null;
 
-  const { data, error } = await supabaseAdmin.rpc('get_user_storage_bytes', {
+  const { data, error } = await supabase.rpc('get_user_storage_bytes', {
     p_user_id: userId,
     p_retention_cutoff: cutoff,
   });
@@ -62,7 +62,7 @@ async function getStorageBytesUsedFallback(
   userId: string,
   retentionCutoff: string | null
 ): Promise<number> {
-  let query = supabaseAdmin
+  let query = supabase
     .from('memories')
     .select('content, metadata, embedding')
     .eq('user_id', userId)

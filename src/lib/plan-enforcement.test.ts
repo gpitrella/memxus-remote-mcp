@@ -35,12 +35,20 @@ describe('plan-enforcement (Remote MCP)', () => {
     assert.equal(state.remaining, 110);
   });
 
-  it('builds approaching memory warning at 80%', () => {
+  it('builds approaching storage warning at 80% (v3 fair-use cap)', () => {
     const prev = process.env.ENABLE_PLAN_WARNINGS;
     process.env.ENABLE_PLAN_WARNINGS = 'true';
-    const state = buildPlanWarningState(PLANS.free.limits, 32, 0, 'Free');
+    const fairUseCap = PLANS.free.limits.fairUseStorageBytes!;
+    const state = buildPlanWarningState(
+      PLANS.free.limits,
+      0,
+      0,
+      'Free',
+      Math.floor(fairUseCap * 0.82)
+    );
     assert.equal(state.level, 'approaching');
     assert.equal(state.warnings.length, 1);
+    assert.equal(state.warnings[0]?.resource, 'storage');
     process.env.ENABLE_PLAN_WARNINGS = prev;
   });
 
