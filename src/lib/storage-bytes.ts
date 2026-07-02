@@ -1,11 +1,12 @@
 /**
  * User storage metering — content + metadata + projected embedding bytes.
- * SYNC: API-IAMemory/src/lib/storage-bytes.ts
+ * SYNC: RemoteMCP-AIMemory/src/lib/storage-bytes.ts
  */
 
-import { supabase } from './supabase.js';
+import { supabaseAdmin } from './supabase';
 import type { PlanDefinition } from './plans';
-import { APPEND_SEPARATOR } from './memory-scope.js';
+import { getEffectiveStorageLimit } from './plans';
+import { APPEND_SEPARATOR } from './memory-scope';
 
 /** Projected embedding size when vector is missing (P90 from prod analysis). */
 export const PROJECTED_EMBEDDING_BYTES = 6144;
@@ -44,7 +45,7 @@ export async function getStorageBytesUsed(
 ): Promise<number> {
   const cutoff = limits ? retentionCutoffIso(limits.retentionDays) : null;
 
-  const { data, error } = await supabase.rpc('get_user_storage_bytes', {
+  const { data, error } = await supabaseAdmin.rpc('get_user_storage_bytes', {
     p_user_id: userId,
     p_retention_cutoff: cutoff,
   });
@@ -61,10 +62,11 @@ async function getStorageBytesUsedFallback(
   userId: string,
   retentionCutoff: string | null
 ): Promise<number> {
-  let query = supabase
+  let query = supabaseAdmin
     .from('memories')
     .select('content, metadata, embedding')
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .eq('status', 'active');
 
   if (retentionCutoff) {
     query = query.gte('created_at', retentionCutoff);
@@ -91,8 +93,9 @@ export function isOverStorageLimit(
   storageBytesUsed: number,
   limits: PlanDefinition['limits']
 ): boolean {
-  if (limits.storageBytes === -1) return false;
-  return storageBytesUsed >= limits.storageBytes;
+  const cap = getEffectiveStorageLimit(limits);
+  if (cap === -1) return false;
+  return storageBytesUsed >= cap;
 }
 
 export function wouldExceedStorageLimit(
@@ -100,6 +103,7 @@ export function wouldExceedStorageLimit(
   additionalBytes: number,
   limits: PlanDefinition['limits']
 ): boolean {
-  if (limits.storageBytes === -1) return false;
-  return storageBytesUsed + additionalBytes > limits.storageBytes;
+  const cap = getEffectiveStorageLimit(limits);
+  if (cap === -1) return false;
+  return storageBytesUsed + additionalBytes > cap;
 }

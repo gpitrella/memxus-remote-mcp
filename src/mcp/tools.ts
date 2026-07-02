@@ -8,6 +8,7 @@ import {
 import { enrichRowsWithGroupNames } from '../lib/memory-public.js';
 import {
   applyMemoryListFilter,
+  applyActiveMemoryFilter,
   buildAccessibleStatsRpcParams,
   buildAccessibleVectorRpcParams,
   canDeleteMemory,
@@ -252,7 +253,7 @@ export async function searchMemories(p: {
         groupId: p.group_id,
       });
       if (accessResult.error) return [];
-      q = accessResult.query
+      q = applyActiveMemoryFilter(accessResult.query)
         .order('importance', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(limit);
@@ -360,7 +361,7 @@ export async function listMemories(p: {
     groupId: p.group_id,
   });
   if (accessResult.error) return [];
-  q = accessResult.query.order('created_at', { ascending: false }).limit(listLimit);
+  q = applyActiveMemoryFilter(accessResult.query).order('created_at', { ascending: false }).limit(listLimit);
 
   q = applyScopeToQuery(q, scope);
 
@@ -518,8 +519,8 @@ async function fetchStatsFallback(
     visibility: 'all',
   });
   countQ = countAccess.error
-    ? countQ.eq('user_id', userId).eq('scope', 'personal')
-    : countAccess.query;
+    ? applyActiveMemoryFilter(countQ.eq('user_id', userId).eq('scope', 'personal'))
+    : applyActiveMemoryFilter(countAccess.query);
   const { count, error: countError } = await countQ;
   if (countError) throw new Error(`getStats: ${countError.message}`);
 
@@ -531,8 +532,8 @@ async function fetchStatsFallback(
     visibility: 'all',
   });
   rowsQ = rowsAccess.error
-    ? rowsQ.eq('user_id', userId).eq('scope', 'personal')
-    : rowsAccess.query;
+    ? applyActiveMemoryFilter(rowsQ.eq('user_id', userId).eq('scope', 'personal'))
+    : applyActiveMemoryFilter(rowsAccess.query);
   const { data, error } = await rowsQ;
   if (error) throw new Error(`getStats: ${error.message}`);
   const rows = data ?? [];

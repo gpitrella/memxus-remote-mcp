@@ -1,19 +1,20 @@
 // SYNC: Dash-AIMemory/lib/plan-enforcement.ts
-import { supabase } from './supabase.js';
-import { getPlan, PLANS, type PlanDefinition, type PlanId } from './plans.js';
+import { supabaseAdmin } from './supabase';
+import { getPlan, getEffectiveStorageLimit, normalizeLegacyPlanId, type PlanDefinition, type PlanId } from './plans';
 import {
   getCachedPlanContext,
   isPlanContextCacheEnabled,
   setCachedPlanContext,
-} from './plan-context-cache.js';
-import { logPerfPhase } from './mcp-perf.js';
+} from './plan-context-cache';
+import { logPerfPhase } from './api-perf';
 import {
   getStorageBytesUsed,
   isOverStorageLimit,
   wouldExceedStorageLimit,
-} from './storage-bytes.js';
+} from './storage-bytes';
+import { isPricingV3RetentionEnabled } from './memory-retention';
 
-export { invalidatePlanContextCache } from './plan-context-cache.js';
+export { invalidatePlanContextCache } from './plan-context-cache';
 
 const DAILY_LIMIT_REFRESH_BUFFER = 5;
 
@@ -21,6 +22,9 @@ export type PlanLimitCode = 'PLAN_LIMIT_MEMORY' | 'PLAN_LIMIT_STORAGE' | 'PLAN_L
 
 export const BILLING_UPGRADE_URL =
   process.env.BILLING_UPGRADE_URL || 'https://dashboard.memxus.com/billing';
+
+export const PRICING_UPGRADE_URL =
+  process.env.PRICING_UPGRADE_URL || 'https://memxus.com/pricing';
 
 export class PlanLimitError extends Error {
   readonly code: PlanLimitCode;
@@ -141,6 +145,29 @@ export async function getDailyRateLimitState(userId: string): Promise<DailyRateL
   return buildDailyRateLimitState(ctx.limits, dailyUsage);
 }
 
+export function setRateLimitHeaders(
+  res: { set(name: string, value: string | number): unknown },
+  state: DailyRateLimitState
+): void {
+  if (state.limit === -1) {
+    res.set('X-RateLimit-Limit', 'unlimited');
+    res.set('X-RateLimit-Remaining', 'unlimited');
+  } else {
+    res.set('X-RateLimit-Limit', String(state.limit));
+    res.set('X-RateLimit-Remaining', String(state.remaining));
+  }
+  res.set('X-RateLimit-Reset', String(state.resetUnix));
+  res.set('X-RateLimit-Increment', '1');
+}
+
+export function setRetryAfterUntilReset(
+  res: { set(name: string, value: string | number): unknown },
+  resetUnix: number
+): void {
+  const seconds = Math.max(1, resetUnix - Math.floor(Date.now() / 1000));
+  res.set('Retry-After', String(seconds));
+}
+
 export function isPlanWarningsEnabled(): boolean {
   return process.env.ENABLE_PLAN_WARNINGS === 'true';
 }
@@ -200,7 +227,7 @@ export function buildPlanWarningState(
   const storageWarn = buildResourceWarning(
     'storage',
     storageBytesUsed,
-    limits.storageBytes,
+    getEffectiveStorageLimit(limits),
     planName
   );
   if (storageWarn) warnings.push(storageWarn);
@@ -216,6 +243,22 @@ export function buildPlanWarningState(
   return { level, warnings, message };
 }
 
+export function setPlanWarnHeaders(
+  res: { set(name: string, value: string | number): unknown },
+  state: PlanWarningState
+): void {
+  if (!isPlanWarningsEnabled() || state.level === 'none') return;
+  res.set('X-Plan-Warn-Level', state.level);
+  if (state.message) {
+    res.set('X-Plan-Warn-Message', state.message);
+  }
+  for (const w of state.warnings) {
+    const header =
+      w.resource === 'memory' ? 'Memory' : w.resource === 'storage' ? 'Storage' : 'Daily';
+    res.set(`X-Plan-Warn-${header}`, w.level);
+  }
+}
+
 export function getRetentionCutoffIso(retentionDays: number): string | null {
   if (retentionDays === -1) return null;
   const d = new Date();
@@ -228,10 +271,12 @@ export function pruneExpiredMemoriesForUser(
   userId: string,
   limits: PlanDefinition['limits']
 ): void {
+  if (isPricingV3RetentionEnabled()) return;
+
   const cutoff = getRetentionCutoffIso(limits.retentionDays);
   if (!cutoff) return;
 
-  void supabase
+  void supabaseAdmin
     .from('memories')
     .delete()
     .eq('user_id', userId)
@@ -243,7 +288,7 @@ export function pruneExpiredMemoriesForUser(
     });
 }
 
-const PAID_PLANS = new Set<PlanId>(['starter', 'pro', 'team', 'enterprise']);
+const PAID_PLANS = new Set<PlanId>(['pro', 'team', 'enterprise']);
 
 export function isPlanLimitsEnabled(): boolean {
   return process.env.PLAN_LIMITS_ENABLED !== 'false';
@@ -253,7 +298,7 @@ export function effectivePlanId(
   planId: string | null | undefined,
   subscriptionStatus: string | null | undefined
 ): PlanId {
-  const id: PlanId = planId && planId in PLANS ? (planId as PlanId) : 'free';
+  const id = normalizeLegacyPlanId(planId, subscriptionStatus);
   if (PAID_PLANS.has(id) && subscriptionStatus !== 'active') {
     return 'free';
   }
@@ -261,7 +306,7 @@ export function effectivePlanId(
 }
 
 export async function loadUserPlan(userId: string): Promise<UserPlanContext | null> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('users')
     .select('id, plan, subscription_status')
     .eq('id', userId)
@@ -291,10 +336,11 @@ export async function getMemoryCount(
   userId: string,
   limits?: PlanDefinition['limits']
 ): Promise<number> {
-  let query = supabase
+  let query = supabaseAdmin
     .from('memories')
     .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .eq('status', 'active');
 
   if (limits) {
     const cutoff = getRetentionCutoffIso(limits.retentionDays);
@@ -310,7 +356,7 @@ export async function getMemoryCount(
 }
 
 export async function getDailyUsageCount(userId: string): Promise<number> {
-  const { count, error } = await supabase
+  const { count, error } = await supabaseAdmin
     .from('usage_logs')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId)
@@ -318,6 +364,16 @@ export async function getDailyUsageCount(userId: string): Promise<number> {
 
   if (error) return 0;
   return count ?? 0;
+}
+
+function fairUseUpgradeMessage(planId: PlanId): string {
+  if (planId === 'free') {
+    return `You've reached the Free fair-use limit. Upgrade to Pro for permanent, expanded memory. ${PRICING_UPGRADE_URL}`;
+  }
+  if (planId === 'pro') {
+    return `Memory storage limit reached on Pro. Upgrade to Team for expanded shared memory. ${PRICING_UPGRADE_URL}`;
+  }
+  return `Memory storage limit reached. Upgrade at ${BILLING_UPGRADE_URL}`;
 }
 
 export function isOverMemoryLimit(memoryCount: number, limits: PlanDefinition['limits']): boolean {
@@ -399,7 +455,7 @@ function enforcePlanLimits(ctx: UserPlanContext, opts: AssertPlanLimitsOptions):
     if (isOverMemoryLimit(memoryCount, ctx.limits)) {
       throw new PlanLimitError(
         'PLAN_LIMIT_MEMORY',
-        `Memory count limit reached (${ctx.limits.memories} on ${ctx.plan.name}). Delete memories with forget or upgrade at ${BILLING_UPGRADE_URL}`,
+        `Memory count limit reached (${ctx.limits.memories} on ${ctx.plan.name}). Delete memories or upgrade at ${BILLING_UPGRADE_URL}`,
         warnState
       );
     }
@@ -409,7 +465,7 @@ function enforcePlanLimits(ctx: UserPlanContext, opts: AssertPlanLimitsOptions):
     ) {
       throw new PlanLimitError(
         'PLAN_LIMIT_STORAGE',
-        `Memory storage limit reached on ${ctx.plan.name}. Delete memories with forget or upgrade at ${BILLING_UPGRADE_URL}`,
+        fairUseUpgradeMessage(ctx.planId),
         warnState
       );
     }
@@ -419,7 +475,7 @@ function enforcePlanLimits(ctx: UserPlanContext, opts: AssertPlanLimitsOptions):
   if (!opts.isForget && isOverMemoryLimit(memoryCount, ctx.limits)) {
     throw new PlanLimitError(
       'PLAN_LIMIT_MEMORY',
-      `You have ${memoryCount} memories but your ${ctx.plan.name} plan allows ${ctx.limits.memories}. Use forget to delete memories or upgrade at ${BILLING_UPGRADE_URL}`,
+      `You have ${memoryCount} memories but your ${ctx.plan.name} plan allows ${ctx.limits.memories}. Delete memories or upgrade at ${BILLING_UPGRADE_URL}`,
       warnState
     );
   }
@@ -427,7 +483,7 @@ function enforcePlanLimits(ctx: UserPlanContext, opts: AssertPlanLimitsOptions):
   if (!opts.isForget && isOverStorageLimit(storageBytesUsed, ctx.limits)) {
     throw new PlanLimitError(
       'PLAN_LIMIT_STORAGE',
-      `Memory storage limit reached on ${ctx.plan.name}. Delete memories with forget or upgrade at ${BILLING_UPGRADE_URL}`,
+      fairUseUpgradeMessage(ctx.planId),
       warnState
     );
   }
@@ -453,7 +509,7 @@ export async function assertWriteStorageAllowed(
     );
     throw new PlanLimitError(
       'PLAN_LIMIT_STORAGE',
-      `Memory storage limit reached on ${ctx.plan.name}. Delete memories with forget or upgrade at ${BILLING_UPGRADE_URL}`,
+      fairUseUpgradeMessage(ctx.planId),
       warnState
     );
   }
@@ -489,13 +545,6 @@ export async function assertWithinPlanLimits(opts: AssertPlanLimitsOptions): Pro
   return result;
 }
 
-export function formatPlanLimitToolError(err: PlanLimitError): string {
-  if (!err.warnings?.message || err.warnings.level === 'none') {
-    return err.message;
-  }
-  return `${err.message}\n\n${err.warnings.message}`;
-}
-
 export interface LogUsageInput {
   userId: string;
   apiKeyId?: string | null;
@@ -507,7 +556,7 @@ export interface LogUsageInput {
 }
 
 export function logUsage(input: LogUsageInput): void {
-  void supabase
+  void supabaseAdmin
     .from('usage_logs')
     .insert({
       user_id: input.userId,

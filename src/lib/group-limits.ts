@@ -3,7 +3,7 @@
  * SYNC: RemoteMCP-AIMemory/src/lib/group-limits.ts (read-only limits map)
  */
 
-import { supabase } from './supabase.js';
+import { supabaseAdmin } from './supabase';
 import { effectivePlanId, loadUserPlan } from './plan-enforcement';
 import type { PlanId } from './plans';
 
@@ -14,7 +14,6 @@ export interface GroupPlanLimits {
 
 const GROUP_LIMITS: Record<PlanId, GroupPlanLimits> = {
   free: { maxGroupsOwned: 1, maxMembersPerGroup: 3 },
-  starter: { maxGroupsOwned: 2, maxMembersPerGroup: 5 },
   pro: { maxGroupsOwned: -1, maxMembersPerGroup: 10 },
   team: { maxGroupsOwned: -1, maxMembersPerGroup: -1 },
   enterprise: { maxGroupsOwned: -1, maxMembersPerGroup: -1 },
@@ -39,7 +38,7 @@ export async function assertCanCreateGroup(
   const limits = await getUserGroupLimits(userId);
   if (limits.maxGroupsOwned < 0) return { ok: true };
 
-  const { count, error } = await supabase
+  const { count, error } = await supabaseAdmin
     .from('shared_groups')
     .select('*', { count: 'exact', head: true })
     .eq('owner_user_id', userId)
@@ -66,7 +65,7 @@ export async function assertCanInviteMember(
   const limits = await getUserGroupLimits(userId);
   if (limits.maxMembersPerGroup < 0) return { ok: true };
 
-  const { count, error } = await supabase
+  const { count, error } = await supabaseAdmin
     .from('shared_group_members')
     .select('*', { count: 'exact', head: true })
     .eq('group_id', groupId)

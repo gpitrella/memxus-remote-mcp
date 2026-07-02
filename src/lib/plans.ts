@@ -7,7 +7,6 @@
  */
 export type PlanId =
   | 'free'
-  | 'starter'
   | 'pro'
   | 'team'
   | 'enterprise'
@@ -16,6 +15,14 @@ export type PlanId =
   | 'ext-premium';
 
 export type PlanCategory = 'dashboard' | 'extension';
+
+const MB = 1024 * 1024;
+
+export interface LaunchPromo {
+  pricePerMonth: number;
+  durationMonths: number;
+  maxRedemptions: number;
+}
 
 export interface PlanDefinition {
   id: PlanId;
@@ -28,12 +35,15 @@ export interface PlanDefinition {
   limits: {
     apiKeys: number; // -1 = unlimited
     requestsPerDay: number; // -1 = unlimited
-    memories: number; // -1 = unlimited
-    storageBytes: number; // -1 = unlimited
-    retentionDays: number; // -1 = unlimited retention
-    listResultsMax: number; // per GET /memories; -1 = server absolute ceiling
-    searchResultsMax: number; // per POST /memories/search; -1 = server absolute ceiling
+    memories: number; // -1 = unlimited (user-facing)
+    storageBytes: number; // -1 = no published cap; Pro/Team use explicit bytes
+    fairUseStorageBytes?: number; // Free internal guard (not shown on cards)
+    retentionDays: number; // -1 = permanent
+    coldArchiveDays?: number; // Free: days archived before purge
+    listResultsMax: number;
+    searchResultsMax: number;
   };
+  launchPromo?: LaunchPromo;
   popular?: boolean;
   /** No Polar checkout — link to sales instead (Enterprise). */
   contactSalesOnly?: boolean;
@@ -49,50 +59,24 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     priceLabel: '$0',
     description: 'Perfect for trying MCP, GPT Actions, or the SDK',
     features: [
+      'Unlimited memories · 30-day history',
       '150 API calls / day',
-      '40 memories stored',
-      '1 MB storage',
-      'Basic semantic search',
-      '30-day memory retention',
       '1 shared group (up to 3 members)',
+      'Basic semantic search',
       'Community support',
     ],
     limits: {
       apiKeys: 1,
       requestsPerDay: 150,
-      memories: 40,
-      storageBytes: 1_048_576,
+      memories: -1,
+      storageBytes: -1,
+      fairUseStorageBytes: 5 * MB,
       retentionDays: 30,
+      coldArchiveDays: 90,
       listResultsMax: 25,
       searchResultsMax: 10,
     },
     polarProductIdEnv: '',
-  },
-  starter: {
-    id: 'starter',
-    name: 'Starter',
-    category: 'dashboard',
-    priceMonthly: 3.99,
-    priceLabel: '$3.99',
-    description: 'More room for daily AI workflows',
-    features: [
-      '500 API calls / day',
-      '150 memories stored',
-      '3 MB storage',
-      '60-day memory retention',
-      '2 shared groups (up to 5 members each)',
-      'Email support',
-    ],
-    limits: {
-      apiKeys: 2,
-      requestsPerDay: 500,
-      memories: 150,
-      storageBytes: 3_145_728,
-      retentionDays: 60,
-      listResultsMax: 35,
-      searchResultsMax: 15,
-    },
-    polarProductIdEnv: 'NEXT_PUBLIC_POLAR_PRODUCT_STARTER',
   },
   pro: {
     id: 'pro',
@@ -102,11 +86,10 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     priceLabel: '$12',
     description: 'For power users and solo builders',
     features: [
+      'Permanent memory — your AI never forgets',
+      'Unlimited memories',
       '1,500 API calls / day',
-      '400 memories stored',
-      '10 MB storage',
       'Advanced semantic search',
-      '90-day memory retention',
       'Unlimited shared groups (up to 10 members each)',
       'Priority recall',
       'Priority email support',
@@ -115,12 +98,13 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     limits: {
       apiKeys: 5,
       requestsPerDay: 1_500,
-      memories: 400,
-      storageBytes: 10_485_760,
-      retentionDays: 90,
+      memories: -1,
+      storageBytes: 25 * MB,
+      retentionDays: -1,
       listResultsMax: 50,
       searchResultsMax: 20,
     },
+    launchPromo: { pricePerMonth: 6, durationMonths: 12, maxRedemptions: 100 },
     popular: true,
     polarProductIdEnv: 'NEXT_PUBLIC_POLAR_PRODUCT_PRO',
   },
@@ -133,11 +117,9 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     description: 'For teams standardizing on shared memory',
     features: [
       'Everything in Pro',
-      '25,000 memories stored',
-      '~352 MB storage',
+      'Shared, permanent team memory',
+      'Unlimited memories & members',
       'Unlimited API calls',
-      'Unlimited memory retention',
-      'Unlimited shared groups & members',
       'Team analytics',
       'Role-based access control',
       'Dedicated support',
@@ -145,8 +127,8 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     limits: {
       apiKeys: -1,
       requestsPerDay: -1,
-      memories: 25_000,
-      storageBytes: 368_951_296,
+      memories: -1,
+      storageBytes: 352 * MB,
       retentionDays: -1,
       listResultsMax: 100,
       searchResultsMax: 50,
@@ -194,7 +176,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       apiKeys: 0,
       requestsPerDay: 500,
       memories: 500,
-      storageBytes: 3_145_728,
+      storageBytes: 3 * MB,
       retentionDays: 30,
       listResultsMax: 25,
       searchResultsMax: 10,
@@ -213,7 +195,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       apiKeys: 0,
       requestsPerDay: 5_000,
       memories: 5_000,
-      storageBytes: 52_428_800,
+      storageBytes: 50 * MB,
       retentionDays: 90,
       listResultsMax: 50,
       searchResultsMax: 20,
@@ -232,7 +214,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       apiKeys: 0,
       requestsPerDay: 50_000,
       memories: 50_000,
-      storageBytes: 524_288_000,
+      storageBytes: 500 * MB,
       retentionDays: -1,
       listResultsMax: 100,
       searchResultsMax: 50,
@@ -241,15 +223,34 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   },
 };
 
-/** Public dashboard plans shown in billing UI and marketing. Starter is implemented but hidden. */
+/** Public dashboard plans shown in billing UI and marketing. */
 export const PLAN_ORDER: PlanId[] = ['free', 'pro', 'team', 'enterprise'];
+/** Personal dashboard plans that bill through Polar subscriptions. */
+export const DASHBOARD_PAID_PLAN_IDS: PlanId[] = ['pro', 'team'];
+/** Legacy extension SKUs — kept for webhook/backfill; not sold in UI. */
 export const EXTENSION_PLAN_ORDER: PlanId[] = ['ext-starter', 'ext-plus', 'ext-premium'];
+/** Chrome extension upgrade page — same Polar products as /billing. */
+export const EXTENSION_UPGRADE_PLAN_ORDER: PlanId[] = ['pro', 'team'];
+/** Public pricing page tiers (excludes Enterprise contact-sales). */
+export const PUBLIC_PRICING_PLANS = ['Free', 'Pro', 'Team'] as const;
+
+/** Legacy DB value — maps to pro (active sub) or free. */
+export function normalizeLegacyPlanId(
+  planId: string | null | undefined,
+  subscriptionStatus?: string | null
+): PlanId {
+  if (planId === 'starter') {
+    return subscriptionStatus === 'active' ? 'pro' : 'free';
+  }
+  if (planId && planId in PLANS) {
+    return planId as PlanId;
+  }
+  return 'free';
+}
 
 export function getPlan(planId: string | null | undefined): PlanDefinition {
-  if (planId && planId in PLANS) {
-    return PLANS[planId as PlanId];
-  }
-  return PLANS.free;
+  const id = normalizeLegacyPlanId(planId);
+  return PLANS[id];
 }
 
 /** Server-side: look up the Polar product id for a plan id. */
@@ -265,5 +266,14 @@ export function planIdFromProduct(productId: string | null | undefined): PlanId 
   for (const id of Object.keys(PLANS) as PlanId[]) {
     if (getPolarProductId(id) === productId) return id;
   }
+  // Legacy Starter product id — treat as Pro if still configured
+  const legacyStarter = process.env.NEXT_PUBLIC_POLAR_PRODUCT_STARTER;
+  if (legacyStarter && legacyStarter === productId) return 'pro';
   return null;
+}
+
+export function getEffectiveStorageLimit(limits: PlanDefinition['limits']): number {
+  if (limits.fairUseStorageBytes != null) return limits.fairUseStorageBytes;
+  if (limits.storageBytes === -1) return -1;
+  return limits.storageBytes;
 }
