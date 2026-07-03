@@ -1,6 +1,12 @@
 import { supabase } from '../lib/supabase.js';
 import { getPlan, type PlanDefinition } from '../lib/plans.js';
-import { resolveListLimit, resolveSearchLimit, loadUserPlan, assertWriteStorageAllowed } from '../lib/plan-enforcement.js';
+import {
+  DEFAULT_SEARCH_RESULTS,
+  resolveListLimit,
+  resolveSearchLimit,
+  loadUserPlan,
+  assertWriteStorageAllowed,
+} from '../lib/plan-enforcement.js';
 import {
   estimateMemoryPayloadBytes,
   getStorageBytesUsed,
@@ -223,8 +229,11 @@ export async function searchMemories(p: {
     ? new Set(p.exclude_memory_ids.map(String))
     : null;
   const excludeSize = excludeSet?.size ?? 0;
-  const fetchLimit =
-    excludeSize > 0 ? resolveSearchLimit(planLimits, limit + excludeSize) : limit;
+  const needed = excludeSize > 0 ? limit + excludeSize : limit;
+  const fetchLimit = resolveSearchLimit(
+    planLimits,
+    Math.max(needed, DEFAULT_SEARCH_RESULTS),
+  );
 
   const searchDbStartedAt = Date.now();
   const { results, winningScope } = await searchMemoriesWithScopeRetry<Record<string, unknown>>({
@@ -316,6 +325,7 @@ export async function searchMemories(p: {
     });
   }
 
+  const candidateFloor = filtered.length;
   filtered = filtered.slice(0, limit);
 
   const enrichStartedAt = Date.now();
@@ -340,8 +350,9 @@ export async function searchMemories(p: {
     memoryScope,
     groupId: p.group_id,
     minSimilarity: p.min_similarity,
-  }).catch(() => null);
-  const total = resolveSearchTotal(countResult, enriched.length);
+    hadVectorHits: results.length > 0,
+  });
+  const total = resolveSearchTotal(countResult, enriched.length, { candidateFloor });
 
   return { memories: enriched as unknown as MemoryRow[], total };
 }

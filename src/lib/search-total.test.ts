@@ -11,8 +11,16 @@ describe('search-total', () => {
     assert.equal(resolveSearchTotal(12, 5), 12);
   });
 
-  it('resolveSearchTotal does not inflate total to limit when RPC fails', () => {
-    assert.equal(resolveSearchTotal(null, 5), 5);
+  it('resolveSearchTotal uses candidateFloor when RPC fails', () => {
+    assert.equal(resolveSearchTotal(null, 5, { candidateFloor: 10 }), 10);
+  });
+
+  it('resolveSearchTotal keeps small pool when RPC fails', () => {
+    assert.equal(resolveSearchTotal(null, 3, { candidateFloor: 3 }), 3);
+  });
+
+  it('resolveSearchTotal prefers RPC when larger than candidateFloor', () => {
+    assert.equal(resolveSearchTotal(12, 5, { candidateFloor: 10 }), 12);
   });
 
   it('isContextPoolExhausted when shown across calls reaches total', () => {

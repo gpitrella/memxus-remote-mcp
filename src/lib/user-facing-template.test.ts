@@ -69,6 +69,19 @@ describe('user-facing-template v3.2', () => {
     assert.doesNotMatch(text!, /ya mostré todas/);
   });
 
+  it('recall limit below total does not show exhausted CTA', () => {
+    const text = buildUserFacingTemplate({
+      topic: 'v3.2 template',
+      memoryCount: 5,
+      totalMemories: 10,
+      requestedLimit: 5,
+      tokensUsed: 100,
+    });
+    assert.match(text!, /5 más relevantes de 10 guardadas/);
+    assert.match(text!, /Ampliar el contexto/);
+    assert.doesNotMatch(text!, /ya mostré todas/);
+  });
+
   it('shows exhausted CTA when pool is fully shown across calls', () => {
     const text = buildUserFacingTemplate({
       topic: 'v3.2 template',

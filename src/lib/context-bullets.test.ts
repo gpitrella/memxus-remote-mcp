@@ -52,6 +52,13 @@ describe('context-bullets', () => {
     );
   });
 
+  it('formatContextCompletenessLine handles expand pool exhausted', () => {
+    assert.match(
+      formatContextCompletenessLine(2, 5, 'auth', 3),
+      /Completé el pool semántico: 5 de 5 memorias sobre/,
+    );
+  });
+
   it('skips context block metadata headers for bullets', () => {
     const bullets = extractContextBullets({
       contextBlock: [

@@ -123,8 +123,8 @@ export function formatContextCompletenessLine(
   if (excludedCount > 0 && count > 0) {
     const shownAcrossCalls = count + excludedCount;
     if (shownAcrossCalls >= total) {
-      const label = total === 1 ? '1 memoria' : `${total} memorias`;
-      return `Recuperé las ${label} que tengo guardadas sobre "${subject}".`;
+      const totalLabel = total === 1 ? '1 memoria' : `${total} memorias`;
+      return `Completé el pool semántico: ${shownAcrossCalls} de ${totalLabel} sobre "${subject}".`;
     }
     return `Recuperé ${count} adicionales (${shownAcrossCalls} de ${total} sobre "${subject}").`;
   }

@@ -1,14 +1,20 @@
 /** Resolve eligible-memory total for context completeness (v3.2). */
 
+export type ResolveSearchTotalOptions = {
+  candidateFloor?: number;
+};
+
 export function resolveSearchTotal(
   countResult: number | null,
   returnedCount: number,
+  opts?: ResolveSearchTotalOptions,
 ): number {
   if (returnedCount === 0) return 0;
-  if (countResult != null && Number.isFinite(countResult)) {
-    return Math.max(countResult, returnedCount);
+  const floor = Math.max(returnedCount, opts?.candidateFloor ?? 0);
+  if (countResult != null && Number.isFinite(countResult) && countResult > 0) {
+    return Math.max(countResult, floor);
   }
-  return returnedCount;
+  return floor;
 }
 
 export function isContextPoolExhausted(input: {
