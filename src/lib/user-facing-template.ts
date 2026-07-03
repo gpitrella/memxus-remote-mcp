@@ -10,8 +10,6 @@ import {
 } from './impact-summary.js';
 import { isContextPoolExhausted } from './search-total.js';
 
-const SEPARATOR = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
-
 export type UserFacingSkill = {
   name: string;
   reason: string;
@@ -148,7 +146,7 @@ export function toUserFacingSkills(
 
 export function buildUserFacingTemplate(input: UserFacingTemplateInput): string {
   const environment = input.environment ?? 'editor';
-  const lines: string[] = [SEPARATOR, ''];
+  const lines: string[] = [];
 
   if (input.mode === 'skill_load') {
     if (input.skillImpactText?.trim()) {
@@ -156,8 +154,6 @@ export function buildUserFacingTemplate(input: UserFacingTemplateInput): string 
     }
     lines.push('');
     lines.push(buildQuestionLine({ topic: input.topic }));
-    lines.push('');
-    lines.push(SEPARATOR);
     return lines.join('\n');
   }
 
@@ -181,8 +177,6 @@ export function buildUserFacingTemplate(input: UserFacingTemplateInput): string 
 
   lines.push('');
   lines.push(buildQuestionLine(input));
-  lines.push('');
-  lines.push(SEPARATOR);
 
   return lines.join('\n');
 }

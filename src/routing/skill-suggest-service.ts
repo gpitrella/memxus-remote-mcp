@@ -1,5 +1,6 @@
 import { getSkippedSkillIds, recordSkillDecision } from '../lib/skill-decisions.js';
-import { resolveSkillInstructions } from '../lib/skill-catalog.js';
+import { resolveSkillInstructions, warmSkillInstructions } from '../lib/skill-catalog.js';
+import { isOfficialRepo } from '../lib/skill-upstream.js';
 import { classifyIntent } from './intent-classifier.js';
 import {
   detectStack,
@@ -81,6 +82,12 @@ export async function suggestSkillsForCollection(input: {
   let skills = rankSkillsForSurfacing(discovered, profile, intent, DISCOVERY_POOL_SIZE);
   skills = dedupeSkillsByName(skills).slice(0, 2);
 
+  if (process.env.SKILL_PRELOAD_ENABLED !== 'false') {
+    void warmSkillInstructions(skills).catch((err) => {
+      console.warn('[skill-preload]', err instanceof Error ? err.message : err);
+    });
+  }
+
   if (input.userId && collection) {
     const skipped = await getSkippedSkillIds(input.userId, collection);
     skills = skills.filter((s) => !skipped.has(s.id));
@@ -134,12 +141,15 @@ export function parseSkillAction(
   reply: string,
 ): { action: 'use' | 'install' | 'skip' | 'skip_all'; index?: number } | null {
   const normalized = reply.trim().toLowerCase();
-  if (/^skip\s+all$/.test(normalized)) return { action: 'skip_all' };
-  const match = normalized.match(/^(use|install|skip)\s+(\d+)$/);
+  if (/^(skip|omitir)\s+all$/.test(normalized)) return { action: 'skip_all' };
+  const match = normalized.match(/^(use|usar|install|instalar|skip|omitir)\s+(\d+)$/);
   if (!match) return null;
   const index = Number(match[2]);
   if (!Number.isFinite(index) || index < 1) return null;
-  return { action: match[1] as 'use' | 'install' | 'skip', index };
+  const actionToken = match[1];
+  if (actionToken === 'use' || actionToken === 'usar') return { action: 'use', index };
+  if (actionToken === 'install' || actionToken === 'instalar') return { action: 'install', index };
+  return { action: 'skip', index };
 }
 
 export async function useSkillInChat(input: {
@@ -149,14 +159,15 @@ export async function useSkillInChat(input: {
   chatSessionId?: string | null;
 }): Promise<{ instructions: string; source: 'official' | 'community'; warning?: string }> {
   const parts = input.skillId.split('/');
-  const repo = parts.length >= 2 ? `${parts[0]}/${parts[1]}` : 'anthropics/skills';
+  const instructionsRepo = parts.length >= 2 ? `${parts[0]}/${parts[1]}` : 'anthropics/skills';
   const skillPathId = parts[parts.length - 1] ?? input.skillId;
-  const official = repo.startsWith('anthropics/') || repo.startsWith('vercel-labs/');
+  const official = isOfficialRepo(instructionsRepo);
 
   const resolved = await resolveSkillInstructions({
     skillId: input.skillId,
-    repo,
+    repo: instructionsRepo,
     skillPathId,
+    instructionsRepo,
     official,
   });
 

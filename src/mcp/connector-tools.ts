@@ -13,6 +13,7 @@ export function mapActiveSkillsForResponse(skills: RoutedSkill[]) {
     id: s.id,
     name: s.name,
     description: s.description,
+    instructionsRepo: s.instructionsRepo,
     installCommand: s.installCommand,
     sourceUrl: s.sourceUrl,
     official: s.official,

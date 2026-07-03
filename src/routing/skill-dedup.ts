@@ -1,4 +1,5 @@
 import type { RoutedSkill } from './types.js';
+import { isOfficialRepo } from '../lib/skill-upstream.js';
 
 /** Internal discovery pool size — independent of final surfacing cap (2). */
 export const DISCOVERY_POOL_SIZE = 12;
@@ -14,6 +15,10 @@ export function normalizeSkillName(name: string): string {
 }
 
 function compareSkillVariants(a: RoutedSkill, b: RoutedSkill): number {
+  if (isOfficialRepo(a.instructionsRepo) !== isOfficialRepo(b.instructionsRepo)) {
+    return isOfficialRepo(a.instructionsRepo) ? -1 : 1;
+  }
+
   if (a.official !== b.official) return a.official ? -1 : 1;
 
   const installsA = a.installs ?? 0;

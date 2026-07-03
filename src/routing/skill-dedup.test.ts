@@ -9,6 +9,7 @@ function mockSkill(partial: Partial<RoutedSkill> & Pick<RoutedSkill, 'name' | 'r
     description: '',
     owner: partial.repo.split('/')[0] ?? 'owner',
     skillId: partial.skillId ?? partial.name,
+    instructionsRepo: partial.instructionsRepo ?? partial.repo,
     sourceUrl: '',
     installCommand: '',
     official: partial.official ?? false,
@@ -83,6 +84,30 @@ describe('dedupeSkillsByName', () => {
     assert.equal(run1.length, 1);
     assert.equal(run1[0]!.repo, run2[0]!.repo);
     assert.equal(run1[0]!.repo, 'm/m');
+  });
+
+  it('prefers official upstream repo over mirror', () => {
+    const skills = dedupeSkillsByName([
+      mockSkill({
+        id: 'davila7/claude-code-templates@supabase-postgres-best-practices',
+        name: 'supabase-postgres-best-practices',
+        repo: 'davila7/claude-code-templates',
+        instructionsRepo: 'davila7/claude-code-templates',
+        official: false,
+        installs: 500,
+      }),
+      mockSkill({
+        id: 'supabase/agent-skills@supabase-postgres-best-practices',
+        name: 'supabase-postgres-best-practices',
+        repo: 'davila7/claude-code-templates',
+        instructionsRepo: 'supabase/agent-skills',
+        official: false,
+        installs: 1,
+      }),
+    ]);
+
+    assert.equal(skills.length, 1);
+    assert.equal(skills[0]!.instructionsRepo, 'supabase/agent-skills');
   });
 
   it('returns 1 skill when only 1 unique after dedup', () => {

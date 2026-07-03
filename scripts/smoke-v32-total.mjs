@@ -33,9 +33,7 @@ function parsePayload(result) {
   const structured = result?.structuredContent ?? {};
   const text = toolText(result);
   const userFacing =
-    (typeof structured.user_facing_template === 'string' && structured.user_facing_template) ||
-    text.split('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━').pop()?.trim() ||
-    '';
+    (typeof structured.user_facing_template === 'string' && structured.user_facing_template) || '';
   return {
     count: Number(structured.count),
     total: Number(structured.total),

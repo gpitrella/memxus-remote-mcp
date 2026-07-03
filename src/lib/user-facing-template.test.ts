@@ -15,6 +15,7 @@ describe('user-facing-template v3.2', () => {
     });
     assert.ok(text);
     assert.doesNotMatch(text!, /🧠|🧩|⚡/);
+    assert.doesNotMatch(text!, /━/);
     assert.match(text!, /CONTEXTO — project:memxus/);
     assert.match(text!, /5 más relevantes de 12 guardadas/);
     assert.match(text!, /~1,509 tokens de contexto reutilizados/);

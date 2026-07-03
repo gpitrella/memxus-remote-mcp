@@ -43,6 +43,7 @@ export type DiscoveredSkill = {
   owner: string;
   repo: string;
   skillId: string;
+  instructionsRepo: string;
   sourceUrl: string;
   installCommand: string;
   official: boolean;
