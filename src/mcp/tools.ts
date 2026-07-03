@@ -196,7 +196,8 @@ export async function searchMemories(p: {
   exclude_memory_ids?: string[];
 }): Promise<SearchMemoriesResult> {
   const searchStartedAt = Date.now();
-  const limit = resolveSearchLimit(resolveLimits(p.planLimits), p.limit);
+  const planLimits = resolveLimits(p.planLimits);
+  const limit = resolveSearchLimit(planLimits, p.limit);
   const baseScope: MemoryScopeFilters = {
     collection: normalizeCollectionSlug(p.collection ?? undefined) ?? undefined,
     tags: p.tags?.length ? normalizeTags(p.tags) : undefined,
@@ -220,22 +221,12 @@ export async function searchMemories(p: {
   const excludeSet = p.exclude_memory_ids?.length
     ? new Set(p.exclude_memory_ids.map(String))
     : null;
-
-  const countPromise = countEligibleMemories({
-    supabase,
-    userId: p.userId,
-    workforceWorkspaceId: p.workforceWorkspaceId,
-    query: p.query,
-    embedding,
-    scope: baseScope,
-    visibility: p.visibility ?? 'all',
-    memoryScope,
-    groupId: p.group_id,
-    minSimilarity: p.min_similarity,
-  }).catch(() => null);
+  const excludeSize = excludeSet?.size ?? 0;
+  const fetchLimit =
+    excludeSize > 0 ? resolveSearchLimit(planLimits, limit + excludeSize) : limit;
 
   const searchDbStartedAt = Date.now();
-  const results = await searchMemoriesWithScopeRetry<Record<string, unknown>>({
+  const { results, winningScope } = await searchMemoriesWithScopeRetry<Record<string, unknown>>({
     query: p.query,
     baseScope,
     rawCollection,
@@ -248,7 +239,7 @@ export async function searchMemories(p: {
       const rpcParams = await buildAccessibleVectorRpcParams(
         p.userId,
         queryEmbedding,
-        limit,
+        fetchLimit,
         threshold,
         scope,
         {
@@ -260,7 +251,7 @@ export async function searchMemories(p: {
       );
       const { data, error } = await supabase.rpc('search_memories_accessible', rpcParams);
       if (error || !data?.length) {
-        const legacyParams = buildVectorRpcParams(p.userId, queryEmbedding, limit, threshold, scope);
+        const legacyParams = buildVectorRpcParams(p.userId, queryEmbedding, fetchLimit, threshold, scope);
         const legacy = await supabase.rpc('search_memories_vector', legacyParams);
         if (legacy.error || !legacy.data?.length) return [];
         return legacy.data as Record<string, unknown>[];
@@ -280,7 +271,7 @@ export async function searchMemories(p: {
       q = applyActiveMemoryFilter(accessResult.query)
         .order('importance', { ascending: false })
         .order('created_at', { ascending: false })
-        .limit(limit);
+        .limit(fetchLimit);
 
       q = applyScopeToQuery(q, scope);
       q = applyTextSearchOr(q, p.query, { skipContentIlike: shouldSkipContentIlike() });
@@ -292,6 +283,8 @@ export async function searchMemories(p: {
   });
   logPerfPhase('search_db', Date.now() - searchDbStartedAt, {
     resultCount: results.length,
+    fetchLimit,
+    excludeSize,
     encryptedSearch: shouldSkipContentIlike(),
   });
 
@@ -314,13 +307,15 @@ export async function searchMemories(p: {
   if (shouldSkipContentIlike() && p.query.trim()) {
     const postFilterStartedAt = Date.now();
     filtered = filterRowsByTextContent(
-      decrypted,
+      filtered as unknown as MemoryRowMinimal[],
       p.query
     ) as unknown as Record<string, unknown>[];
     logPerfPhase('search_post_filter', Date.now() - postFilterStartedAt, {
       filteredCount: filtered.length,
     });
   }
+
+  filtered = filtered.slice(0, limit);
 
   const enrichStartedAt = Date.now();
   const enriched = await enrichRowsWithGroupNames(filtered, fetchGroupNameMap);
@@ -332,7 +327,19 @@ export async function searchMemories(p: {
     visibility: p.visibility ?? 'all',
   });
 
-  const countResult = await countPromise;
+  const countScope = winningScope ?? baseScope;
+  const countResult = await countEligibleMemories({
+    supabase,
+    userId: p.userId,
+    workforceWorkspaceId: p.workforceWorkspaceId,
+    query: p.query,
+    embedding,
+    scope: countScope,
+    visibility: p.visibility ?? 'all',
+    memoryScope,
+    groupId: p.group_id,
+    minSimilarity: p.min_similarity,
+  }).catch(() => null);
   const total =
     enriched.length === 0
       ? 0

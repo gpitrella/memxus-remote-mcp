@@ -4,6 +4,11 @@
 import type { CollectionListItem, MemoryScopeFilters } from './memory-scope.js';
 import { buildSearchScopeAttempts } from './memory-scope.js';
 
+export type SearchWithScopeResult<T extends Record<string, unknown>> = {
+  results: T[];
+  winningScope: MemoryScopeFilters | null;
+};
+
 export async function searchMemoriesWithScopeRetry<T extends Record<string, unknown>>(options: {
   query: string;
   baseScope: MemoryScopeFilters;
@@ -13,7 +18,7 @@ export async function searchMemoriesWithScopeRetry<T extends Record<string, unkn
   generateEmbedding: (text: string) => Promise<number[] | null>;
   vectorSearch: (embedding: number[], scope: MemoryScopeFilters) => Promise<T[]>;
   textSearch: (scope: MemoryScopeFilters) => Promise<T[]>;
-}): Promise<T[]> {
+}): Promise<SearchWithScopeResult<T>> {
   const attempts = buildSearchScopeAttempts(
     options.baseScope,
     options.rawCollection,
@@ -25,12 +30,16 @@ export async function searchMemoriesWithScopeRetry<T extends Record<string, unkn
     const embedding = await options.generateEmbedding(options.query);
     if (embedding) {
       const vectorResults = await options.vectorSearch(embedding, scope);
-      if (vectorResults.length > 0) return vectorResults;
+      if (vectorResults.length > 0) {
+        return { results: vectorResults, winningScope: scope };
+      }
     }
 
     const textResults = await options.textSearch(scope);
-    if (textResults.length > 0) return textResults;
+    if (textResults.length > 0) {
+      return { results: textResults, winningScope: scope };
+    }
   }
 
-  return [];
+  return { results: [], winningScope: null };
 }
