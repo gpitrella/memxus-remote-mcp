@@ -25,6 +25,7 @@ export const V2_TOOL_NAMES = [
   'list_syncable_items',
   'reset_skill_decision',
   'set_sync_selection',
+  'skip_skill',
   'suggest_skills',
   'use_skill_in_chat',
 ];
@@ -60,7 +61,7 @@ export function validateToolManifest(names, mode = 'auto') {
 
   if (count !== CORE_TOOL_NAMES.length && count !== ALL_KNOWN_TOOL_NAMES.length) {
     throw new Error(
-      `Partial v2 manifest: got ${count} tools (expected 9 core or 18 full). ` +
+      `Partial v2 manifest: got ${count} tools (expected 9 core or 19 full). ` +
         `Present v2: ${presentV2.join(', ') || '(none)'}. ` +
         'Enable both ENABLE_INAPP_CONNECT and ENABLE_SKILL_ROUTING plus user mcp_preferences, or expect core-only.'
     );
@@ -75,7 +76,7 @@ export function validateToolManifest(names, mode = 'auto') {
 
   if (mode === 'full' && tier !== 'full') {
     throw new Error(
-      `SMOKE_MANIFEST=full requires all 18 tools. Got ${count} (core-only). ` +
+      `SMOKE_MANIFEST=full requires all 19 tools. Got ${count} (core-only). ` +
         'Enable ENABLE_* flags and v2 mcp_preferences on the smoke user.'
     );
   }

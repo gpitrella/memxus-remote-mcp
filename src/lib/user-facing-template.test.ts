@@ -55,4 +55,29 @@ describe('user-facing-template v3.2', () => {
     });
     assert.match(text!, /No encontré memorias relevantes/);
   });
+
+  it('does not show exhausted CTA when exclude leaves more in pool', () => {
+    const text = buildUserFacingTemplate({
+      topic: 'v3.2 template',
+      memoryCount: 2,
+      totalMemories: 10,
+      excludedMemoryCount: 3,
+      requestedLimit: 10,
+      tokensUsed: 100,
+    });
+    assert.match(text!, /Ampliar el contexto/);
+    assert.doesNotMatch(text!, /ya mostré todas/);
+  });
+
+  it('shows exhausted CTA when pool is fully shown across calls', () => {
+    const text = buildUserFacingTemplate({
+      topic: 'v3.2 template',
+      memoryCount: 2,
+      totalMemories: 5,
+      excludedMemoryCount: 3,
+      requestedLimit: 10,
+      tokensUsed: 100,
+    });
+    assert.match(text!, /ya mostré todas las memorias disponibles/);
+  });
 });

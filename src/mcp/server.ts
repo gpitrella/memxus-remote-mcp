@@ -30,7 +30,7 @@ import {
   type UserPlanContext,
 } from '../lib/plan-enforcement.js';
 import { estimateTokens } from '../lib/estimate-tokens.js';
-import { MCP_CONTEXT_DEFAULTS } from '../lib/context-defaults.js';
+import { MCP_CONTEXT_DEFAULTS, MCP_SEARCH_DEFAULTS } from '../lib/context-defaults.js';
 import { trimMemoriesToTokenBudget } from '../lib/context-budget.js';
 import { buildMcpContextBlock, formatMcpContextMemoryLine } from '../lib/context-format.js';
 import { sanitizeToolError } from '../lib/tool-errors.js';
@@ -86,6 +86,16 @@ function toBulletMemories(
     updated_at: m.updated_at,
     similarity: m.similarity,
   }));
+}
+
+function userFacingContextProps(
+  excludeMemoryIds: string[] | undefined,
+  requestedLimit: number,
+) {
+  return {
+    excludedMemoryCount: excludeMemoryIds?.length ?? 0,
+    requestedLimit,
+  };
 }
 
 export { MCP_TOOLS, getActiveMcpTools, MCP_CORE_TOOLS } from './tool-schemas.js';
@@ -239,6 +249,7 @@ export function createMCPServer(ctx: McpContext): Server {
             visibility,
             group_id: input.group_id,
             group_name: input.group_name,
+            min_similarity: MCP_SEARCH_DEFAULTS.min_similarity,
             exclude_memory_ids: input.exclude_memory_ids,
           });
           const scope = input.collection ? ` in collection "${input.collection}"` : '';
@@ -249,6 +260,7 @@ export function createMCPServer(ctx: McpContext): Server {
               collection: input.collection,
               memoryCount: 0,
               totalMemories: total,
+              ...userFacingContextProps(input.exclude_memory_ids, searchLimit),
             });
             result = toolSuccessWithUserFacing(
               text,
@@ -288,6 +300,7 @@ export function createMCPServer(ctx: McpContext): Server {
               tokensUsed,
               skills: toUserFacingSkills(undefined, suggestedSkills),
               stackConfidence: suggestedSkills?.length ? 0.8 : undefined,
+              ...userFacingContextProps(input.exclude_memory_ids, searchLimit),
             });
             result = toolSuccessWithUserFacing(
               text,
@@ -346,6 +359,7 @@ export function createMCPServer(ctx: McpContext): Server {
               collection: input.collection,
               memoryCount: 0,
               totalMemories: total,
+              ...userFacingContextProps(input.exclude_memory_ids, contextLimit),
             });
             result = toolSuccessWithUserFacing(
               text,
@@ -384,6 +398,7 @@ export function createMCPServer(ctx: McpContext): Server {
               contextBlock: block,
               memoryRows: toBulletMemories(trimmed.memories),
               tokensUsed: trimmed.tokensUsed,
+              ...userFacingContextProps(input.exclude_memory_ids, contextLimit),
             });
             result = toolSuccessWithUserFacing(
               block,
@@ -729,6 +744,7 @@ export function createMCPServer(ctx: McpContext): Server {
             tokensUsed: assembled.tokensUsed,
             skills: toUserFacingSkills(assembled.suggestions),
             stackConfidence: assembled.routing.profile.confidence,
+            ...userFacingContextProps(input.exclude_memory_ids, contextLimit),
           });
           result = toolSuccessWithUserFacing(
             assembled.contextBlock,
@@ -781,6 +797,7 @@ export function createMCPServer(ctx: McpContext): Server {
             planLimits: limits,
             collection: input.collection,
             visibility: resolveDefaultReadVisibility(skillPrefs),
+            min_similarity: MCP_SEARCH_DEFAULTS.min_similarity,
           });
           const surfaced = await surfaceSkills({
             trigger: 'suggest',
@@ -796,6 +813,7 @@ export function createMCPServer(ctx: McpContext): Server {
             totalMemories: total,
             skills: toUserFacingSkills(surfaced.suggestions),
             stackConfidence: surfaced.profile.confidence,
+            requestedLimit: contextLimit,
           });
           result = toolSuccessWithUserFacing(
             surfaced.skillsMessage,

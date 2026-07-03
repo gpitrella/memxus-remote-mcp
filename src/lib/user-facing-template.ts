@@ -8,6 +8,7 @@ import {
   formatContextReuseSummary,
   formatSkillInjectedSummary,
 } from './impact-summary.js';
+import { isContextPoolExhausted } from './search-total.js';
 
 const SEPARATOR = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
 
@@ -22,6 +23,8 @@ export type UserFacingTemplateInput = {
   topic?: string;
   memoryCount?: number;
   totalMemories?: number;
+  excludedMemoryCount?: number;
+  requestedLimit?: number;
   contextBlock?: string;
   memoryRows?: BulletMemoryInput[];
   tokensUsed?: number;
@@ -63,9 +66,10 @@ function buildContextSection(input: UserFacingTemplateInput): string[] {
   const collection = formatCollectionLabel(input.collection);
   const count = input.memoryCount ?? 0;
   const total = input.totalMemories ?? count;
+  const excludedCount = input.excludedMemoryCount ?? 0;
 
   const lines = [`CONTEXTO — ${collection}`];
-  lines.push(formatContextCompletenessLine(count, total, topic));
+  lines.push(formatContextCompletenessLine(count, total, topic, excludedCount));
 
   if (count > 0 && input.contextBlock) {
     const bullets = extractContextBullets({
@@ -97,13 +101,28 @@ function buildSavingsSection(input: UserFacingTemplateInput): string[] {
   return lines;
 }
 
-function buildQuestionLine(topic?: string, count?: number, total?: number): string {
+function buildQuestionLine(input: UserFacingTemplateInput): string {
+  const topic = input.topic;
+  const count = input.memoryCount;
+  const total = input.totalMemories ?? input.memoryCount;
   const subject = topic?.trim() || 'esto';
   const base = `¿Qué querés hacer con ${subject}? · Seguir con la tarea · Guardar una decisión`;
-  if (count !== undefined && total !== undefined && count < total) {
+
+  if (count === undefined || total === undefined) {
     return `${base} · Ampliar el contexto`;
   }
-  if (count !== undefined && total !== undefined && count >= total && total > 0) {
+
+  const exhausted = isContextPoolExhausted({
+    returnedCount: count,
+    total,
+    excludedCount: input.excludedMemoryCount ?? 0,
+    requestedLimit: input.requestedLimit ?? count,
+  });
+
+  if (!exhausted && count < total) {
+    return `${base} · Ampliar el contexto`;
+  }
+  if (exhausted && total > 0) {
     return `${base} · Ampliar el contexto (ya mostré todas las memorias disponibles)`;
   }
   return `${base} · Ampliar el contexto`;
@@ -136,7 +155,7 @@ export function buildUserFacingTemplate(input: UserFacingTemplateInput): string 
       lines.push(input.skillImpactText.trim());
     }
     lines.push('');
-    lines.push(buildQuestionLine(input.topic));
+    lines.push(buildQuestionLine({ topic: input.topic }));
     lines.push('');
     lines.push(SEPARATOR);
     return lines.join('\n');
@@ -161,9 +180,7 @@ export function buildUserFacingTemplate(input: UserFacingTemplateInput): string 
   }
 
   lines.push('');
-  lines.push(
-    buildQuestionLine(input.topic, input.memoryCount, input.totalMemories ?? input.memoryCount),
-  );
+  lines.push(buildQuestionLine(input));
   lines.push('');
   lines.push(SEPARATOR);
 

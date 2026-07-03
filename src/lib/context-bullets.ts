@@ -13,6 +13,13 @@ export type ExtractBulletsInput = {
   maxBullets?: number;
 };
 
+const BLOCK_METADATA_PATTERN =
+  /^(?:Topic:|Collection:|Memories [Rr]etrieved:|Found \d+:|ID:|Type:|Importance:|Tags:|Saved:)/;
+
+function isRecallStyleBlock(contextBlock: string): boolean {
+  return /^\s*Found \d+:/m.test(contextBlock);
+}
+
 function normalizeContentHash(text: string): string {
   const normalized = text.trim().toLowerCase().replace(/\s+/g, ' ');
   return createHash('sha256').update(normalized).digest('hex');
@@ -45,15 +52,20 @@ function compareMemories(a: BulletMemoryInput, b: BulletMemoryInput): number {
 }
 
 function extractFromContextBlock(contextBlock: string): string[] {
+  if (isRecallStyleBlock(contextBlock)) return [];
+
   const lines = contextBlock.split('\n');
   const fragments: string[] = [];
 
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('===')) continue;
+    if (BLOCK_METADATA_PATTERN.test(trimmed)) continue;
 
-    const numbered = trimmed.match(/^\[\d+\]\s*(?:\[[^\]]+\]\s*)*(.*)$/);
-    const body = numbered?.[1]?.trim() ?? trimmed;
+    const numbered = trimmed.match(/^\[\d+\]\s*\[[^\]]+\](?:\s*\[[^\]]+\])?\s+(.*)$/);
+    if (!numbered) continue;
+
+    const body = numbered[1]?.trim() ?? '';
     if (body.length < 8) continue;
 
     const sentences = body.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
@@ -67,7 +79,7 @@ function extractFromContextBlock(contextBlock: string): string[] {
 }
 
 /**
- * Extract 1–3 literal bullets from the summarized context_block (anti-hallucination).
+ * Extract 1–3 literal bullets from memory content (anti-hallucination).
  */
 export function extractContextBullets(input: ExtractBulletsInput): string[] {
   const maxBullets = input.maxBullets ?? 3;
@@ -77,9 +89,7 @@ export function extractContextBullets(input: ExtractBulletsInput): string[] {
   const seenHashes = new Set<string>();
   const bullets: string[] = [];
 
-  const blockFragments = extractFromContextBlock(input.contextBlock);
   const pool: string[] = [];
-
   for (const memory of sorted) {
     const snippet = sanitizeBulletText(memory.content.slice(0, 400));
     if (snippet.length >= 8) {
@@ -87,7 +97,9 @@ export function extractContextBullets(input: ExtractBulletsInput): string[] {
     }
   }
 
-  for (const fragment of [...blockFragments, ...pool]) {
+  const blockFragments = extractFromContextBlock(input.contextBlock);
+
+  for (const fragment of [...pool, ...blockFragments]) {
     if (bullets.length >= maxBullets) break;
     const hash = normalizeContentHash(fragment);
     if (seenHashes.has(hash)) continue;
@@ -102,10 +114,19 @@ export function formatContextCompletenessLine(
   count: number,
   total: number,
   topic: string,
+  excludedCount = 0,
 ): string {
   const subject = topic.trim() || 'este tema';
   if (total === 0 || count === 0) {
     return `No encontré memorias relevantes para "${subject}".`;
+  }
+  if (excludedCount > 0 && count > 0) {
+    const shownAcrossCalls = count + excludedCount;
+    if (shownAcrossCalls >= total) {
+      const label = total === 1 ? '1 memoria' : `${total} memorias`;
+      return `Recuperé las ${label} que tengo guardadas sobre "${subject}".`;
+    }
+    return `Recuperé ${count} adicionales (${shownAcrossCalls} de ${total} sobre "${subject}").`;
   }
   if (count === 1 && total === 1) {
     return `Recuperé la única memoria que tengo guardada sobre "${subject}".`;

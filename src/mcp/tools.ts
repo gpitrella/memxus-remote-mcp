@@ -51,6 +51,7 @@ import { scheduleEmbeddingUpdate } from '../lib/embedding-background.js';
 import { generateEmbedding } from '../lib/embedding.js';
 import { logPerfPhase } from '../lib/mcp-perf.js';
 import { countEligibleMemories } from '../lib/search-eligible-count.js';
+import { resolveSearchTotal } from '../lib/search-total.js';
 import type { MemoryRow } from './memory-types.js';
 
 export type SearchMemoriesResult = {
@@ -340,10 +341,7 @@ export async function searchMemories(p: {
     groupId: p.group_id,
     minSimilarity: p.min_similarity,
   }).catch(() => null);
-  const total =
-    enriched.length === 0
-      ? 0
-      : Math.max(countResult ?? enriched.length, enriched.length);
+  const total = resolveSearchTotal(countResult, enriched.length);
 
   return { memories: enriched as unknown as MemoryRow[], total };
 }

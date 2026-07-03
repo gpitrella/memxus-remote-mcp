@@ -45,6 +45,41 @@ describe('context-bullets', () => {
     );
   });
 
+  it('formatContextCompletenessLine handles expand with excludes', () => {
+    assert.match(
+      formatContextCompletenessLine(2, 10, 'auth', 3),
+      /2 adicionales \(5 de 10 sobre/,
+    );
+  });
+
+  it('skips context block metadata headers for bullets', () => {
+    const bullets = extractContextBullets({
+      contextBlock: [
+        '=== AI Memory Context ===',
+        'Topic: auth flow',
+        'Collection: project:memxus',
+        'Memories retrieved: 3',
+        '[1] [INSTRUCTION] [project:memxus] Memxus pricing v3 defines Free and Pro tiers.',
+      ].join('\n'),
+      memories: [
+        { id: 'a', content: 'Memxus pricing v3 defines Free and Pro tiers for retention.' },
+      ],
+    });
+    assert.ok(bullets.length >= 1);
+    assert.doesNotMatch(bullets[0]!, /^Topic:/);
+    assert.match(bullets[0]!, /pricing v3/i);
+  });
+
+  it('recall-style block uses memory content only', () => {
+    const bullets = extractContextBullets({
+      contextBlock: 'Found 5:\n\n[1] ID: abc\nType: general',
+      memories: [{ id: 'abc', content: 'SPEC v3.9 skills surfacing for chat and editor.' }],
+    });
+    assert.equal(bullets.length, 1);
+    assert.match(bullets[0]!, /SPEC v3\.9/);
+    assert.doesNotMatch(bullets[0]!, /^ID:/);
+  });
+
   it('formatContextCompletenessLine handles single memory', () => {
     assert.match(
       formatContextCompletenessLine(1, 1, 'auth'),
