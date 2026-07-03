@@ -1,5 +1,6 @@
 import { config } from '../config.js';
 import {
+  ANTIGRAVITY_REDIRECT_URI,
   CLAUDE_REDIRECT_URIS,
   GLAMA_APP_REDIRECT_URI,
   GLAMA_INSPECTOR_REDIRECT_URI,
@@ -17,6 +18,7 @@ const KNOWN_MCP_REDIRECT_URIS = new Set<string>([
   ...GEMINI_CLI_REDIRECT_URIS,
   GLAMA_APP_REDIRECT_URI,
   GLAMA_INSPECTOR_REDIRECT_URI,
+  ANTIGRAVITY_REDIRECT_URI,
 ]);
 
 /** RFC 8252 loopback OAuth redirect for MCP desktop clients (port ignored). */

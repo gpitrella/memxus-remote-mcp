@@ -27,6 +27,9 @@ export const VS_CODE_REDIRECT_URIS = [
 /** Gemini CLI remote MCP OAuth (DCR + loopback callback on port 7777). */
 export const GEMINI_CLI_REDIRECT_URIS = ['http://localhost:7777/oauth/callback'] as const;
 
+/** Google Antigravity IDE/CLI remote MCP OAuth (fixed hosted callback). */
+export const ANTIGRAVITY_REDIRECT_URI = 'https://antigravity.google/oauth-callback' as const;
+
 export function isSmitheryRedirectUri(uri: string): boolean {
   return (SMITHERY_REDIRECT_URIS as readonly string[]).includes(uri);
 }
@@ -80,6 +83,10 @@ export function isGeminiCliRedirectUri(uri: string): boolean {
   );
 }
 
+export function isAntigravityRedirectUri(uri: string): boolean {
+  return uri === ANTIGRAVITY_REDIRECT_URI;
+}
+
 /** Smithery/Glama app use browser-heavy OAuth; Claude uses the same 302 path. */
 export function isMarketplaceBrowserRedirectUri(uri: string): boolean {
   return isSmitheryRedirectUri(uri) || isGlamaAppRedirectUri(uri);
@@ -115,5 +122,6 @@ export function apiKeyNameForOAuthClient(
   }
   if (isVsCodeRedirectUri(redirectUri)) return `VS Code (${clientId})`;
   if (isGeminiCliRedirectUri(redirectUri)) return `Gemini CLI (${clientId})`;
+  if (isAntigravityRedirectUri(redirectUri)) return `Antigravity (${clientId})`;
   return `Claude (${clientId})`;
 }

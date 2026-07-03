@@ -13,6 +13,7 @@ import {
   geminiCliLoopbackRedirectUrisMatch,
 } from './redirect-allowlist.js';
 import {
+  ANTIGRAVITY_REDIRECT_URI,
   CLAUDE_REDIRECT_URIS,
   GLAMA_APP_REDIRECT_URI,
   GLAMA_INSPECTOR_REDIRECT_URI,
@@ -160,6 +161,7 @@ test('isKnownMcpRedirectUri includes Smithery run and Connect callbacks', () => 
   assert.equal(isKnownMcpRedirectUri('https://smithery.ai/oauth/callback'), true);
   assert.equal(isKnownMcpRedirectUri('https://smithery.ai/connect/callback'), true);
   assert.equal(isKnownMcpRedirectUri('https://auth.smithery.ai/connect'), true);
+  assert.equal(isKnownMcpRedirectUri(ANTIGRAVITY_REDIRECT_URI), true);
 });
 
 test('filterAllowedRedirectUris keeps Claude and loopback, drops unknown', () => {

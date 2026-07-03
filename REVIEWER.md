@@ -104,6 +104,37 @@ curl -s -X POST https://mcp.memxus.com/oauth/register \
 
 Registry listing: `com.memxus/memxus` on [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io).
 
+## Antigravity IDE (OAuth — recommended)
+
+1. Add Memxus to `~/.gemini/antigravity/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "memxus": {
+      "serverUrl": "https://mcp.memxus.com/mcp"
+    }
+  }
+}
+```
+
+2. Antigravity IDE → Settings → Customizations → Installed MCP Servers → **Authenticate** on memxus.
+3. Complete Google sign-in via dashboard when the browser opens → Approve on consent screen.
+4. When redirected to `antigravity.google/oauth-callback`, **copy the authorization code** and paste it into the Antigravity dialog.
+5. Expected: **9 core tools**; API key name **Antigravity (...)** in dashboard after connect.
+
+Troubleshooting: [docs/ANTIGRAVITY_TROUBLESHOOTING.md](docs/ANTIGRAVITY_TROUBLESHOOTING.md).
+
+DCR smoke:
+
+```bash
+curl -s -X POST https://mcp.memxus.com/oauth/register \
+  -H "Content-Type: application/json" \
+  -d '{"redirect_uris":["https://antigravity.google/oauth-callback"],"client_name":"antigravity-smoke","token_endpoint_auth_method":"none"}'
+```
+
+Bearer fallback: dashboard API key in `mcp_config.json` with `Authorization: Bearer aimem_...` header (see install page).
+
 ## Gemini CLI (OAuth — recommended)
 
 1. Install [Gemini CLI](https://geminicli.com/docs/).

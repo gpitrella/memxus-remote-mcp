@@ -6,8 +6,10 @@ import {
   GLAMA_INSPECTOR_REDIRECT_URI,
   SMITHERY_REDIRECT_URI,
   SMITHERY_REDIRECT_URIS,
+  ANTIGRAVITY_REDIRECT_URI,
   acceptsHtmlResponse,
   apiKeyNameForOAuthClient,
+  isAntigravityRedirectUri,
   isClaudeRedirectUri,
   isGlamaAppRedirectUri,
   isGlamaInspectorRedirectUri,
@@ -27,6 +29,8 @@ test('redirect URI classifiers', () => {
   assert.equal(isGlamaInspectorRedirectUri(GLAMA_APP_REDIRECT_URI), false);
   assert.equal(isClaudeRedirectUri(CLAUDE_REDIRECT_URIS[0]), true);
   assert.equal(isClaudeRedirectUri(SMITHERY_REDIRECT_URI), false);
+  assert.equal(isAntigravityRedirectUri(ANTIGRAVITY_REDIRECT_URI), true);
+  assert.equal(isAntigravityRedirectUri(SMITHERY_REDIRECT_URI), false);
 });
 
 test('isMarketplaceBrowserRedirectUri covers Smithery and Glama app only', () => {
@@ -72,5 +76,9 @@ test('apiKeyNameForOAuthClient labels by redirect', () => {
   assert.match(
     apiKeyNameForOAuthClient('aimem_abcd', 'http://localhost:7777/oauth/callback'),
     /^Gemini CLI /
+  );
+  assert.match(
+    apiKeyNameForOAuthClient('aimem_abcd', ANTIGRAVITY_REDIRECT_URI),
+    /^Antigravity /
   );
 });
