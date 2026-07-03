@@ -84,9 +84,9 @@ export async function countEligibleMemories(p: EligibleCountParams): Promise<num
       p_group_ids: rpcParams.p_group_ids,
       p_workforce_workspace_ids: rpcParams.p_workforce_workspace_ids,
       p_include_personal: rpcParams.p_include_personal,
-      p_collection: rpcParams.p_collection,
-      p_memory_type: rpcParams.p_memory_type,
-      p_tags: rpcParams.p_tags,
+      p_collection: rpcParams.p_collection ?? null,
+      p_memory_type: rpcParams.p_memory_type ?? null,
+      p_tags: rpcParams.p_tags ?? null,
     };
     const rpcCount = await countViaAccessibleRpc(p.supabase, countParams, hadVectorHits);
     if (rpcCount != null) return rpcCount;
