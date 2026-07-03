@@ -3,6 +3,7 @@ import type { FormattableMemory } from './format-memory.js';
 export type ToolSuccessResult = {
   content: Array<{ type: 'text'; text: string }>;
   structuredContent: Record<string, unknown>;
+  _meta?: Record<string, unknown>;
 };
 
 export function toStructuredMemory(m: FormattableMemory): Record<string, unknown> {
@@ -21,10 +22,15 @@ export function toStructuredMemories(ms: FormattableMemory[]): Record<string, un
   return ms.map(toStructuredMemory);
 }
 
-export function toolSuccess(text: string, structured: Record<string, unknown>): ToolSuccessResult {
+export function toolSuccess(
+  text: string,
+  structured: Record<string, unknown>,
+  meta?: Record<string, unknown>,
+): ToolSuccessResult {
   return {
     content: [{ type: 'text', text }],
     structuredContent: structured,
+    ...(meta ? { _meta: meta } : {}),
   };
 }
 
@@ -32,11 +38,12 @@ export function toolSuccessWithUserFacing(
   body: string,
   structured: Record<string, unknown>,
   userFacing: string | null,
+  meta?: Record<string, unknown>,
 ): ToolSuccessResult {
   const displayText = userFacing ? `${body}\n\n${userFacing}` : body;
   return toolSuccess(displayText, {
     ...structured,
     message: displayText,
     ...(userFacing ? { user_facing_template: userFacing } : {}),
-  });
+  }, meta);
 }

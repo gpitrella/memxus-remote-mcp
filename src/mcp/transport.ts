@@ -6,6 +6,7 @@ import { createMCPServer } from './server.js';
 import { AuthedRequest } from '../lib/auth.js';
 import { getCachedUserMcpPreferences } from '../lib/mcp-preferences-cache.js';
 import { sendMcpUnauthorized } from '../oauth/unauthorized.js';
+import type { McpHandshakeContext } from '../lib/skill-capabilities.js';
 
 interface Session {
   transport: StreamableHTTPServerTransport;
@@ -13,6 +14,7 @@ interface Session {
   apiKeyId?: string;
   lastActivityAt: number;
   sseActive: boolean;
+  handshake?: McpHandshakeContext;
 }
 
 const sessions = new Map<string, Session>();
@@ -135,19 +137,56 @@ function logMcpSessionExpired(
 
 async function createServerContext(req: AuthedRequest) {
   const mcpPreferences = await getCachedUserMcpPreferences(req.userId!);
+  const acceptLanguageHeader = req.headers['accept-language'];
+  const acceptLanguage = Array.isArray(acceptLanguageHeader)
+    ? acceptLanguageHeader[0]
+    : acceptLanguageHeader;
   return {
     userId: req.userId!,
     apiKeyId: req.apiKeyId,
     workforceWorkspaceId: req.workforceWorkspaceId,
     oauthScope: req.oauthScope,
     isOAuthToken: req.isOAuthToken,
+    acceptLanguage,
     mcpPreferences,
+  };
+}
+
+function extractHandshake(body: unknown): McpHandshakeContext | undefined {
+  if (!isInitializeRequest(body)) return undefined;
+  const params = (body as { params?: Record<string, unknown> }).params ?? {};
+  const meta = params._meta;
+  const apps = (params.capabilities as Record<string, unknown> | undefined)?.experimental;
+  const directActions =
+    apps && typeof apps === 'object'
+      ? (apps as Record<string, unknown>).directActions === true ||
+        ((apps as Record<string, unknown>).apps as Record<string, unknown> | undefined)?.directActions === true
+      : false;
+
+  return {
+    clientInfo:
+      params.clientInfo && typeof params.clientInfo === 'object'
+        ? (params.clientInfo as { name?: string; version?: string })
+        : undefined,
+    clientCapabilities:
+      params.capabilities && typeof params.capabilities === 'object'
+        ? (params.capabilities as Record<string, unknown>)
+        : undefined,
+    negotiatedExtensions: Array.isArray((params.capabilities as Record<string, unknown> | undefined)?.extensions)
+      ? (((params.capabilities as Record<string, unknown>).extensions as unknown[]) as string[])
+      : undefined,
+    appsFeatures: { directActions },
+    meta:
+      meta && typeof meta === 'object'
+        ? (meta as McpHandshakeContext['meta'])
+        : undefined,
   };
 }
 
 function createSessionEntry(
   transport: StreamableHTTPServerTransport,
-  req: AuthedRequest
+  req: AuthedRequest,
+  handshake?: McpHandshakeContext
 ): Session {
   return {
     transport,
@@ -155,6 +194,7 @@ function createSessionEntry(
     apiKeyId: req.apiKeyId,
     lastActivityAt: Date.now(),
     sseActive: false,
+    handshake,
   };
 }
 
@@ -175,7 +215,10 @@ async function handleStatelessPost(req: AuthedRequest, res: Response): Promise<v
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
   });
-  const server = createMCPServer(await createServerContext(req));
+  const server = createMCPServer({
+    ...(await createServerContext(req)),
+    handshake: extractHandshake(req.body),
+  });
   await server.connect(transport);
   try {
     await transport.handleRequest(req, res, req.body);
@@ -207,6 +250,7 @@ async function handleStatefulPost(req: AuthedRequest, res: Response): Promise<vo
       return;
     }
 
+    const handshake = extractHandshake(req.body);
     const newSessionId = randomUUID();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => newSessionId,
@@ -220,9 +264,13 @@ async function handleStatefulPost(req: AuthedRequest, res: Response): Promise<vo
     transport.onclose = () => {
       if (transport.sessionId) sessions.delete(transport.sessionId);
     };
-    const server = createMCPServer(await createServerContext(req));
+    const server = createMCPServer({
+      ...(await createServerContext(req)),
+      handshake,
+      sessionId: newSessionId,
+    });
     await server.connect(transport);
-    session = createSessionEntry(transport, req);
+    session = createSessionEntry(transport, req, handshake);
     sessions.set(newSessionId, session);
     logMcpSessionCreated(newSessionId, req.userId!);
   } else {

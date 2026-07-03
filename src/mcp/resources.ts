@@ -1,6 +1,10 @@
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import { loadUserPlan } from '../lib/plan-enforcement.js';
 import { getPlan } from '../lib/plans.js';
 import { listMemories } from './tools.js';
+import { SKILL_CARD_RESOURCE_URI } from './skill-card.js';
 
 export interface ResourceListItem {
   uri: string;
@@ -16,7 +20,22 @@ export const RESOURCES: ResourceListItem[] = [
     description: 'Your most recent memories (count capped per plan)',
     mimeType: 'text/html',
   },
+  {
+    uri: SKILL_CARD_RESOURCE_URI,
+    name: 'Memxus Skill Card',
+    description: 'Interactive MCP Apps card for suggested skills',
+    mimeType: 'text/html',
+  },
 ];
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const skillCardHtml = readFileSync(join(__dirname, '../../resources/skill-card/index.html'), 'utf8');
+const skillCardCss = readFileSync(join(__dirname, '../../resources/skill-card/card.css'), 'utf8');
+const skillCardJs = readFileSync(join(__dirname, '../../resources/skill-card/card.js'), 'utf8');
+
+const skillCardDocument = skillCardHtml
+  .replace('/* __INLINE_CSS__ */', skillCardCss)
+  .replace('/* __INLINE_JS__ */', skillCardJs);
 
 function escapeHtml(s: string): string {
   return s
@@ -27,6 +46,9 @@ function escapeHtml(s: string): string {
 }
 
 export async function readResource(uri: string, userId: string): Promise<string> {
+  if (uri === SKILL_CARD_RESOURCE_URI) {
+    return skillCardDocument;
+  }
   if (uri !== 'memory://recent') throw new Error(`Unknown resource: ${uri}`);
   const planCtx = await loadUserPlan(userId);
   const limits = planCtx?.limits ?? getPlan('free').limits;

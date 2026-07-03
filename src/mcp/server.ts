@@ -53,7 +53,7 @@ import {
 import { assembleContextWithSkills } from '../routing/context-assembler.js';
 import { buildImpactPayload, buildSkillImpactFields } from '../lib/impact-summary.js';
 import { buildUserFacingTemplate, toUserFacingSkills } from '../lib/user-facing-template.js';
-import { resetSkillDecision } from '../lib/skill-decisions.js';
+import { completeSkipEvent, recordSkipEvent, resetSkillDecision } from '../lib/skill-decisions.js';
 import {
   installSkillForUser,
   skipSkillForUser,
@@ -66,6 +66,8 @@ import {
 import {
   isInAppConnectEnabled,
   isSkillRoutingEnabled,
+  isSkillCardUiEnabled,
+  isForcePlainTextEnabled,
 } from '../lib/feature-flags.js';
 import {
   isInAppConnectActiveForUser,
@@ -76,6 +78,15 @@ import {
 import { assertOAuthScopes, assertMemoryReadScope, assertMemoryWriteScope, assertMemoryDeleteScope } from '../lib/oauth-scopes.js';
 import { getCachedUserMcpPreferences } from '../lib/mcp-preferences-cache.js';
 import { toolSuccess, toolSuccessWithUserFacing, toStructuredMemory, toStructuredMemories, type ToolSuccessResult } from './tool-results.js';
+import { buildSkillCardMeta, buildSkillCardPayload } from './skill-card.js';
+import { detectLanguage, t, type SupportedLanguage } from '../lib/i18n.js';
+import { getUserLanguageState, updateDetectedLanguage } from '../lib/user-language-state.js';
+import {
+  isDisabledClient,
+  resolveCapabilities,
+  type EffectiveCapabilities,
+  type McpHandshakeContext,
+} from '../lib/skill-capabilities.js';
 
 function toBulletMemories(
   ms: Array<{ id: string; content: string; updated_at?: string; similarity?: number | null }>,
@@ -106,6 +117,9 @@ export interface McpContext {
   workforceWorkspaceId?: string;
   oauthScope?: string;
   isOAuthToken?: boolean;
+  acceptLanguage?: string;
+  handshake?: McpHandshakeContext;
+  sessionId?: string;
   mcpPreferences?: UserMcpPreferences;
 }
 
@@ -116,7 +130,36 @@ export function createMCPServer(ctx: McpContext): Server {
   const oauthOpts = { isOAuthToken };
 
   async function resolvePrefs(): Promise<UserMcpPreferences> {
-    return getCachedUserMcpPreferences(userId);
+    return ctx.mcpPreferences ?? getCachedUserMcpPreferences(userId);
+  }
+
+  async function resolveLanguage(
+    prefs: UserMcpPreferences,
+    text?: string,
+  ): Promise<SupportedLanguage> {
+    const state = prefs.language_locked ? { streak: 0 } : await getUserLanguageState(userId);
+    const lang = detectLanguage({
+      explicit: prefs.language,
+      text,
+      acceptLanguage: ctx.acceptLanguage,
+      locale: ctx.handshake?.meta?.locale,
+      lastDetected: state.lastDetected,
+    });
+    if (!prefs.language_locked) {
+      void updateDetectedLanguage(userId, lang);
+    }
+    return lang;
+  }
+
+  function resolveSkillCaps(): EffectiveCapabilities {
+    const caps = resolveCapabilities(ctx.handshake);
+    if (!isSkillCardUiEnabled() || isForcePlainTextEnabled()) {
+      return { ...caps, renderApps: false, hostSkipAction: false };
+    }
+    if (isDisabledClient({ handshake: ctx.handshake, userId, sessionId: ctx.sessionId })) {
+      return { ...caps, renderApps: false, hostSkipAction: false };
+    }
+    return caps;
   }
 
   const server = new Server(
@@ -693,6 +736,8 @@ export function createMCPServer(ctx: McpContext): Server {
               exclude_memory_ids: z.array(z.string().uuid()).optional(),
             })
             .parse(a);
+          const lang = await resolveLanguage(skillPrefs, input.topic);
+          const skillCaps = resolveSkillCaps();
           const visibility = resolveDefaultReadVisibility(skillPrefs, input.visibility);
           const contextLimit = resolveSearchLimit(limits, input.max_memories);
           const { memories: ms, total } = await searchMemories({
@@ -744,7 +789,16 @@ export function createMCPServer(ctx: McpContext): Server {
             tokensUsed: assembled.tokensUsed,
             skills: toUserFacingSkills(assembled.suggestions),
             stackConfidence: assembled.routing.profile.confidence,
+            lang,
             ...userFacingContextProps(input.exclude_memory_ids, contextLimit),
+          });
+          const skillCard = buildSkillCardPayload({
+            lang,
+            skills: assembled.routing.activeSkills,
+            caps: skillCaps,
+            topic: input.topic,
+            collection: input.collection,
+            userFacingTemplate: userFacing,
           });
           result = toolSuccessWithUserFacing(
             assembled.contextBlock,
@@ -764,9 +818,15 @@ export function createMCPServer(ctx: McpContext): Server {
               message: assembled.contextBlock,
               tokens_used: assembled.tokensUsed,
               truncated: assembled.truncated,
+              skill_card: skillCard,
+              presentation: {
+                surface: skillCaps.surface,
+                render_apps: skillCaps.renderApps,
+              },
               ...(impact ?? {}),
             },
             userFacing,
+            buildSkillCardMeta(skillCard),
           );
           break;
         }
@@ -788,6 +848,8 @@ export function createMCPServer(ctx: McpContext): Server {
               max_memories: z.number().int().optional(),
             })
             .parse(a);
+          const lang = await resolveLanguage(skillPrefs, input.topic);
+          const skillCaps = resolveSkillCaps();
           const contextLimit = resolveSearchLimit(limits, input.max_memories ?? 5);
           const { memories: ms, total } = await searchMemories({
             userId,
@@ -814,6 +876,15 @@ export function createMCPServer(ctx: McpContext): Server {
             skills: toUserFacingSkills(surfaced.suggestions),
             stackConfidence: surfaced.profile.confidence,
             requestedLimit: contextLimit,
+            lang,
+          });
+          const skillCard = buildSkillCardPayload({
+            lang,
+            skills: surfaced.skills,
+            caps: skillCaps,
+            topic: input.topic,
+            collection: input.collection,
+            userFacingTemplate: userFacing,
           });
           result = toolSuccessWithUserFacing(
             surfaced.skillsMessage,
@@ -829,9 +900,15 @@ export function createMCPServer(ctx: McpContext): Server {
               intent: surfaced.intent,
               discovery_degraded: surfaced.discoveryDegraded,
               requires_approval: true,
+              skill_card: skillCard,
+              presentation: {
+                surface: skillCaps.surface,
+                render_apps: skillCaps.renderApps,
+              },
               message: surfaced.skillsMessage,
             },
             userFacing,
+            buildSkillCardMeta(skillCard),
           );
           break;
         }
@@ -853,6 +930,7 @@ export function createMCPServer(ctx: McpContext): Server {
               chat_session_id: z.string().optional(),
             })
             .parse(a);
+          const lang = await resolveLanguage(skillPrefs, input.skill_id);
           const loaded = await useSkillInChat({
             userId,
             collection: input.collection,
@@ -866,6 +944,7 @@ export function createMCPServer(ctx: McpContext): Server {
             mode: 'skill_load',
             topic: skillName,
             skillImpactText: skillImpact?.skill_impact_text,
+            lang,
           });
           result = toolSuccessWithUserFacing(
             loaded.instructions,
@@ -899,6 +978,17 @@ export function createMCPServer(ctx: McpContext): Server {
               chat_session_id: z.string().optional(),
             })
             .parse(a);
+          const lang = await resolveLanguage(skillPrefs, input.skill_id);
+          const skillCaps = resolveSkillCaps();
+          if (!skillCaps.canInstall && !input.confirmed) {
+            const message = t(lang, 'installNotAvailable');
+            result = toolSuccess(message, {
+              install_command: input.install_command,
+              confirmed: false,
+              message,
+            });
+            break;
+          }
           const out = await installSkillForUser({
             userId,
             collection: input.collection,
@@ -907,7 +997,8 @@ export function createMCPServer(ctx: McpContext): Server {
             confirmed: input.confirmed,
             chatSessionId: input.chat_session_id,
           });
-          result = toolSuccess(out.message, { ...out, message: out.message });
+          const message = input.confirmed ? t(lang, 'installConfirmed') : out.message;
+          result = toolSuccess(message, { ...out, message });
           break;
         }
         case 'skip_skill': {
@@ -926,19 +1017,38 @@ export function createMCPServer(ctx: McpContext): Server {
               skill_id: z.string().min(1),
               collection: z.string().min(1),
               chat_session_id: z.string().optional(),
+              correlation_id: z.string().optional(),
             })
             .parse(a);
+          const lang = await resolveLanguage(skillPrefs, input.skill_id);
+          if (input.correlation_id) {
+            await recordSkipEvent({
+              correlationId: input.correlation_id,
+              userId,
+              skillId: input.skill_id,
+              clientName: ctx.handshake?.clientInfo?.name,
+              channel: 'direct',
+              metadata: {
+                collection: input.collection,
+                surface: resolveSkillCaps().surface,
+              },
+            });
+          }
           await skipSkillForUser({
             userId,
             collection: input.collection,
             skillId: input.skill_id,
             chatSessionId: input.chat_session_id,
           });
-          const message = `Skill ${input.skill_id} omitted for this collection.`;
+          if (input.correlation_id) {
+            await completeSkipEvent(input.correlation_id);
+          }
+          const message = `${t(lang, 'skipRecorded')} (${input.skill_id})`;
           result = toolSuccess(message, {
             skill_id: input.skill_id,
             collection: input.collection,
             skipped: true,
+            correlation_id: input.correlation_id,
             message,
           });
           break;

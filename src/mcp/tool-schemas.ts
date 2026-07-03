@@ -618,7 +618,7 @@ const MCP_SKILL_ROUTING_TOOLS: Tool[] = [
     name: 'get_context_with_skills',
     ...toolMeta('Get context with skills', { readOnly: true, openWorld: true, idempotent: true }),
     description:
-      'Build context for a topic and suggest official Agent Skills from skills.sh. Skills require user approval before use — they are suggestions only.',
+      'Build context for a topic and suggest official Agent Skills from skills.sh. Compatible clients can render an interactive skill card; all clients still receive plain text fallback.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -676,7 +676,7 @@ const MCP_SKILL_ROUTING_TOOLS: Tool[] = [
     name: 'suggest_skills',
     ...toolMeta('Suggest skills', { readOnly: true, openWorld: true, idempotent: true }),
     description: appendRenderingInstructions(
-      'Discover official Agent Skills for a topic via skills.sh without building a full context block. Requires skill routing enabled in dashboard settings.',
+      'Discover official Agent Skills for a topic via skills.sh without building a full context block. Compatible clients can render an interactive skill card; all clients still receive plain text fallback.',
     ),
     inputSchema: {
       type: 'object',
@@ -745,7 +745,7 @@ const MCP_SKILL_ACTION_TOOLS: Tool[] = [
     name: 'install_skill',
     ...toolMeta('Install skill', { readOnly: true, openWorld: true, idempotent: false }),
     description:
-      'Return the install command for a suggested skill. Set confirmed=true after the user runs the command in their terminal.',
+      'Return the install command for a suggested skill. Set confirmed=true after the user runs the command in their terminal. Install can be unavailable on web/mobile surfaces.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -778,6 +778,10 @@ const MCP_SKILL_ACTION_TOOLS: Tool[] = [
         skill_id: { type: 'string' },
         collection: { type: 'string' },
         chat_session_id: { type: 'string' },
+        correlation_id: {
+          type: 'string',
+          description: 'Optional client correlation id for button analytics.',
+        },
       },
       required: ['skill_id', 'collection'],
     },

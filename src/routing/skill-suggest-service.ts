@@ -12,6 +12,7 @@ import { discoverSkills } from './skill-discovery.js';
 import { dedupeSkillsByName, DISCOVERY_POOL_SIZE } from './skill-dedup.js';
 import { rankSkillsForSurfacing } from './skill-surfacing.js';
 import type { RoutedSkill, SkillSuggestion, SuggestSkillsResult } from './types.js';
+import { sanitizeInstallCommand } from '../lib/skill-sanitizers.js';
 
 export const PRESENTATION_HINT = 'use N | install N | skip N | skip all';
 
@@ -19,12 +20,14 @@ const CACHE_TTL_MS = 60_000;
 const suggestCache = new Map<string, { expires: number; result: SuggestSkillsResult }>();
 
 function toSuggestion(skill: RoutedSkill): SkillSuggestion {
+  const installCommand =
+    skill.official ? sanitizeInstallCommand(skill.installCommand) ?? '' : '';
   return {
     id: skill.id,
     name: skill.name,
     reason: skill.reason,
     source: skill.official ? 'official' : 'community',
-    install_command: skill.installCommand,
+    install_command: installCommand,
     source_url: skill.sourceUrl,
   };
 }
@@ -190,6 +193,10 @@ export async function installSkillForUser(input: {
   confirmed?: boolean;
   chatSessionId?: string | null;
 }): Promise<{ install_command: string; confirmed: boolean; message: string }> {
+  const safeInstallCommand = sanitizeInstallCommand(input.installCommand);
+  if (!safeInstallCommand) {
+    throw new Error('Install command is not allowed');
+  }
   if (input.confirmed) {
     await recordSkillDecision({
       userId: input.userId,
@@ -199,16 +206,16 @@ export async function installSkillForUser(input: {
       chatSessionId: input.chatSessionId,
     });
     return {
-      install_command: input.installCommand,
+      install_command: safeInstallCommand,
       confirmed: true,
       message: 'Skill install recorded. Run the command in your project terminal if you have not already.',
     };
   }
 
   return {
-    install_command: input.installCommand,
+    install_command: safeInstallCommand,
     confirmed: false,
-    message: `Run this in your project terminal, then confirm:\n${input.installCommand}`,
+    message: `Run this in your project terminal, then confirm:\n${safeInstallCommand}`,
   };
 }
 

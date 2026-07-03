@@ -5,6 +5,7 @@ import {
   isOfficialRepo,
   listRepoSkills,
 } from '../lib/skill-upstream.js';
+import { withCommunityFetch } from '../lib/community-fetch.js';
 
 export type SkillsShResult = {
   id: string;
@@ -186,21 +187,23 @@ async function fetchSkillsSh(query: string, limit: number): Promise<SkillsShResu
   url.searchParams.set('q', query);
   url.searchParams.set('limit', String(limit));
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
-  try {
-    const res = await fetch(url.toString(), {
-      signal: controller.signal,
-      headers: { Accept: 'application/json', 'User-Agent': 'memxus-skill-discovery' },
-    });
-    if (!res.ok) return [];
-    const json = (await res.json()) as SkillsShResponse;
-    return json.skills ?? [];
-  } catch {
-    return [];
-  } finally {
-    clearTimeout(timer);
-  }
+  return withCommunityFetch(url.toString(), async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
+    try {
+      const res = await fetch(url.toString(), {
+        signal: controller.signal,
+        headers: { Accept: 'application/json', 'User-Agent': 'memxus-skill-discovery' },
+      });
+      if (!res.ok) {
+        throw new Error(`skills.sh request failed: ${res.status}`);
+      }
+      const json = (await res.json()) as SkillsShResponse;
+      return json.skills ?? [];
+    } finally {
+      clearTimeout(timer);
+    }
+  }, []);
 }
 
 export type DiscoverSkillsResult = {

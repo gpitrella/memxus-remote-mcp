@@ -192,11 +192,12 @@ test('listPrompts returns empty array for Glama Inspector compatibility', async 
   });
 });
 
-test('listResources still exposes memory://recent', async () => {
+test('listResources exposes memory and skill-card resources', async () => {
   await withTestClient(async (client) => {
     const result = await client.listResources();
-    assert.equal(result.resources.length, 1);
+    assert.equal(result.resources.length, 2);
     assert.equal(result.resources[0]?.uri, 'memory://recent');
+    assert.equal(result.resources[1]?.uri, 'ui://memxus/skill-card');
   });
 });
 

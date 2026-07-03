@@ -68,3 +68,37 @@ export async function resetSkillDecision(input: {
   }
   return (count ?? 0) > 0;
 }
+
+export async function recordSkipEvent(input: {
+  correlationId: string;
+  userId: string;
+  skillId: string;
+  clientName?: string | null;
+  channel: 'direct' | 'sendMessage';
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  const { error } = await supabase.from('skip_events').upsert(
+    {
+      correlation_id: input.correlationId,
+      user_id: input.userId,
+      skill_id: input.skillId,
+      client_name: input.clientName ?? null,
+      channel: input.channel,
+      metadata: input.metadata ?? {},
+    },
+    { onConflict: 'correlation_id' },
+  );
+  if (error) {
+    console.warn('[skill-decisions] recordSkipEvent:', error.message);
+  }
+}
+
+export async function completeSkipEvent(correlationId: string): Promise<void> {
+  const { error } = await supabase
+    .from('skip_events')
+    .update({ completed_at: new Date().toISOString() })
+    .eq('correlation_id', correlationId);
+  if (error) {
+    console.warn('[skill-decisions] completeSkipEvent:', error.message);
+  }
+}

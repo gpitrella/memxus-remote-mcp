@@ -3,7 +3,9 @@
     "in_app_connect_enabled": false,
     "skill_routing_enabled": false,
     "default_memory_visibility": "private",
-    "include_group_memories_in_context": false
+    "include_group_memories_in_context": false,
+    "language": null,
+    "language_locked": false
   },
   "parseCases": [
     {
@@ -19,7 +21,9 @@
         "in_app_connect_enabled": true,
         "skill_routing_enabled": false,
         "default_memory_visibility": "shared",
-        "include_group_memories_in_context": false
+        "include_group_memories_in_context": false,
+        "language": null,
+        "language_locked": false
       }
     }
   ],
@@ -31,7 +35,9 @@
         "in_app_connect_enabled": false,
         "skill_routing_enabled": true,
         "default_memory_visibility": "private",
-        "include_group_memories_in_context": false
+        "include_group_memories_in_context": false,
+        "language": null,
+        "language_locked": false
       }
     }
   ]

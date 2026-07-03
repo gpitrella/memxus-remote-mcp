@@ -8,6 +8,7 @@ import {
   isInAppConnectEnabled,
   isSkillRoutingEnabled,
 } from './feature-flags.js';
+import { isSupportedLanguage, type SupportedLanguage } from './i18n.js';
 
 export type MemoryVisibilityPreference = 'private' | 'shared';
 
@@ -16,6 +17,8 @@ export interface UserMcpPreferences {
   skill_routing_enabled: boolean;
   default_memory_visibility: MemoryVisibilityPreference;
   include_group_memories_in_context: boolean;
+  language: SupportedLanguage | null;
+  language_locked: boolean;
 }
 
 export const DEFAULT_USER_MCP_PREFERENCES: UserMcpPreferences = {
@@ -23,6 +26,8 @@ export const DEFAULT_USER_MCP_PREFERENCES: UserMcpPreferences = {
   skill_routing_enabled: false,
   default_memory_visibility: 'private',
   include_group_memories_in_context: false,
+  language: null,
+  language_locked: false,
 };
 
 export function parseMcpPreferencesJson(raw: unknown): UserMcpPreferences {
@@ -45,6 +50,11 @@ export function parseMcpPreferencesJson(raw: unknown): UserMcpPreferences {
       typeof obj.include_group_memories_in_context === 'boolean'
         ? obj.include_group_memories_in_context
         : DEFAULT_USER_MCP_PREFERENCES.include_group_memories_in_context,
+    language: isSupportedLanguage(obj.language) ? obj.language : null,
+    language_locked:
+      typeof obj.language_locked === 'boolean'
+        ? obj.language_locked
+        : DEFAULT_USER_MCP_PREFERENCES.language_locked,
   };
 }
 
