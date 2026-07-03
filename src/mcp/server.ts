@@ -779,7 +779,8 @@ export function createMCPServer(ctx: McpContext): Server {
                   assembled.includedMemories.some((inc) => inc.content === m.content),
                 );
           const impact = buildImpactPayload(assembled.tokensUsed);
-          const userFacing = buildUserFacingTemplate({
+          const skillEnvironment = skillCaps.canInstall ? 'editor' : 'chat';
+          const plainUserFacing = buildUserFacingTemplate({
             topic: input.topic,
             collection: input.collection,
             memoryCount: responseMs.length,
@@ -789,6 +790,22 @@ export function createMCPServer(ctx: McpContext): Server {
             tokensUsed: assembled.tokensUsed,
             skills: toUserFacingSkills(assembled.suggestions),
             stackConfidence: assembled.routing.profile.confidence,
+            environment: skillEnvironment,
+            lang,
+            variant: 'plain',
+            ...userFacingContextProps(input.exclude_memory_ids, contextLimit),
+          });
+          const cardUserFacing = buildUserFacingTemplate({
+            topic: input.topic,
+            collection: input.collection,
+            memoryCount: responseMs.length,
+            totalMemories: total,
+            contextBlock: assembled.contextBlock,
+            memoryRows: toBulletMemories(responseMs),
+            tokensUsed: assembled.tokensUsed,
+            skills: toUserFacingSkills(assembled.suggestions),
+            stackConfidence: assembled.routing.profile.confidence,
+            environment: skillEnvironment,
             lang,
             ...userFacingContextProps(input.exclude_memory_ids, contextLimit),
           });
@@ -798,7 +815,7 @@ export function createMCPServer(ctx: McpContext): Server {
             caps: skillCaps,
             topic: input.topic,
             collection: input.collection,
-            userFacingTemplate: userFacing,
+            cardTemplate: cardUserFacing,
           });
           result = toolSuccessWithUserFacing(
             assembled.contextBlock,
@@ -825,8 +842,9 @@ export function createMCPServer(ctx: McpContext): Server {
               },
               ...(impact ?? {}),
             },
-            userFacing,
+            plainUserFacing,
             buildSkillCardMeta(skillCard),
+            skillCaps.renderApps ? 'append' : 'template_only',
           );
           break;
         }
@@ -868,7 +886,8 @@ export function createMCPServer(ctx: McpContext): Server {
             memorySnippets: ms.map((m) => m.content),
             userId,
           });
-          const userFacing = buildUserFacingTemplate({
+          const skillEnvironment = skillCaps.canInstall ? 'editor' : 'chat';
+          const plainUserFacing = buildUserFacingTemplate({
             topic: input.topic,
             collection: input.collection,
             memoryCount: ms.length,
@@ -876,6 +895,19 @@ export function createMCPServer(ctx: McpContext): Server {
             skills: toUserFacingSkills(surfaced.suggestions),
             stackConfidence: surfaced.profile.confidence,
             requestedLimit: contextLimit,
+            environment: skillEnvironment,
+            lang,
+            variant: 'plain',
+          });
+          const cardUserFacing = buildUserFacingTemplate({
+            topic: input.topic,
+            collection: input.collection,
+            memoryCount: ms.length,
+            totalMemories: total,
+            skills: toUserFacingSkills(surfaced.suggestions),
+            stackConfidence: surfaced.profile.confidence,
+            requestedLimit: contextLimit,
+            environment: skillEnvironment,
             lang,
           });
           const skillCard = buildSkillCardPayload({
@@ -884,7 +916,7 @@ export function createMCPServer(ctx: McpContext): Server {
             caps: skillCaps,
             topic: input.topic,
             collection: input.collection,
-            userFacingTemplate: userFacing,
+            cardTemplate: cardUserFacing,
           });
           result = toolSuccessWithUserFacing(
             surfaced.skillsMessage,
@@ -907,8 +939,9 @@ export function createMCPServer(ctx: McpContext): Server {
               },
               message: surfaced.skillsMessage,
             },
-            userFacing,
+            plainUserFacing,
             buildSkillCardMeta(skillCard),
+            skillCaps.renderApps ? 'append' : 'template_only',
           );
           break;
         }
@@ -944,6 +977,7 @@ export function createMCPServer(ctx: McpContext): Server {
             mode: 'skill_load',
             topic: skillName,
             skillImpactText: skillImpact?.skill_impact_text,
+            skillTokensUsed,
             lang,
           });
           result = toolSuccessWithUserFacing(

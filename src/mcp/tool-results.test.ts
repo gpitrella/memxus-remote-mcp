@@ -38,3 +38,19 @@ test('toolSuccessWithUserFacing appends footer and sets message', () => {
   assert.equal(r.structuredContent.context_block, body);
   assert.equal(r.structuredContent.user_facing_template, footer);
 });
+
+test('toolSuccessWithUserFacing can expose template only', () => {
+  const body = '=== context ===';
+  const footer = 'CONTEXTO\n1. use 1';
+  const r = toolSuccessWithUserFacing(
+    body,
+    { context_block: body, count: 1 },
+    footer,
+    undefined,
+    'template_only',
+  );
+  assert.equal(r.content[0].text, footer);
+  assert.equal(r.structuredContent.message, footer);
+  assert.equal(r.structuredContent.context_block, body);
+  assert.equal(r.structuredContent.user_facing_template, footer);
+});

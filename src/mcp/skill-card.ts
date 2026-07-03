@@ -36,7 +36,7 @@ export function buildSkillCardPayload(input: {
   caps: EffectiveCapabilities;
   topic?: string;
   collection?: string | null;
-  userFacingTemplate?: string | null;
+  cardTemplate?: string | null;
 }): SkillCardPayload {
   const presented = input.skills.slice(0, 2).map((skill) => presentSkill(skill, input.caps));
   return {
@@ -46,7 +46,7 @@ export function buildSkillCardPayload(input: {
     compactLayout: input.caps.compactLayout,
     collection: input.collection ?? null,
     topic: input.topic,
-    userFacingTemplate: input.userFacingTemplate ?? null,
+    userFacingTemplate: input.cardTemplate ?? null,
     notice: communityNotice(input.lang, presented),
     client: {
       renderApps: input.caps.renderApps,

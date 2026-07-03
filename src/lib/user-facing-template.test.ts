@@ -94,4 +94,35 @@ describe('user-facing-template v3.2', () => {
     });
     assert.match(text!, /ya mostré todas las memorias disponibles/);
   });
+
+  it('renders plain fallback variant with short command labels for chat surfaces', () => {
+    const text = buildUserFacingTemplate({
+      topic: 'api memxus',
+      collection: 'project:memxus',
+      memoryCount: 3,
+      totalMemories: 10,
+      contextBlock: '[1] [NOTE] AI Context Engine en produccion',
+      memoryRows: [{ id: '1', content: 'AI Context Engine en produccion con 18 tools activas' }],
+      tokensUsed: 1609,
+      skills: [
+        { name: 'analyze-project', reason: 'match', source: 'community' },
+        { name: 'project-analyzer', reason: 'match', source: 'community' },
+      ],
+      stackConfidence: 0.9,
+      environment: 'chat',
+      variant: 'plain',
+    });
+    assert.match(text!, /^CONTEXTO/m);
+    assert.match(text!, /Proyecto: project:memxus/);
+    assert.match(text!, /^SKILLS SUGERIDAS/m);
+    assert.match(text!, /1\. analyze-project \(community\)/);
+    assert.match(text!, /use 1 \/ skip 1/);
+    assert.match(text!, /^AHORRO/m);
+    assert.match(text!, /~1,609 tokens de contexto reutilizados/);
+    assert.match(text!, /^ELEGI UNA OPCION/m);
+    assert.match(text!, /1\. use 1/);
+    assert.match(text!, /3\. skip all/);
+    assert.match(text!, /4\. ampliar contexto/);
+    assert.doesNotMatch(text!, /CONTEXTO —/);
+  });
 });

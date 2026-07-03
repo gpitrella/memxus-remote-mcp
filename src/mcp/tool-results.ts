@@ -6,6 +6,8 @@ export type ToolSuccessResult = {
   _meta?: Record<string, unknown>;
 };
 
+export type UserFacingDisplayMode = 'append' | 'template_only';
+
 export function toStructuredMemory(m: FormattableMemory): Record<string, unknown> {
   return {
     id: m.id,
@@ -39,8 +41,13 @@ export function toolSuccessWithUserFacing(
   structured: Record<string, unknown>,
   userFacing: string | null,
   meta?: Record<string, unknown>,
+  displayMode: UserFacingDisplayMode = 'append',
 ): ToolSuccessResult {
-  const displayText = userFacing ? `${body}\n\n${userFacing}` : body;
+  const displayText = userFacing
+    ? displayMode === 'template_only'
+      ? userFacing
+      : `${body}\n\n${userFacing}`
+    : body;
   return toolSuccess(displayText, {
     ...structured,
     message: displayText,
