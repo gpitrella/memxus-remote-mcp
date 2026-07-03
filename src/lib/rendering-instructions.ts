@@ -27,7 +27,7 @@ function loadRenderingMarkdown(): string {
 export const RENDERING_INSTRUCTIONS_FULL = loadRenderingMarkdown();
 
 export const RENDERING_INSTRUCTIONS_BRIEF =
-  'After this tool returns, show the user the block "MEMXUS — Resumen para el usuario" at the end of the tool result verbatim (already server-rendered). Do not repeat the raw context_block above it. Chat: use N|skip N. Editor: use N|install N|skip N.';
+  'After this tool returns, show the user the pre-rendered block at the end of the tool result verbatim (user_facing_template). Do not repeat the raw context_block. Expand context: if count < total, recall/get_context with exclude_memory_ids + higher max_memories; if count === total, say no more memories without calling the server. Skills: use N → use_skill_in_chat, install N → install_skill, skip N → skip_skill.';
 
 export function appendRenderingInstructions(description: string): string {
   return `${description} ${RENDERING_INSTRUCTIONS_BRIEF}`;

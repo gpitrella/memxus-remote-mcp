@@ -43,7 +43,7 @@ test('getActiveMcpTools hides optional tools when user pref off', () => {
         skill_routing_enabled: true,
       },
     });
-    assert.equal(withUser.length, 18);
+    assert.equal(withUser.length, 19);
   } finally {
     if (envOn === undefined) delete process.env.ENABLE_INAPP_CONNECT;
     else process.env.ENABLE_INAPP_CONNECT = envOn;

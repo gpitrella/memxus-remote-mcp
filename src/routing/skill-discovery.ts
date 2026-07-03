@@ -1,3 +1,4 @@
+import { DISCOVERY_POOL_SIZE } from './skill-dedup.js';
 import type { Intent, ProjectProfile, DiscoveredSkill, RoutedSkill } from './types.js';
 
 export type SkillsShResult = {
@@ -220,7 +221,7 @@ function mapSkill(raw: SkillsShResult, score: number, reason: string, official: 
     installCommand,
     official,
   };
-  return { ...skill, score, reason };
+  return { ...skill, score, reason, installs: raw.installs ?? 0 };
 }
 
 function isBannedMatch(text: string, bannedTokens: string[]): boolean {
@@ -351,7 +352,8 @@ export async function discoverSkills(input: {
   }
 
   scored.sort((a, b) => b.score - a.score);
-  const skills = scored.slice(0, maxResults);
+  const poolSize = Math.max(maxResults, DISCOVERY_POOL_SIZE);
+  const skills = scored.slice(0, poolSize);
   const anyFetchOk = anySkillsShOk || anyGithubOk;
 
   return {

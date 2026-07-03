@@ -56,6 +56,7 @@ import { buildUserFacingTemplate, toUserFacingSkills } from '../lib/user-facing-
 import { resetSkillDecision } from '../lib/skill-decisions.js';
 import {
   installSkillForUser,
+  skipSkillForUser,
   useSkillInChat,
 } from '../routing/skill-suggest-service.js';
 import {
@@ -75,6 +76,17 @@ import {
 import { assertOAuthScopes, assertMemoryReadScope, assertMemoryWriteScope, assertMemoryDeleteScope } from '../lib/oauth-scopes.js';
 import { getCachedUserMcpPreferences } from '../lib/mcp-preferences-cache.js';
 import { toolSuccess, toolSuccessWithUserFacing, toStructuredMemory, toStructuredMemories, type ToolSuccessResult } from './tool-results.js';
+
+function toBulletMemories(
+  ms: Array<{ id: string; content: string; updated_at?: string; similarity?: number | null }>,
+) {
+  return ms.map((m) => ({
+    id: m.id,
+    content: m.content,
+    updated_at: m.updated_at,
+    similarity: m.similarity,
+  }));
+}
 
 export { MCP_TOOLS, getActiveMcpTools, MCP_CORE_TOOLS } from './tool-schemas.js';
 
@@ -210,11 +222,12 @@ export function createMCPServer(ctx: McpContext): Server {
               group_id: z.string().uuid().optional(),
               group_name: z.string().optional(),
               include_skills: z.boolean().optional(),
+              exclude_memory_ids: z.array(z.string().uuid()).optional(),
             })
             .parse(a);
           const visibility = resolveDefaultReadVisibility(prefs, input.visibility);
           const searchLimit = resolveSearchLimit(limits, input.limit);
-          const ms = await searchMemories({
+          const { memories: ms, total } = await searchMemories({
             userId,
             workforceWorkspaceId,
             query: input.query,
@@ -226,15 +239,22 @@ export function createMCPServer(ctx: McpContext): Server {
             visibility,
             group_id: input.group_id,
             group_name: input.group_name,
+            exclude_memory_ids: input.exclude_memory_ids,
           });
+          const scope = input.collection ? ` in collection "${input.collection}"` : '';
           if (ms.length === 0) {
-            const scope = input.collection ? ` in collection "${input.collection}"` : '';
             const text = `No memories found for that query${scope}.`;
-            result = toolSuccess(text, {
-              count: 0,
-              memories: [],
-              message: text,
+            const userFacing = buildUserFacingTemplate({
+              topic: input.query,
+              collection: input.collection,
+              memoryCount: 0,
+              totalMemories: total,
             });
+            result = toolSuccessWithUserFacing(
+              text,
+              { count: 0, total, memories: [], message: text },
+              userFacing,
+            );
           } else {
             const formatted = ms.map((m, i) => formatMemoryLine(m, i)).join('\n\n---\n\n');
             let text = `Found ${ms.length}:\n\n${formatted}`;
@@ -262,13 +282,18 @@ export function createMCPServer(ctx: McpContext): Server {
               topic: input.query,
               collection: input.collection,
               memoryCount: ms.length,
-              impactSummaryText: impact?.impact_summary_text,
+              totalMemories: total,
+              contextBlock: text,
+              memoryRows: toBulletMemories(ms),
+              tokensUsed,
               skills: toUserFacingSkills(undefined, suggestedSkills),
+              stackConfidence: suggestedSkills?.length ? 0.8 : undefined,
             });
             result = toolSuccessWithUserFacing(
               text,
               {
                 count: ms.length,
+                total,
                 memories: toStructuredMemories(ms),
                 message: text,
                 tokens_used: tokensUsed,
@@ -293,11 +318,12 @@ export function createMCPServer(ctx: McpContext): Server {
               visibility: z.enum(['private', 'shared', 'all']).optional(),
               group_id: z.string().uuid().optional(),
               group_name: z.string().optional(),
+              exclude_memory_ids: z.array(z.string().uuid()).optional(),
             })
             .parse(a);
           const visibility = resolveDefaultReadVisibility(prefs, input.visibility);
           const contextLimit = resolveSearchLimit(limits, input.max_memories);
-          const ms = await searchMemories({
+          const { memories: ms, total } = await searchMemories({
             userId,
             workforceWorkspaceId,
             query: input.topic,
@@ -310,17 +336,29 @@ export function createMCPServer(ctx: McpContext): Server {
             group_id: input.group_id,
             group_name: input.group_name,
             min_similarity: MCP_CONTEXT_DEFAULTS.min_similarity,
+            exclude_memory_ids: input.exclude_memory_ids,
           });
           if (ms.length === 0) {
             const scope = input.collection ? ` (collection: ${input.collection})` : '';
             const text = `No relevant memories found for this topic${scope}.`;
-            result = toolSuccess(text, {
+            const userFacing = buildUserFacingTemplate({
               topic: input.topic,
-              count: 0,
-              context_block: text,
-              memories: [],
-              message: text,
+              collection: input.collection,
+              memoryCount: 0,
+              totalMemories: total,
             });
+            result = toolSuccessWithUserFacing(
+              text,
+              {
+                topic: input.topic,
+                count: 0,
+                total,
+                context_block: text,
+                memories: [],
+                message: text,
+              },
+              userFacing,
+            );
           } else {
             const { overheadTokens } = buildMcpContextBlock(input.topic, input.collection, []);
             const trimmed = trimMemoriesToTokenBudget(
@@ -342,13 +380,17 @@ export function createMCPServer(ctx: McpContext): Server {
               topic: input.topic,
               collection: input.collection,
               memoryCount: trimmed.memories.length,
-              impactSummaryText: impact?.impact_summary_text,
+              totalMemories: total,
+              contextBlock: block,
+              memoryRows: toBulletMemories(trimmed.memories),
+              tokensUsed: trimmed.tokensUsed,
             });
             result = toolSuccessWithUserFacing(
               block,
               {
                 topic: input.topic,
                 count: trimmed.memories.length,
+                total,
                 context_block: block,
                 memories: toStructuredMemories(trimmed.memories),
                 message: block,
@@ -633,11 +675,12 @@ export function createMCPServer(ctx: McpContext): Server {
               visibility: z.enum(['private', 'shared', 'all']).optional(),
               group_id: z.string().uuid().optional(),
               group_name: z.string().optional(),
+              exclude_memory_ids: z.array(z.string().uuid()).optional(),
             })
             .parse(a);
           const visibility = resolveDefaultReadVisibility(skillPrefs, input.visibility);
           const contextLimit = resolveSearchLimit(limits, input.max_memories);
-          const ms = await searchMemories({
+          const { memories: ms, total } = await searchMemories({
             userId,
             workforceWorkspaceId,
             query: input.topic,
@@ -650,25 +693,40 @@ export function createMCPServer(ctx: McpContext): Server {
             group_id: input.group_id,
             group_name: input.group_name,
             min_similarity: MCP_CONTEXT_DEFAULTS.min_similarity,
+            exclude_memory_ids: input.exclude_memory_ids,
           });
           const assembled = await assembleContextWithSkills({
             userId,
             topic: input.topic,
             collection: input.collection,
             memories: ms.map((m) => ({
+              id: m.id,
               content: m.content,
               similarity: m.similarity,
+              updated_at: m.updated_at,
             })),
             max_tokens_budget: MCP_CONTEXT_DEFAULTS.max_tokens_budget,
           });
-          const includedContents = new Set(assembled.includedMemories.map((m) => m.content));
-          const responseMs = ms.filter((m) => includedContents.has(m.content));
+          const includedIds = new Set(
+            assembled.includedMemories
+              .map((m) => m.id)
+              .filter((id): id is string => Boolean(id)),
+          );
+          const responseMs =
+            includedIds.size > 0
+              ? ms.filter((m) => includedIds.has(m.id))
+              : ms.filter((m) =>
+                  assembled.includedMemories.some((inc) => inc.content === m.content),
+                );
           const impact = buildImpactPayload(assembled.tokensUsed);
           const userFacing = buildUserFacingTemplate({
             topic: input.topic,
             collection: input.collection,
             memoryCount: responseMs.length,
-            impactSummaryText: impact?.impact_summary_text,
+            totalMemories: total,
+            contextBlock: assembled.contextBlock,
+            memoryRows: toBulletMemories(responseMs),
+            tokensUsed: assembled.tokensUsed,
             skills: toUserFacingSkills(assembled.suggestions),
             stackConfidence: assembled.routing.profile.confidence,
           });
@@ -677,6 +735,7 @@ export function createMCPServer(ctx: McpContext): Server {
             {
               topic: input.topic,
               count: responseMs.length,
+              total,
               context_block: assembled.contextBlock,
               profile: assembled.routing.profile,
               intent: assembled.routing.intent,
@@ -714,7 +773,7 @@ export function createMCPServer(ctx: McpContext): Server {
             })
             .parse(a);
           const contextLimit = resolveSearchLimit(limits, input.max_memories ?? 5);
-          const ms = await searchMemories({
+          const { memories: ms, total } = await searchMemories({
             userId,
             workforceWorkspaceId,
             query: input.topic,
@@ -730,18 +789,32 @@ export function createMCPServer(ctx: McpContext): Server {
             memorySnippets: ms.map((m) => m.content),
             userId,
           });
-          result = toolSuccess(surfaced.skillsMessage, {
+          const userFacing = buildUserFacingTemplate({
             topic: input.topic,
-            active_skills: mapActiveSkillsForResponse(surfaced.skills),
-            suggestions: surfaced.suggestions,
-            presentation_hint: surfaced.presentation_hint,
-            skills_message: surfaced.skillsMessage,
-            profile: surfaced.profile,
-            intent: surfaced.intent,
-            discovery_degraded: surfaced.discoveryDegraded,
-            requires_approval: true,
-            message: surfaced.skillsMessage,
+            collection: input.collection,
+            memoryCount: ms.length,
+            totalMemories: total,
+            skills: toUserFacingSkills(surfaced.suggestions),
+            stackConfidence: surfaced.profile.confidence,
           });
+          result = toolSuccessWithUserFacing(
+            surfaced.skillsMessage,
+            {
+              topic: input.topic,
+              count: ms.length,
+              total,
+              active_skills: mapActiveSkillsForResponse(surfaced.skills),
+              suggestions: surfaced.suggestions,
+              presentation_hint: surfaced.presentation_hint,
+              skills_message: surfaced.skillsMessage,
+              profile: surfaced.profile,
+              intent: surfaced.intent,
+              discovery_degraded: surfaced.discoveryDegraded,
+              requires_approval: true,
+              message: surfaced.skillsMessage,
+            },
+            userFacing,
+          );
           break;
         }
         case 'use_skill_in_chat': {
@@ -817,6 +890,39 @@ export function createMCPServer(ctx: McpContext): Server {
             chatSessionId: input.chat_session_id,
           });
           result = toolSuccess(out.message, { ...out, message: out.message });
+          break;
+        }
+        case 'skip_skill': {
+          assertMemoryReadScope(oauthScope, oauthOpts);
+          if (!isSkillRoutingEnabled()) {
+            throw new Error('Skill routing is not enabled on this server');
+          }
+          const skillPrefs = await resolvePrefs();
+          if (!isSkillRoutingActiveForUser(skillPrefs)) {
+            throw new Error(
+              'Skill routing is disabled in your dashboard settings. Enable it under Settings → AI & MCP.'
+            );
+          }
+          const input = z
+            .object({
+              skill_id: z.string().min(1),
+              collection: z.string().min(1),
+              chat_session_id: z.string().optional(),
+            })
+            .parse(a);
+          await skipSkillForUser({
+            userId,
+            collection: input.collection,
+            skillId: input.skill_id,
+            chatSessionId: input.chat_session_id,
+          });
+          const message = `Skill ${input.skill_id} omitted for this collection.`;
+          result = toolSuccess(message, {
+            skill_id: input.skill_id,
+            collection: input.collection,
+            skipped: true,
+            message,
+          });
           break;
         }
         case 'reset_skill_decision': {

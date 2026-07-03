@@ -198,6 +198,12 @@ export const MCP_CORE_TOOLS: Tool[] = [
           description:
             'When skill routing is enabled, append official skill suggestions for work intents (build/review/fix/test). Default: auto-detect from query.',
         },
+        exclude_memory_ids: {
+          type: 'array',
+          items: { type: 'string', format: 'uuid' },
+          description:
+            'Memory IDs to exclude (for "Ampliar el contexto" follow-up calls).',
+        },
       },
       required: ['query'],
     },
@@ -205,6 +211,10 @@ export const MCP_CORE_TOOLS: Tool[] = [
       type: 'object',
       properties: {
         count: { type: 'number', description: 'Number of memories returned.' },
+        total: {
+          type: 'number',
+          description: 'Total eligible memories for ranking (before LIMIT).',
+        },
         memories: {
           type: 'array',
           items: MEMORY_ITEM_SCHEMA,
@@ -252,6 +262,12 @@ export const MCP_CORE_TOOLS: Tool[] = [
         },
         group_id: GROUP_VISIBILITY_FIELDS.group_id,
         group_name: GROUP_VISIBILITY_FIELDS.group_name,
+        exclude_memory_ids: {
+          type: 'array',
+          items: { type: 'string', format: 'uuid' },
+          description:
+            'Memory IDs to exclude (for "Ampliar el contexto" follow-up calls).',
+        },
       },
       required: ['topic'],
     },
@@ -260,6 +276,10 @@ export const MCP_CORE_TOOLS: Tool[] = [
       properties: {
         topic: { type: 'string', description: 'Topic that was searched.' },
         count: { type: 'number', description: 'Number of memories included.' },
+        total: {
+          type: 'number',
+          description: 'Total eligible memories for ranking (before LIMIT).',
+        },
         context_block: {
           type: 'string',
           description: 'Formatted context block for injection into the conversation.',
@@ -619,6 +639,12 @@ const MCP_SKILL_ROUTING_TOOLS: Tool[] = [
         },
         group_id: GROUP_VISIBILITY_FIELDS.group_id,
         group_name: GROUP_VISIBILITY_FIELDS.group_name,
+        exclude_memory_ids: {
+          type: 'array',
+          items: { type: 'string', format: 'uuid' },
+          description:
+            'Memory IDs to exclude (for "Ampliar el contexto" follow-up calls).',
+        },
       },
       required: ['topic'],
     },
@@ -627,6 +653,7 @@ const MCP_SKILL_ROUTING_TOOLS: Tool[] = [
       properties: {
         topic: { type: 'string' },
         count: { type: 'number' },
+        total: { type: 'number', description: 'Total eligible memories for ranking.' },
         context_block: { type: 'string' },
         profile: { type: 'object', additionalProperties: true },
         intent: { type: 'object', additionalProperties: true },
@@ -738,6 +765,31 @@ const MCP_SKILL_ACTION_TOOLS: Tool[] = [
         message: { type: 'string' },
       },
       required: ['install_command', 'confirmed', 'message'],
+    },
+  },
+  {
+    name: 'skip_skill',
+    ...toolMeta('Skip skill', { readOnly: false, idempotent: true }),
+    description:
+      'Record that the user chose to omit a suggested skill for this collection (reply "skip N" or "omitir").',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        skill_id: { type: 'string' },
+        collection: { type: 'string' },
+        chat_session_id: { type: 'string' },
+      },
+      required: ['skill_id', 'collection'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        skill_id: { type: 'string' },
+        collection: { type: 'string' },
+        skipped: { type: 'boolean' },
+        message: { type: 'string' },
+      },
+      required: ['skill_id', 'collection', 'skipped', 'message'],
     },
   },
   {

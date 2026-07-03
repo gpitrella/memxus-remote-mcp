@@ -12,7 +12,7 @@ describe('impact-summary', () => {
   it('formatContextReuseSummary uses approved copy with real token count', async () => {
     const { formatContextReuseSummary } = await import('./impact-summary.js');
     const text = formatContextReuseSummary(1509);
-    assert.match(text, /⚡ ~1,509 tokens de contexto reutilizados/);
+    assert.match(text, /~1,509 tokens de contexto reutilizados/);
     assert.match(text, /no tuviste que reescribir/);
     assert.doesNotMatch(text, /Sin Memxus/);
   });
@@ -20,7 +20,7 @@ describe('impact-summary', () => {
   it('formatSkillInjectedSummary uses approved copy', async () => {
     const { formatSkillInjectedSummary } = await import('./impact-summary.js');
     const text = formatSkillInjectedSummary('find-skills', 420);
-    assert.match(text, /🧩 Skill 'find-skills' cargada/);
+    assert.match(text, /Skill 'find-skills' cargada/);
     assert.match(text, /~420 tokens de guía inyectados/);
   });
 

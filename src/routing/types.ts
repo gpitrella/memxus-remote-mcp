@@ -64,6 +64,7 @@ export type VerifiedSkill = DiscoveredSkill & {
 export type RoutedSkill = DiscoveredSkill & {
   score: number;
   reason: string;
+  installs?: number;
 };
 
 export type SkillRoutingResult = {

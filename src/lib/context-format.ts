@@ -10,6 +10,7 @@ export type RetrieveMemoryRow = {
   scope?: string | null;
   groupName?: string | null;
   similarity?: number;
+  updated_at?: string;
 };
 
 export function formatMcpContextMemoryLine(m: FormattableMemory, index: number): string {

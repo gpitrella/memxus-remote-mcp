@@ -8,5 +8,5 @@ export async function routeSkills(input: {
   memorySnippets?: string[];
 }): Promise<RoutedSkill[]> {
   const { skills } = await discoverSkills(input);
-  return skills;
+  return skills.slice(0, 2);
 }

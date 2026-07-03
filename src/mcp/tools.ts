@@ -50,7 +50,13 @@ import { shouldSkipContentIlike } from '../lib/memory-persistence.js';
 import { scheduleEmbeddingUpdate } from '../lib/embedding-background.js';
 import { generateEmbedding } from '../lib/embedding.js';
 import { logPerfPhase } from '../lib/mcp-perf.js';
+import { countEligibleMemories } from '../lib/search-eligible-count.js';
 import type { MemoryRow } from './memory-types.js';
+
+export type SearchMemoriesResult = {
+  memories: MemoryRow[];
+  total: number;
+};
 
 export type { MemoryRow } from './memory-types.js';
 
@@ -187,7 +193,8 @@ export async function searchMemories(p: {
   group_id?: string;
   group_name?: string;
   min_similarity?: number;
-}): Promise<MemoryRow[]> {
+  exclude_memory_ids?: string[];
+}): Promise<SearchMemoriesResult> {
   const searchStartedAt = Date.now();
   const limit = resolveSearchLimit(resolveLimits(p.planLimits), p.limit);
   const baseScope: MemoryScopeFilters = {
@@ -210,6 +217,23 @@ export async function searchMemories(p: {
   });
   const memoryScope: MemoryScopeValue =
     p.visibility === 'private' ? 'personal' : p.visibility === 'shared' ? 'group' : 'all';
+  const excludeSet = p.exclude_memory_ids?.length
+    ? new Set(p.exclude_memory_ids.map(String))
+    : null;
+
+  const countPromise = countEligibleMemories({
+    supabase,
+    userId: p.userId,
+    workforceWorkspaceId: p.workforceWorkspaceId,
+    query: p.query,
+    embedding,
+    scope: baseScope,
+    visibility: p.visibility ?? 'all',
+    memoryScope,
+    groupId: p.group_id,
+    minSimilarity: p.min_similarity,
+  }).catch(() => null);
+
   const searchDbStartedAt = Date.now();
   const results = await searchMemoriesWithScopeRetry<Record<string, unknown>>({
     query: p.query,
@@ -284,6 +308,9 @@ export async function searchMemories(p: {
 
   // Post-decrypt keyword filter when content.ilike was skipped
   let filtered = decrypted as unknown as Record<string, unknown>[];
+  if (excludeSet) {
+    filtered = filtered.filter((row) => !excludeSet.has(String(row.id)));
+  }
   if (shouldSkipContentIlike() && p.query.trim()) {
     const postFilterStartedAt = Date.now();
     filtered = filterRowsByTextContent(
@@ -304,7 +331,14 @@ export async function searchMemories(p: {
     finalCount: enriched.length,
     visibility: p.visibility ?? 'all',
   });
-  return enriched as unknown as MemoryRow[];
+
+  const countResult = await countPromise;
+  const total =
+    enriched.length === 0
+      ? 0
+      : Math.max(countResult ?? enriched.length, enriched.length);
+
+  return { memories: enriched as unknown as MemoryRow[], total };
 }
 
 export async function getMemoryById(p: {

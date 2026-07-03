@@ -83,12 +83,12 @@ function formatTokenNum(n: number): string {
 
 export function formatContextReuseSummary(tokensInjected: number): string {
   const n = Math.max(0, Math.round(tokensInjected));
-  return `⚡ ${formatTokenNum(n)} tokens de contexto reutilizados — Contexto de tu proyecto que Memxus recuperó y no tuviste que reescribir.`;
+  return `${formatTokenNum(n)} tokens de contexto reutilizados — contexto de tu proyecto que Memxus recuperó y no tuviste que reescribir.`;
 }
 
 export function formatSkillInjectedSummary(skillName: string, tokensInjected: number): string {
   const n = Math.max(0, Math.round(tokensInjected));
-  return `🧩 Skill '${skillName}' cargada — ${formatTokenNum(n)} tokens de guía inyectados — Mejores prácticas que el LLM ahora conoce sin gastar la conversación en definirlas.`;
+  return `Skill '${skillName}' cargada — ${formatTokenNum(n)} tokens de guía inyectados.`;
 }
 
 export function buildImpactSummaryRows(impact: ImpactMetrics): ImpactSummaryRow[] {

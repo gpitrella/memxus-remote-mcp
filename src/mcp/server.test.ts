@@ -43,7 +43,7 @@ const LEGACY_INPUT_KEYS: Record<string, string[]> = {
     'group_id',
     'group_name',
   ],
-  recall: ['query', 'limit', 'type', 'collection', 'tags', 'visibility', 'group_id', 'group_name', 'include_skills'],
+  recall: ['query', 'limit', 'type', 'collection', 'tags', 'visibility', 'group_id', 'group_name', 'include_skills', 'exclude_memory_ids'],
   get_context: [
     'topic',
     'max_memories',
@@ -53,6 +53,7 @@ const LEGACY_INPUT_KEYS: Record<string, string[]> = {
     'visibility',
     'group_id',
     'group_name',
+    'exclude_memory_ids',
   ],
   list_memories: [
     'limit',

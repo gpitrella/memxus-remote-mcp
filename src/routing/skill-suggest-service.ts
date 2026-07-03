@@ -8,6 +8,7 @@ import {
   profileProject,
 } from './project-profiler.js';
 import { discoverSkills } from './skill-discovery.js';
+import { dedupeSkillsByName, DISCOVERY_POOL_SIZE } from './skill-dedup.js';
 import { rankSkillsForSurfacing } from './skill-surfacing.js';
 import type { RoutedSkill, SkillSuggestion, SuggestSkillsResult } from './types.js';
 
@@ -77,7 +78,8 @@ export async function suggestSkillsForCollection(input: {
     bannedTokens,
   });
 
-  let skills = rankSkillsForSurfacing(discovered, profile, intent, 2).slice(0, 2);
+  let skills = rankSkillsForSurfacing(discovered, profile, intent, DISCOVERY_POOL_SIZE);
+  skills = dedupeSkillsByName(skills).slice(0, 2);
 
   if (input.userId && collection) {
     const skipped = await getSkippedSkillIds(input.userId, collection);
