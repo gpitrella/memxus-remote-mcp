@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { MCP_TOOLS, MCP_CORE_TOOLS, getActiveMcpTools } from './tool-schemas.js';
+import { MCP_TOOLS, MCP_CORE_TOOLS, MCP_SKILL_ROUTING_TOOLS, getActiveMcpTools } from './tool-schemas.js';
 import { createMCPServer } from './server.js';
 
 async function withTestClient(fn: (client: Client) => Promise<void>): Promise<void> {
@@ -46,6 +46,7 @@ const LEGACY_INPUT_KEYS: Record<string, string[]> = {
   recall: ['query', 'limit', 'type', 'collection', 'tags', 'visibility', 'group_id', 'group_name', 'include_skills', 'exclude_memory_ids'],
   get_context: [
     'topic',
+    'include_skills',
     'max_memories',
     'type',
     'collection',
@@ -75,7 +76,7 @@ const LEGACY_INPUT_KEYS: Record<string, string[]> = {
 const LEGACY_REQUIRED: Record<string, string[]> = {
   remember: ['content'],
   recall: ['query'],
-  get_context: ['topic'],
+  get_context: [],
   list_memories: [],
   get_memory: ['memory_id'],
   list_collections: [],
@@ -185,15 +186,6 @@ test('listResourceTemplates returns empty array for Glama Inspector compatibilit
   });
 });
 
-test('listPrompts returns Memxus context prompts', async () => {
-  await withTestClient(async (client) => {
-    const result = await client.listPrompts();
-    assert.equal(result.prompts.length, 2);
-    assert.equal(result.prompts[0]?.name, 'memxus-context');
-    assert.equal(result.prompts[1]?.name, 'memxus-context-skills');
-  });
-});
-
 test('listResources exposes memory, skill-card, and collections-card resources', async () => {
   await withTestClient(async (client) => {
     const result = await client.listResources();
@@ -206,10 +198,43 @@ test('listResources exposes memory, skill-card, and collections-card resources',
   });
 });
 
+test('listPrompts returns Memxus context prompts without arguments', async () => {
+  await withTestClient(async (client) => {
+    const result = await client.listPrompts();
+    assert.equal(result.prompts.length, 2);
+    assert.equal(result.prompts[0]?.name, 'memxus-context');
+    assert.equal(result.prompts[1]?.name, 'memxus-context-skills');
+    for (const prompt of result.prompts) {
+      assert.deepEqual(prompt.arguments ?? [], []);
+    }
+  });
+});
+
+test('get_context tool definition exposes collections-card _meta.ui', () => {
+  const tool = MCP_CORE_TOOLS.find((t) => t.name === 'get_context');
+  assert.ok(tool);
+  const meta = tool!._meta as { ui?: { resourceUri?: string; visibility?: string[] } };
+  assert.equal(meta.ui?.resourceUri, 'ui://memxus/collections-card');
+  assert.deepEqual(meta.ui?.visibility, ['model', 'app']);
+});
+
+test('get_context_with_skills tool definition exposes skill-card _meta.ui', () => {
+  const tool = MCP_SKILL_ROUTING_TOOLS.find((t) => t.name === 'get_context_with_skills');
+  assert.ok(tool);
+  const meta = tool!._meta as { ui?: { resourceUri?: string; visibility?: string[] } };
+  assert.equal(meta.ui?.resourceUri, 'ui://memxus/skill-card');
+  assert.deepEqual(meta.ui?.visibility, ['model', 'app']);
+});
+
 test('listTools exposes core tools (9 by default)', async () => {
   await withTestClient(async (client) => {
     const result = await client.listTools();
     assert.equal(result.tools.length, 9);
+    const getContext = result.tools.find((t) => t.name === 'get_context');
+    assert.ok(getContext);
+    const meta = getContext!._meta as { ui?: { resourceUri?: string; visibility?: string[] } };
+    assert.equal(meta.ui?.resourceUri, 'ui://memxus/collections-card');
+    assert.deepEqual(meta.ui?.visibility, ['model', 'app']);
     assert.deepEqual(
       result.tools.map((tool) => tool.name),
       [...CORE_TOOL_NAMES]

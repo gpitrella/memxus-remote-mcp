@@ -4,6 +4,8 @@ import {
   isSkillRoutingEnabled,
 } from '../lib/feature-flags.js';
 import { appendRenderingInstructions } from '../lib/rendering-instructions.js';
+import { COLLECTIONS_CARD_RESOURCE_URI } from './collections-card.js';
+import { SKILL_CARD_RESOURCE_URI } from './skill-card.js';
 import type { UserMcpPreferences } from '../lib/mcp-preferences.js';
 import {
   isInAppConnectActiveForUser,
@@ -86,6 +88,24 @@ const COLLECTION_ITEM_SCHEMA = {
   },
   required: ['slug', 'name'],
 };
+
+const TOOL_UI_COLLECTIONS_CARD = {
+  _meta: {
+    ui: {
+      resourceUri: COLLECTIONS_CARD_RESOURCE_URI,
+      visibility: ['model', 'app'],
+    },
+  },
+} as const;
+
+const TOOL_UI_SKILL_CARD = {
+  _meta: {
+    ui: {
+      resourceUri: SKILL_CARD_RESOURCE_URI,
+      visibility: ['model', 'app'],
+    },
+  },
+} as const;
 
 function toolMeta(
   title: string,
@@ -237,8 +257,9 @@ export const MCP_CORE_TOOLS: Tool[] = [
   {
     name: 'get_context',
     ...toolMeta('Get context', { readOnly: true, openWorld: true, idempotent: true }),
+    ...TOOL_UI_COLLECTIONS_CARD,
     description: appendRenderingInstructions(
-      'Build a formatted context block for the current topic. Call list_collections when unsure of the exact slug. Partial collection names are resolved server-side. If the user\'s first message appears to be a coding task, technical question, or project-related request, call get_context with the detected topic BEFORE responding — do not wait for the user to ask.',
+      'Build a formatted context block for the current topic. Omit topic and collection to show the interactive collection picker (Memxus menu flow). Call list_collections when unsure of the exact slug. Partial collection names are resolved server-side. If the user\'s first message appears to be a coding task, technical question, or project-related request, call get_context with the detected topic BEFORE responding — do not wait for the user to ask.',
     ),
     inputSchema: {
       type: 'object',
@@ -246,7 +267,12 @@ export const MCP_CORE_TOOLS: Tool[] = [
         topic: {
           type: 'string',
           description:
-            'Subject to build context for (e.g. "current project", "client meeting notes").',
+            'Subject to build context for (e.g. "current project", "client meeting notes"). Omit with collection to show the collection picker.',
+        },
+        include_skills: {
+          type: 'boolean',
+          description:
+            'When showing the collection picker, set true if the user chose context + skills (default false).',
         },
         max_memories: {
           type: 'number',
@@ -269,11 +295,14 @@ export const MCP_CORE_TOOLS: Tool[] = [
             'Memory IDs to exclude (for "Ampliar el contexto" follow-up calls).',
         },
       },
-      required: ['topic'],
     },
     outputSchema: {
       type: 'object',
       properties: {
+        mode: {
+          type: 'string',
+          description: 'collection_picker when showing the collection selector; omitted for context results.',
+        },
         topic: { type: 'string', description: 'Topic that was searched.' },
         count: { type: 'number', description: 'Number of memories included.' },
         total: {
@@ -283,6 +312,11 @@ export const MCP_CORE_TOOLS: Tool[] = [
         context_block: {
           type: 'string',
           description: 'Formatted context block for injection into the conversation.',
+        },
+        collections: {
+          type: 'array',
+          items: COLLECTION_ITEM_SCHEMA,
+          description: 'Collections shown in picker mode.',
         },
         memories: {
           type: 'array',
@@ -295,7 +329,7 @@ export const MCP_CORE_TOOLS: Tool[] = [
         impact_summary: { type: 'object', additionalProperties: true },
         impact_summary_text: { type: 'string', description: 'Token reuse line for the AHORRO block when ENABLE_IMPACT_SUMMARY is on.' },
       },
-      required: ['topic', 'count', 'context_block', 'message'],
+      required: ['count', 'message'],
     },
   },
   {
@@ -613,10 +647,11 @@ const MCP_INAPP_CONNECT_TOOLS: Tool[] = [
   },
 ];
 
-const MCP_SKILL_ROUTING_TOOLS: Tool[] = [
+export const MCP_SKILL_ROUTING_TOOLS: Tool[] = [
   {
     name: 'get_context_with_skills',
     ...toolMeta('Get context with skills', { readOnly: true, openWorld: true, idempotent: true }),
+    ...TOOL_UI_SKILL_CARD,
     description:
       'Build context for a topic and suggest official Agent Skills from skills.sh. Compatible clients can render an interactive skill card; all clients still receive plain text fallback.',
     inputSchema: {

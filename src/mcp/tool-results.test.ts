@@ -22,6 +22,18 @@ test('toStructuredMemory omits embedding and exposes public fields', () => {
   assert.equal('embedding' in s, false);
 });
 
+test('toolSuccess passes _meta through to the result', () => {
+  const meta = { ui: { resourceUri: 'ui://memxus/skill-card' } };
+  const r = toolSuccess('body', { count: 1 }, meta);
+  assert.deepEqual(r._meta, meta);
+});
+
+test('toolSuccessWithUserFacing passes _meta through to the result', () => {
+  const meta = { ui: { resourceUri: 'ui://memxus/collections-card' } };
+  const r = toolSuccessWithUserFacing('body', { count: 1 }, 'footer', meta);
+  assert.deepEqual(r._meta, meta);
+});
+
 test('toolSuccess preserves text and adds structuredContent', () => {
   const text = 'Hello world';
   const r = toolSuccess(text, { count: 1 });

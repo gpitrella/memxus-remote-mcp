@@ -56,7 +56,7 @@ import {
 } from './connector-tools.js';
 import { assembleContextWithSkills } from '../routing/context-assembler.js';
 import { buildImpactPayload, buildSkillImpactFields } from '../lib/impact-summary.js';
-import { buildUserFacingTemplate, toUserFacingSkills, buildCollectionsTemplate } from '../lib/user-facing-template.js';
+import { buildUserFacingTemplate, toUserFacingSkills } from '../lib/user-facing-template.js';
 import { completeSkipEvent, recordSkipEvent, resetSkillDecision } from '../lib/skill-decisions.js';
 import {
   installSkillForUser,
@@ -83,12 +83,14 @@ import { assertOAuthScopes, assertMemoryReadScope, assertMemoryWriteScope, asser
 import { getCachedUserMcpPreferences } from '../lib/mcp-preferences-cache.js';
 import { toolSuccess, toolSuccessWithUserFacing, toStructuredMemory, toStructuredMemories, type ToolSuccessResult } from './tool-results.js';
 import { buildSkillCardMeta, buildSkillCardPayload } from './skill-card.js';
+import { buildCollectionsPickerToolResult } from './collections-card.js';
 import {
-  buildCollectionsCardMeta,
-  buildCollectionsCardPayload,
-  COLLECTIONS_CARD_RESOURCE_URI,
-} from './collections-card.js';
-import { MEMXUS_MCP_PROMPTS, MEMXUS_CONTEXT_PROMPT, MEMXUS_CONTEXT_SKILLS_PROMPT } from './prompts.js';
+  MEMXUS_MCP_PROMPTS,
+  MEMXUS_CONTEXT_PROMPT,
+  MEMXUS_CONTEXT_SKILLS_PROMPT,
+  MEMXUS_CONTEXT_PROMPT_INSTRUCTION,
+  MEMXUS_CONTEXT_SKILLS_PROMPT_INSTRUCTION,
+} from './prompts.js';
 import { detectLanguage, t, type SupportedLanguage } from '../lib/i18n.js';
 import { getUserLanguageState, updateDetectedLanguage } from '../lib/user-language-state.js';
 import {
@@ -194,159 +196,26 @@ export function createMCPServer(ctx: McpContext): Server {
 
   server.setRequestHandler(GetPromptRequestSchema, async (req) => {
     const promptName = req.params.name;
-    const args = req.params.arguments ?? {};
-    const includeSkills = promptName === MEMXUS_CONTEXT_SKILLS_PROMPT;
     if (promptName !== MEMXUS_CONTEXT_PROMPT && promptName !== MEMXUS_CONTEXT_SKILLS_PROMPT) {
       throw new Error(`Unknown prompt: ${promptName}`);
     }
 
-    const prefs = await resolvePrefs();
-    const lang = await resolveLanguage(prefs);
-    const skillCaps = resolveSkillCaps();
-    const collectionArg = args.collection?.trim();
-    const showAll = collectionArg?.toLowerCase() === 'all';
-
-    if (!collectionArg || showAll) {
-      const allCollections = await getAllCollectionsByUsage(userId);
-      const topCollections = showAll ? allCollections : await getTopCollectionsByUsage(userId, 5);
-      const showMore = !showAll && allCollections.length > topCollections.length;
-      const template = buildCollectionsTemplate({
-        lang,
-        collections: topCollections,
-        showMore,
-        allCollections: showAll ? allCollections : undefined,
-      });
-      const cardPayload = buildCollectionsCardPayload({
-        lang,
-        collections: topCollections,
-        showMore,
-        includeSkills,
-      });
-      const cardMeta = buildCollectionsCardMeta(skillCaps.renderApps);
-
-      return {
-        description: includeSkills ? 'Memxus context + skills' : 'Memxus context',
-        messages: [
-          {
-            role: 'user' as const,
-            content: {
-              type: 'text' as const,
-              text: template,
-            },
-          },
-        ],
-        ...(cardMeta
-          ? {
-              _meta: {
-                ...cardMeta,
-                collections_card: cardPayload,
-                resourceUri: COLLECTIONS_CARD_RESOURCE_URI,
-              },
-            }
-          : {}),
-      };
-    }
-
-    const collection = collectionArg;
-    const visibility = resolveDefaultReadVisibility(prefs);
-    const planCtx = await loadUserPlan(userId);
-    const limits = planCtx?.limits ?? getPlan('free').limits;
-    const resolvedLimit = resolveSearchLimit(limits);
-
-    const { memories: ms, total } = await searchMemories({
-      userId,
-      workforceWorkspaceId,
-      query: collection,
-      limit: resolvedLimit,
-      planLimits: limits,
-      collection,
-      visibility,
-      min_similarity: MCP_CONTEXT_DEFAULTS.min_similarity,
-    });
-
-    if (ms.length === 0) {
-      const text = `No memories found in collection "${collection}".`;
-      return {
-        description: text,
-        messages: [{ role: 'user' as const, content: { type: 'text' as const, text } }],
-      };
-    }
-
-    if (includeSkills && isSkillRoutingEnabled() && isSkillRoutingActiveForUser(prefs)) {
-      const assembled = await assembleContextWithSkills({
-        userId,
-        topic: collection,
-        collection,
-        memories: ms.map((m) => ({
-          id: m.id,
-          content: m.content,
-          similarity: m.similarity,
-          updated_at: m.updated_at,
-        })),
-        max_tokens_budget: MCP_CONTEXT_DEFAULTS.max_tokens_budget,
-      });
-      const impact = buildImpactPayload(assembled.tokensUsed);
-      const skillEnvironment = skillCaps.canInstall ? 'editor' : 'chat';
-      const userFacing = buildUserFacingTemplate({
-        topic: collection,
-        collection,
-        memoryCount: assembled.includedMemories.length,
-        totalMemories: total,
-        contextBlock: assembled.contextBlock,
-        memoryRows: toBulletMemories(assembled.includedMemories.map((m) => ({
-          id: m.id ?? '',
-          content: m.content,
-          updated_at: m.updated_at,
-          similarity: m.similarity,
-        }))),
-        tokensUsed: assembled.tokensUsed,
-        skills: toUserFacingSkills(assembled.suggestions),
-        stackConfidence: assembled.routing.profile.confidence,
-        environment: skillEnvironment,
-        lang,
-      });
-      const skillCard = buildSkillCardPayload({
-        lang,
-        skills: assembled.routing.activeSkills,
-        caps: skillCaps,
-        topic: collection,
-        collection,
-        cardTemplate: userFacing,
-      });
-      const cardMeta = buildSkillCardMeta(skillCard);
-
-      return {
-        description: `Context + skills for ${collection}`,
-        messages: [{ role: 'user' as const, content: { type: 'text' as const, text: userFacing } }],
-        ...(cardMeta ? { _meta: { ...cardMeta, skill_card: skillCard } } : {}),
-        ...(impact ?? {}),
-      };
-    }
-
-    const { overheadTokens } = buildMcpContextBlock(collection, collection, []);
-    const trimmed = trimMemoriesToTokenBudget(
-      ms.map((m) => ({ ...m, similarity: m.similarity })),
-      MCP_CONTEXT_DEFAULTS.max_tokens_budget,
-      formatMcpContextMemoryLine,
-      overheadTokens,
-    );
-    const block = buildMcpContextBlock(collection, collection, trimmed.memories).contextBlock;
-    const impact = buildImpactPayload(trimmed.tokensUsed);
-    const userFacing = buildUserFacingTemplate({
-      topic: collection,
-      collection,
-      memoryCount: trimmed.memories.length,
-      totalMemories: total,
-      contextBlock: block,
-      memoryRows: toBulletMemories(trimmed.memories),
-      tokensUsed: trimmed.tokensUsed,
-      lang,
-    });
+    const includeSkills = promptName === MEMXUS_CONTEXT_SKILLS_PROMPT;
+    const instruction = includeSkills
+      ? MEMXUS_CONTEXT_SKILLS_PROMPT_INSTRUCTION
+      : MEMXUS_CONTEXT_PROMPT_INSTRUCTION;
 
     return {
-      description: `Context for ${collection}`,
-      messages: [{ role: 'user' as const, content: { type: 'text' as const, text: userFacing } }],
-      ...(impact ?? {}),
+      description: includeSkills ? 'Memxus context + skills' : 'Memxus context',
+      messages: [
+        {
+          role: 'user' as const,
+          content: {
+            type: 'text' as const,
+            text: instruction,
+          },
+        },
+      ],
     };
   });
 
@@ -537,7 +406,8 @@ export function createMCPServer(ctx: McpContext): Server {
           const prefs = await resolvePrefs();
           const input = z
             .object({
-              topic: z.string().min(1),
+              topic: z.string().min(1).optional(),
+              include_skills: z.boolean().optional(),
               max_memories: z.number().int().optional(),
               type: memoryTypeEnum.optional(),
               collection: z.string().optional().nullable(),
@@ -548,12 +418,37 @@ export function createMCPServer(ctx: McpContext): Server {
               exclude_memory_ids: z.array(z.string().uuid()).optional(),
             })
             .parse(a);
+          const topic = input.topic?.trim();
+          const collectionRaw = input.collection?.trim();
+          const showAll = collectionRaw?.toLowerCase() === 'all';
+          const isPicker = showAll || (!topic && !collectionRaw);
+
+          if (isPicker) {
+            const lang = await resolveLanguage(prefs);
+            const skillCaps = resolveSkillCaps();
+            const allCollections = await getAllCollectionsByUsage(userId);
+            const topCollections = showAll
+              ? allCollections
+              : await getTopCollectionsByUsage(userId, 5);
+            const showMore = !showAll && allCollections.length > topCollections.length;
+            result = buildCollectionsPickerToolResult({
+              lang,
+              collections: topCollections,
+              showMore,
+              showAll,
+              allCollections: showAll ? allCollections : undefined,
+              includeSkills: input.include_skills ?? false,
+              caps: skillCaps,
+            });
+            break;
+          }
+
           const visibility = resolveDefaultReadVisibility(prefs, input.visibility);
           const contextLimit = resolveSearchLimit(limits, input.max_memories);
           const { memories: ms, total } = await searchMemories({
             userId,
             workforceWorkspaceId,
-            query: input.topic,
+            query: topic!,
             limit: contextLimit,
             planLimits: limits,
             type: input.type,
@@ -569,7 +464,7 @@ export function createMCPServer(ctx: McpContext): Server {
             const scope = input.collection ? ` (collection: ${input.collection})` : '';
             const text = `No relevant memories found for this topic${scope}.`;
             const userFacing = buildUserFacingTemplate({
-              topic: input.topic,
+              topic: topic!,
               collection: input.collection,
               memoryCount: 0,
               totalMemories: total,
@@ -578,7 +473,7 @@ export function createMCPServer(ctx: McpContext): Server {
             result = toolSuccessWithUserFacing(
               text,
               {
-                topic: input.topic,
+                topic: topic!,
                 count: 0,
                 total,
                 context_block: text,
@@ -588,7 +483,7 @@ export function createMCPServer(ctx: McpContext): Server {
               userFacing,
             );
           } else {
-            const { overheadTokens } = buildMcpContextBlock(input.topic, input.collection, []);
+            const { overheadTokens } = buildMcpContextBlock(topic!, input.collection, []);
             const trimmed = trimMemoriesToTokenBudget(
               ms.map((m) => ({
                 ...m,
@@ -599,13 +494,13 @@ export function createMCPServer(ctx: McpContext): Server {
               overheadTokens
             );
             const block = buildMcpContextBlock(
-              input.topic,
+              topic!,
               input.collection,
               trimmed.memories
             ).contextBlock;
             const impact = buildImpactPayload(trimmed.tokensUsed);
             const userFacing = buildUserFacingTemplate({
-              topic: input.topic,
+              topic: topic!,
               collection: input.collection,
               memoryCount: trimmed.memories.length,
               totalMemories: total,
@@ -617,7 +512,7 @@ export function createMCPServer(ctx: McpContext): Server {
             result = toolSuccessWithUserFacing(
               block,
               {
-                topic: input.topic,
+                topic: topic!,
                 count: trimmed.memories.length,
                 total,
                 context_block: block,
