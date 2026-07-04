@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { MCP_CORE_TOOLS, getActiveMcpTools } from './tool-schemas.js';
 import { RESOURCES } from './resources.js';
+import { MEMXUS_MCP_PROMPTS } from './prompts.js';
 import { resolveBearerAuthContext } from '../lib/auth.js';
 import { getCachedUserMcpPreferences } from '../lib/mcp-preferences-cache.js';
 
@@ -63,7 +64,7 @@ async function respondDiscoveryList(method: string, req: Request): Promise<unkno
     case 'resources/templates/list':
       return { resourceTemplates: [] };
     case 'prompts/list':
-      return { prompts: [] };
+      return { prompts: [...MEMXUS_MCP_PROMPTS] };
     default:
       return null;
   }

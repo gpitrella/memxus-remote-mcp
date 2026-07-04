@@ -262,3 +262,38 @@ test('handleMcpGet prunes expired session before lookup', async () => {
   assert.equal(res.statusCode, 400);
   assert.equal(_test.hasSession(sessionId), false);
 });
+
+test('extractHandshake parses object extensions per MCP Apps spec', () => {
+  const handshake = _test.extractHandshake({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'initialize',
+    params: {
+      protocolVersion: '2024-11-05',
+      clientInfo: { name: 'test-client', version: '1.0.0' },
+      capabilities: {
+        extensions: {
+          'io.modelcontextprotocol/ui': {
+            mimeTypes: ['text/html;profile=mcp-app'],
+          },
+        },
+      },
+    },
+  });
+
+  assert.ok(handshake);
+  assert.deepEqual(handshake!.negotiatedExtensions, ['io.modelcontextprotocol/ui']);
+  assert.deepEqual(handshake!.extensionsDetail?.['io.modelcontextprotocol/ui']?.mimeTypes, [
+    'text/html;profile=mcp-app',
+  ]);
+});
+
+test('extractHandshake returns undefined for non-initialize requests', () => {
+  const handshake = _test.extractHandshake({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/list',
+    params: {},
+  });
+  assert.equal(handshake, undefined);
+});

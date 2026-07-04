@@ -1,4 +1,6 @@
-export const MCP_APPS_EXT = 'mcp_apps';
+export const MCP_APPS_EXT = 'io.modelcontextprotocol/ui';
+const LEGACY_APPS_KEYS = ['mcp_apps'] as const;
+const MCP_APP_MIME = 'text/html;profile=mcp-app';
 
 export type Surface =
   | 'code-editor'
@@ -13,6 +15,7 @@ export interface McpHandshakeContext {
   clientInfo?: { name?: string; version?: string };
   clientCapabilities?: Record<string, unknown>;
   negotiatedExtensions?: string[];
+  extensionsDetail?: Record<string, { mimeTypes?: string[] }>;
   appsFeatures?: { directActions?: boolean };
   meta?: {
     locale?: string;
@@ -78,7 +81,13 @@ function hasRoots(clientCapabilities?: Record<string, unknown>): boolean {
 
 function hasAppsCapability(hs?: McpHandshakeContext): boolean {
   if (!hs) return false;
-  if (hs.negotiatedExtensions?.includes(MCP_APPS_EXT)) return true;
+
+  if (hs.negotiatedExtensions?.includes(MCP_APPS_EXT)) {
+    const detail = hs.extensionsDetail?.[MCP_APPS_EXT];
+    if (!detail || detail.mimeTypes?.includes(MCP_APP_MIME)) return true;
+  }
+
+  if (LEGACY_APPS_KEYS.some((k) => hs.negotiatedExtensions?.includes(k))) return true;
 
   const experimental = hs.clientCapabilities?.experimental;
   if (experimental && typeof experimental === 'object') {

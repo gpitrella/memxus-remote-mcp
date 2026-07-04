@@ -457,6 +457,56 @@ export async function listCollections(userId: string): Promise<
   return mergeCollectionLists(registered ?? [], slugs);
 }
 
+export async function getTopCollectionsByUsage(
+  userId: string,
+  limit = 5,
+): Promise<Array<{ slug: string; name: string; description: string | null; memoryCount: number }>> {
+  const [stats, collections] = await Promise.all([getStats(userId), listCollections(userId)]);
+  const metaBySlug = new Map(collections.map((row) => [row.slug, row]));
+
+  return Object.entries(stats.byCollection)
+    .filter(([slug]) => slug && slug !== '(uncategorized)')
+    .map(([slug, memoryCount]) => {
+      const meta = metaBySlug.get(slug);
+      return {
+        slug,
+        name: meta?.name ?? slug,
+        description: meta?.description ?? null,
+        memoryCount,
+      };
+    })
+    .sort((a, b) => b.memoryCount - a.memoryCount || a.name.localeCompare(b.name))
+    .slice(0, limit);
+}
+
+export async function getAllCollectionsByUsage(
+  userId: string,
+): Promise<Array<{ slug: string; name: string; description: string | null; memoryCount: number }>> {
+  const [stats, collections] = await Promise.all([getStats(userId), listCollections(userId)]);
+  const metaBySlug = new Map(collections.map((row) => [row.slug, row]));
+  const counts = new Map<string, number>();
+
+  for (const [slug, count] of Object.entries(stats.byCollection)) {
+    if (!slug || slug === '(uncategorized)') continue;
+    counts.set(slug, count);
+  }
+  for (const row of collections) {
+    if (!counts.has(row.slug)) counts.set(row.slug, 0);
+  }
+
+  return [...counts.entries()]
+    .map(([slug, memoryCount]) => {
+      const meta = metaBySlug.get(slug);
+      return {
+        slug,
+        name: meta?.name ?? slug,
+        description: meta?.description ?? null,
+        memoryCount,
+      };
+    })
+    .sort((a, b) => b.memoryCount - a.memoryCount || a.name.localeCompare(b.name));
+}
+
 export async function deleteMemory(p: {
   userId: string;
   workforceWorkspaceId?: string;

@@ -455,3 +455,45 @@ export function buildUserFacingTemplate(input: UserFacingTemplateInput): string 
 }
 
 export { formatSkillInjectedSummary };
+
+export type CollectionsTemplateInput = {
+  lang?: SupportedLanguage;
+  collections: Array<{
+    slug: string;
+    name: string;
+    description: string | null;
+    memoryCount: number;
+  }>;
+  showMore: boolean;
+  tokensSaved?: number;
+  allCollections?: Array<{ slug: string; name: string; description: string | null; memoryCount: number }>;
+};
+
+export function buildCollectionsTemplate(input: CollectionsTemplateInput): string {
+  const lang = input.lang ?? 'es';
+  const items = input.allCollections ?? input.collections;
+  const lines: string[] = [t(lang, 'collectionsHeader'), ''];
+
+  items.forEach((item, index) => {
+    const desc = item.description ? ` — ${item.description}` : '';
+    lines.push(`${index + 1}. ${item.slug} — ${item.name}${desc} (${item.memoryCount} memories)`);
+  });
+
+  if (input.showMore && !input.allCollections) {
+    lines.push('');
+    lines.push(`→ ${t(lang, 'collectionsShowMore')}: ${t(lang, 'collectionsShowMoreHint')}`);
+  }
+
+  if (input.tokensSaved && input.tokensSaved > 0) {
+    lines.push('');
+    lines.push(
+      lang === 'en'
+        ? `Tokens reused: ${input.tokensSaved.toLocaleString()}`
+        : lang === 'pt'
+          ? `Tokens reutilizados: ${input.tokensSaved.toLocaleString()}`
+          : `Tokens reutilizados: ${input.tokensSaved.toLocaleString()}`,
+    );
+  }
+
+  return lines.join('\n');
+}

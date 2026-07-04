@@ -26,6 +26,7 @@ const STATELESS_POST_FALLBACK_METHODS = new Set([
   'resources/list',
   'resources/templates/list',
   'prompts/list',
+  'prompts/get',
 ]);
 
 const DEFAULT_SESSION_TTL_MS = 60 * 60 * 1000;
@@ -156,7 +157,9 @@ function extractHandshake(body: unknown): McpHandshakeContext | undefined {
   if (!isInitializeRequest(body)) return undefined;
   const params = (body as { params?: Record<string, unknown> }).params ?? {};
   const meta = params._meta;
-  const apps = (params.capabilities as Record<string, unknown> | undefined)?.experimental;
+  const caps = params.capabilities as Record<string, unknown> | undefined;
+  const extensions = caps?.extensions;
+  const apps = caps?.experimental;
   const directActions =
     apps && typeof apps === 'object'
       ? (apps as Record<string, unknown>).directActions === true ||
@@ -169,12 +172,20 @@ function extractHandshake(body: unknown): McpHandshakeContext | undefined {
         ? (params.clientInfo as { name?: string; version?: string })
         : undefined,
     clientCapabilities:
-      params.capabilities && typeof params.capabilities === 'object'
-        ? (params.capabilities as Record<string, unknown>)
-        : undefined,
-    negotiatedExtensions: Array.isArray((params.capabilities as Record<string, unknown> | undefined)?.extensions)
-      ? (((params.capabilities as Record<string, unknown>).extensions as unknown[]) as string[])
-      : undefined,
+      caps && typeof caps === 'object' ? caps : undefined,
+    negotiatedExtensions: (() => {
+      if (Array.isArray(extensions)) return extensions as string[];
+      if (extensions && typeof extensions === 'object') {
+        return Object.keys(extensions as Record<string, unknown>);
+      }
+      return undefined;
+    })(),
+    extensionsDetail: (() => {
+      if (extensions && typeof extensions === 'object' && !Array.isArray(extensions)) {
+        return extensions as Record<string, { mimeTypes?: string[] }>;
+      }
+      return undefined;
+    })(),
     appsFeatures: { directActions },
     meta:
       meta && typeof meta === 'object'
@@ -368,6 +379,7 @@ export function _resetSessionsForTest(): void {
 
 export const _test = {
   resetSessions: _resetSessionsForTest,
+  extractHandshake,
   setStatelessMode: (value: boolean | undefined) => {
     mcpStatelessOverride = value;
   },

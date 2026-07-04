@@ -15,7 +15,11 @@ type TranslationKey =
   | 'skillLoaded'
   | 'skipRecorded'
   | 'installConfirmed'
-  | 'installCommandReady';
+  | 'installCommandReady'
+  | 'collectionsSelect'
+  | 'collectionsShowMore'
+  | 'collectionsHeader'
+  | 'collectionsShowMoreHint';
 
 const DICTIONARY: Record<SupportedLanguage, Record<TranslationKey, string>> = {
   en: {
@@ -34,6 +38,10 @@ const DICTIONARY: Record<SupportedLanguage, Record<TranslationKey, string>> = {
     skipRecorded: 'Skill skipped for this collection.',
     installConfirmed: 'Install confirmed.',
     installCommandReady: 'Run the install command in your terminal and then confirm it here.',
+    collectionsSelect: 'Select',
+    collectionsShowMore: 'See more',
+    collectionsHeader: 'COLLECTIONS',
+    collectionsShowMoreHint: 'Reply with a collection slug or "all" to list every collection.',
   },
   es: {
     skillsHeader: 'Skills sugeridas',
@@ -51,6 +59,10 @@ const DICTIONARY: Record<SupportedLanguage, Record<TranslationKey, string>> = {
     skipRecorded: 'Skill omitida para esta coleccion.',
     installConfirmed: 'Instalación confirmada.',
     installCommandReady: 'Ejecutá el comando de instalación en tu terminal y luego confirmalo acá.',
+    collectionsSelect: 'Seleccionar',
+    collectionsShowMore: 'Ver más',
+    collectionsHeader: 'COLECCIONES',
+    collectionsShowMoreHint: 'Respondé con un slug de colección o "all" para ver todas.',
   },
   pt: {
     skillsHeader: 'Skills sugeridas',
@@ -68,6 +80,10 @@ const DICTIONARY: Record<SupportedLanguage, Record<TranslationKey, string>> = {
     skipRecorded: 'Skill ignorada para esta colecao.',
     installConfirmed: 'Instalacao confirmada.',
     installCommandReady: 'Execute o comando de instalacao no terminal e depois confirme aqui.',
+    collectionsSelect: 'Selecionar',
+    collectionsShowMore: 'Ver mais',
+    collectionsHeader: 'COLECOES',
+    collectionsShowMoreHint: 'Responda com um slug de colecao ou "all" para ver todas.',
   },
 };
 

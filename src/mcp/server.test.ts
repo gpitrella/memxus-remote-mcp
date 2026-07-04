@@ -185,19 +185,24 @@ test('listResourceTemplates returns empty array for Glama Inspector compatibilit
   });
 });
 
-test('listPrompts returns empty array for Glama Inspector compatibility', async () => {
+test('listPrompts returns Memxus context prompts', async () => {
   await withTestClient(async (client) => {
     const result = await client.listPrompts();
-    assert.deepEqual(result.prompts, []);
+    assert.equal(result.prompts.length, 2);
+    assert.equal(result.prompts[0]?.name, 'memxus-context');
+    assert.equal(result.prompts[1]?.name, 'memxus-context-skills');
   });
 });
 
-test('listResources exposes memory and skill-card resources', async () => {
+test('listResources exposes memory, skill-card, and collections-card resources', async () => {
   await withTestClient(async (client) => {
     const result = await client.listResources();
-    assert.equal(result.resources.length, 2);
+    assert.equal(result.resources.length, 3);
     assert.equal(result.resources[0]?.uri, 'memory://recent');
     assert.equal(result.resources[1]?.uri, 'ui://memxus/skill-card');
+    assert.equal(result.resources[2]?.uri, 'ui://memxus/collections-card');
+    assert.equal(result.resources[1]?.mimeType, 'text/html;profile=mcp-app');
+    assert.equal(result.resources[2]?.mimeType, 'text/html;profile=mcp-app');
   });
 });
 
