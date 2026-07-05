@@ -2,9 +2,9 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import {
   isInAppConnectEnabled,
   isSkillRoutingEnabled,
+  areSkillsHardDisabled,
 } from '../lib/feature-flags.js';
 import { appendRenderingInstructions } from '../lib/rendering-instructions.js';
-import { COLLECTIONS_CARD_RESOURCE_URI } from './collections-card.js';
 import { SKILL_CARD_RESOURCE_URI } from './skill-card.js';
 import type { UserMcpPreferences } from '../lib/mcp-preferences.js';
 import {
@@ -88,15 +88,6 @@ const COLLECTION_ITEM_SCHEMA = {
   },
   required: ['slug', 'name'],
 };
-
-const TOOL_UI_COLLECTIONS_CARD = {
-  _meta: {
-    ui: {
-      resourceUri: COLLECTIONS_CARD_RESOURCE_URI,
-      visibility: ['model', 'app'],
-    },
-  },
-} as const;
 
 const TOOL_UI_SKILL_CARD = {
   _meta: {
@@ -257,9 +248,8 @@ export const MCP_CORE_TOOLS: Tool[] = [
   {
     name: 'get_context',
     ...toolMeta('Get context', { readOnly: true, openWorld: true, idempotent: true }),
-    ...TOOL_UI_COLLECTIONS_CARD,
     description: appendRenderingInstructions(
-      'Build a formatted context block for the current topic. Omit topic and collection to show the interactive collection picker (Memxus menu flow). Call list_collections when unsure of the exact slug. Partial collection names are resolved server-side. If the user\'s first message appears to be a coding task, technical question, or project-related request, call get_context with the detected topic BEFORE responding — do not wait for the user to ask.',
+      'Build a formatted context block for the current topic. Omit topic and collection to show the text collection picker (Memxus menu flow). Call list_collections when unsure of the exact slug. Partial collection names are resolved server-side. If the user\'s first message appears to be a coding task, technical question, or project-related request, call get_context with the detected topic BEFORE responding — do not wait for the user to ask.',
     ),
     inputSchema: {
       type: 'object',
@@ -889,19 +879,17 @@ function patchSkillRoutingToolDescriptions(tools: Tool[]): Tool[] {
 export function getActiveMcpTools(opts?: { prefs?: UserMcpPreferences }): Tool[] {
   const tools = [...MCP_CORE_TOOLS];
   const prefs = opts?.prefs;
-  const skillRoutingOn = prefs
+  const skillsDisabled = areSkillsHardDisabled();
+  const skillRoutingOn = !skillsDisabled && (prefs
     ? isSkillRoutingActiveForUser(prefs)
-    : isSkillRoutingEnabled();
+    : isSkillRoutingEnabled());
+
   if (prefs) {
     if (isInAppConnectActiveForUser(prefs)) tools.push(...MCP_INAPP_CONNECT_TOOLS);
-    if (isSkillRoutingActiveForUser(prefs)) {
-      tools.push(...MCP_SKILL_ROUTING_TOOLS, ...MCP_SKILL_ACTION_TOOLS);
-    }
+    if (skillRoutingOn) tools.push(...MCP_SKILL_ROUTING_TOOLS, ...MCP_SKILL_ACTION_TOOLS);
   } else {
     if (isInAppConnectEnabled()) tools.push(...MCP_INAPP_CONNECT_TOOLS);
-    if (isSkillRoutingEnabled()) {
-      tools.push(...MCP_SKILL_ROUTING_TOOLS, ...MCP_SKILL_ACTION_TOOLS);
-    }
+    if (skillRoutingOn) tools.push(...MCP_SKILL_ROUTING_TOOLS, ...MCP_SKILL_ACTION_TOOLS);
   }
   return skillRoutingOn ? patchSkillRoutingToolDescriptions(tools) : tools;
 }

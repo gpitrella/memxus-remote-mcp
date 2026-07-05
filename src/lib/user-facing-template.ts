@@ -309,11 +309,14 @@ function buildPlainSkillLoadSection(input: UserFacingTemplateInput): string[] {
 
 function buildSavingsSection(input: UserFacingTemplateInput): string[] {
   const lines: string[] = [];
+  const skillName = input.topic?.trim() || 'skill';
 
-  if (input.skillImpactText?.trim()) {
-    lines.push(input.skillImpactText.trim());
+  if (input.skillTokensUsed !== undefined && input.skillTokensUsed > 0) {
+    lines.push(formatSkillInjectedSummary(skillName, input.skillTokensUsed));
   } else if (input.tokensUsed !== undefined && input.tokensUsed > 0) {
     lines.push(formatContextReuseSummary(input.tokensUsed));
+  } else if (input.skillImpactText?.trim()) {
+    lines.push(input.skillImpactText.trim());
   } else if (input.impactSummaryText?.trim()) {
     lines.push(input.impactSummaryText.trim());
   }
@@ -421,8 +424,10 @@ export function buildUserFacingTemplate(input: UserFacingTemplateInput): string 
   }
 
   if (input.mode === 'skill_load') {
-    if (input.skillImpactText?.trim()) {
-      lines.push(input.skillImpactText.trim());
+    const savings = buildSavingsSection(input);
+    if (savings.length > 0) {
+      lines.push(sectionTitle(lang, 'savings'));
+      lines.push(...savings);
     }
     lines.push('');
     lines.push(buildQuestionLine({ topic: input.topic, lang }));
@@ -445,6 +450,7 @@ export function buildUserFacingTemplate(input: UserFacingTemplateInput): string 
   const savings = buildSavingsSection(input);
   if (savings.length > 0) {
     lines.push('');
+    lines.push(sectionTitle(lang, 'savings'));
     lines.push(...savings);
   }
 

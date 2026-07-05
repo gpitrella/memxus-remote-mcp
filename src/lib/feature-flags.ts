@@ -4,6 +4,7 @@ export const ENABLE_SKILL_ROUTING = 'ENABLE_SKILL_ROUTING';
 export const ENABLE_INAPP_CONNECT = 'ENABLE_INAPP_CONNECT';
 export const ENABLE_SKILL_CARD_UI = 'ENABLE_SKILL_CARD_UI';
 export const FORCE_PLAIN_TEXT = 'FORCE_PLAIN_TEXT';
+export const DISABLE_SKILLS = 'DISABLE_SKILLS';
 export { ENABLE_IMPACT_SUMMARY, isImpactSummaryEnabled } from './impact-summary.js';
 
 export function isFeatureFlagEnabled(flag: string): boolean {
@@ -24,4 +25,9 @@ export function isSkillCardUiEnabled(): boolean {
 
 export function isForcePlainTextEnabled(): boolean {
   return isFeatureFlagEnabled(FORCE_PLAIN_TEXT);
+}
+
+/** Hard kill-switch: when true, skill tools are not listed and skill cards are off. */
+export function areSkillsHardDisabled(): boolean {
+  return isFeatureFlagEnabled(DISABLE_SKILLS);
 }

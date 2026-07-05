@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { buildUserFacingTemplate } from './user-facing-template.js';
+import { formatContextReuseSummary, formatSkillInjectedSummary } from './impact-summary.js';
 
 describe('user-facing-template v3.2', () => {
   it('renders without emojis and with completeness copy', () => {
@@ -18,8 +19,49 @@ describe('user-facing-template v3.2', () => {
     assert.doesNotMatch(text!, /━/);
     assert.match(text!, /CONTEXTO — project:memxus/);
     assert.match(text!, /5 más relevantes de 12 guardadas/);
-    assert.match(text!, /~1,509 tokens de contexto reutilizados/);
+    assert.match(text!, /^AHORRO/m);
+    assert.ok(text!.includes(formatContextReuseSummary(1509)));
     assert.match(text!, /Ampliar el contexto/);
+  });
+
+  it('shows AHORRO from tokensUsed without ENABLE_IMPACT_SUMMARY structured fields', () => {
+    const prev = process.env.ENABLE_IMPACT_SUMMARY;
+    delete process.env.ENABLE_IMPACT_SUMMARY;
+    try {
+      const text = buildUserFacingTemplate({
+        topic: 'api',
+        memoryCount: 2,
+        totalMemories: 2,
+        tokensUsed: 1500,
+        variant: 'plain',
+      });
+      assert.match(text!, /^AHORRO/m);
+      assert.match(text!, /~1,500 tokens de contexto reutilizados/);
+    } finally {
+      if (prev === undefined) delete process.env.ENABLE_IMPACT_SUMMARY;
+      else process.env.ENABLE_IMPACT_SUMMARY = prev;
+    }
+  });
+
+  it('omits AHORRO when tokensUsed is zero', () => {
+    const text = buildUserFacingTemplate({
+      topic: 'empty',
+      memoryCount: 0,
+      totalMemories: 0,
+      tokensUsed: 0,
+      variant: 'plain',
+    });
+    assert.doesNotMatch(text!, /^AHORRO/m);
+  });
+
+  it('skill_load full variant shows skill savings from skillTokensUsed without skillImpactText', () => {
+    const text = buildUserFacingTemplate({
+      mode: 'skill_load',
+      topic: 'find-skills',
+      skillTokensUsed: 420,
+    });
+    assert.match(text!, /^AHORRO/m);
+    assert.ok(text!.includes(formatSkillInjectedSummary('find-skills', 420)));
   });
 
   it('formats skills without icons', () => {
