@@ -36,6 +36,11 @@ export function toolSuccess(
   };
 }
 
+/**
+ * Render invariant: `_meta.ui.resourceUri` is allowed only in the Skills domain (skill-card.ts).
+ * `displayMode='template_only'` is reserved for card fallbacks when renderApps is false
+ * (collections picker, skills). Memory tools use default `'append'`.
+ */
 export function toolSuccessWithUserFacing(
   body: string,
   structured: Record<string, unknown>,

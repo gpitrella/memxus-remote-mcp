@@ -7,6 +7,7 @@ import {
   isInAppConnectActiveForUser,
 } from './mcp-preferences.js';
 import { getActiveMcpTools } from '../mcp/tool-schemas.js';
+import { DISABLE_SKILLS, ENABLE_INAPP_CONNECT, ENABLE_SKILL_ROUTING } from './feature-flags.js';
 import { assertOAuthScopes, tokenHasScopes, getDefaultOAuthScope, normalizeRequestedOAuthScopes } from './oauth-scopes.js';
 
 test('parseMcpPreferencesJson applies defaults', () => {
@@ -26,10 +27,10 @@ test('resolveDefaultReadVisibility respects include_group_memories_in_context', 
 });
 
 test('getActiveMcpTools hides optional tools when user pref off', () => {
-  const envOn = process.env.ENABLE_INAPP_CONNECT;
-  const envSkill = process.env.ENABLE_SKILL_ROUTING;
-  process.env.ENABLE_INAPP_CONNECT = 'true';
-  process.env.ENABLE_SKILL_ROUTING = 'true';
+  const envOn = process.env[ENABLE_INAPP_CONNECT];
+  const envSkill = process.env[ENABLE_SKILL_ROUTING];
+  process.env[ENABLE_INAPP_CONNECT] = 'true';
+  process.env[ENABLE_SKILL_ROUTING] = 'true';
   try {
     const withoutUser = getActiveMcpTools({
       prefs: { ...DEFAULT_USER_MCP_PREFERENCES },
@@ -45,10 +46,35 @@ test('getActiveMcpTools hides optional tools when user pref off', () => {
     });
     assert.equal(withUser.length, 19);
   } finally {
-    if (envOn === undefined) delete process.env.ENABLE_INAPP_CONNECT;
-    else process.env.ENABLE_INAPP_CONNECT = envOn;
-    if (envSkill === undefined) delete process.env.ENABLE_SKILL_ROUTING;
-    else process.env.ENABLE_SKILL_ROUTING = envSkill;
+    if (envOn === undefined) delete process.env[ENABLE_INAPP_CONNECT];
+    else process.env[ENABLE_INAPP_CONNECT] = envOn;
+    if (envSkill === undefined) delete process.env[ENABLE_SKILL_ROUTING];
+    else process.env[ENABLE_SKILL_ROUTING] = envSkill;
+  }
+});
+
+test('DISABLE_SKILLS kill-switch overrides skill routing env and user pref', () => {
+  const prevDisable = process.env[DISABLE_SKILLS];
+  const prevRouting = process.env[ENABLE_SKILL_ROUTING];
+  process.env[DISABLE_SKILLS] = 'true';
+  process.env[ENABLE_SKILL_ROUTING] = 'true';
+  try {
+    const tools = getActiveMcpTools({
+      prefs: {
+        ...DEFAULT_USER_MCP_PREFERENCES,
+        skill_routing_enabled: true,
+        in_app_connect_enabled: true,
+      },
+    });
+    const names = tools.map((t) => t.name);
+    assert.equal(tools.length, 9);
+    assert.ok(!names.includes('get_context_with_skills'));
+    assert.ok(!names.includes('install_skill'));
+  } finally {
+    if (prevDisable === undefined) delete process.env[DISABLE_SKILLS];
+    else process.env[DISABLE_SKILLS] = prevDisable;
+    if (prevRouting === undefined) delete process.env[ENABLE_SKILL_ROUTING];
+    else process.env[ENABLE_SKILL_ROUTING] = prevRouting;
   }
 });
 

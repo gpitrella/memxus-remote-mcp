@@ -4,6 +4,7 @@ import type { SupportedLanguage } from '../lib/i18n.js';
 import { t } from '../lib/i18n.js';
 import { communityNotice, presentSkill } from '../lib/skill-sanitizers.js';
 
+/** Interactive MCP App cards — Skills domain only; memory tools must return plain text. */
 export const SKILL_CARD_RESOURCE_URI = 'ui://memxus/skill-card';
 
 export type SkillCardPayload = {

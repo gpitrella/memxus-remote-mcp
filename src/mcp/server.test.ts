@@ -210,12 +210,11 @@ test('listPrompts returns Memxus context prompts without arguments', async () =>
   });
 });
 
-test('get_context tool definition exposes collections-card _meta.ui', () => {
+test('get_context tool definition does not expose collections-card _meta.ui', () => {
   const tool = MCP_CORE_TOOLS.find((t) => t.name === 'get_context');
   assert.ok(tool);
-  const meta = tool!._meta as { ui?: { resourceUri?: string; visibility?: string[] } };
-  assert.equal(meta.ui?.resourceUri, 'ui://memxus/collections-card');
-  assert.deepEqual(meta.ui?.visibility, ['model', 'app']);
+  const meta = tool!._meta as { ui?: { resourceUri?: string } } | undefined;
+  assert.equal(meta?.ui?.resourceUri, undefined);
 });
 
 test('get_context_with_skills tool definition exposes skill-card _meta.ui', () => {
@@ -232,9 +231,8 @@ test('listTools exposes core tools (9 by default)', async () => {
     assert.equal(result.tools.length, 9);
     const getContext = result.tools.find((t) => t.name === 'get_context');
     assert.ok(getContext);
-    const meta = getContext!._meta as { ui?: { resourceUri?: string; visibility?: string[] } };
-    assert.equal(meta.ui?.resourceUri, 'ui://memxus/collections-card');
-    assert.deepEqual(meta.ui?.visibility, ['model', 'app']);
+    const meta = getContext!._meta as { ui?: { resourceUri?: string } } | undefined;
+    assert.equal(meta?.ui?.resourceUri, undefined);
     assert.deepEqual(
       result.tools.map((tool) => tool.name),
       [...CORE_TOOL_NAMES]

@@ -59,6 +59,7 @@ export function buildCollectionsCardMeta(
   };
 }
 
+// Collections picker: plain text only — interactive cards are Skills-only.
 export function buildCollectionsPickerToolResult(input: {
   lang: SupportedLanguage;
   collections: CollectionCardItem[];
@@ -68,26 +69,14 @@ export function buildCollectionsPickerToolResult(input: {
   includeSkills: boolean;
   caps: EffectiveCapabilities;
 }): ToolSuccessResult {
+  void input.caps;
+  void input.includeSkills;
   const template = buildCollectionsTemplate({
     lang: input.lang,
     collections: input.collections,
     showMore: input.showMore,
     allCollections: input.showAll ? input.allCollections : undefined,
   });
-  const cardPayload = buildCollectionsCardPayload({
-    lang: input.lang,
-    collections: input.collections,
-    showMore: input.showMore,
-    includeSkills: input.includeSkills,
-  });
-  const cardMeta = buildCollectionsCardMeta(input.caps.renderApps);
-  const meta = cardMeta
-    ? {
-        ...cardMeta,
-        collections_card: cardPayload,
-        resourceUri: COLLECTIONS_CARD_RESOURCE_URI,
-      }
-    : undefined;
 
   return toolSuccessWithUserFacing(
     template,
@@ -103,7 +92,7 @@ export function buildCollectionsPickerToolResult(input: {
       message: template,
     },
     template,
-    meta,
-    input.caps.renderApps ? 'append' : 'template_only',
+    undefined,
+    'template_only',
   );
 }

@@ -26,7 +26,6 @@ import {
   assertWithinPlanLimits,
   formatPlanLimitToolError,
   invalidatePlanContextCache,
-  loadUserPlan,
   logUsage,
   PlanLimitError,
   resolveListLimit,
@@ -72,6 +71,7 @@ import {
   isSkillRoutingEnabled,
   isSkillCardUiEnabled,
   isForcePlainTextEnabled,
+  areSkillsHardDisabled,
 } from '../lib/feature-flags.js';
 import {
   isInAppConnectActiveForUser,
@@ -165,6 +165,9 @@ export function createMCPServer(ctx: McpContext): Server {
 
   function resolveSkillCaps(): EffectiveCapabilities {
     const caps = resolveCapabilities(ctx.handshake);
+    if (areSkillsHardDisabled()) {
+      return { ...caps, renderApps: false, hostSkipAction: false };
+    }
     if (!isSkillCardUiEnabled() || isForcePlainTextEnabled()) {
       return { ...caps, renderApps: false, hostSkipAction: false };
     }
@@ -953,6 +956,7 @@ export function createMCPServer(ctx: McpContext): Server {
             userId,
           });
           const skillEnvironment = skillCaps.canInstall ? 'editor' : 'chat';
+          const suggestTokensUsed = estimateTokens(ms.map((m) => m.content).join('\n'));
           const plainUserFacing = buildUserFacingTemplate({
             topic: input.topic,
             collection: input.collection,
@@ -964,6 +968,7 @@ export function createMCPServer(ctx: McpContext): Server {
             environment: skillEnvironment,
             lang,
             variant: 'plain',
+            tokensUsed: suggestTokensUsed,
           });
           const cardUserFacing = buildUserFacingTemplate({
             topic: input.topic,
@@ -975,6 +980,7 @@ export function createMCPServer(ctx: McpContext): Server {
             requestedLimit: contextLimit,
             environment: skillEnvironment,
             lang,
+            tokensUsed: suggestTokensUsed,
           });
           const skillCard = buildSkillCardPayload({
             lang,
