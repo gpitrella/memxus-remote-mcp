@@ -21,7 +21,7 @@ Builds persistent context from GitHub, Notion, and your saved decisions — deli
 
 <div align="center">
 
-https://www.youtube.com/watch?v=Tg7BVuEXFm0
+[![Watch the Memxus demo on YouTube](https://markdown-videos-api.jorgenkh.no/youtube/Tg7BVuEXFm0)](https://www.youtube.com/watch?v=Tg7BVuEXFm0)
 
 ▶️ [**Watch the demo on YouTube**](https://www.youtube.com/watch?v=Tg7BVuEXFm0) · [Demo page](https://www.memxus.com/demo)
 
