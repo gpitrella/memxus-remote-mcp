@@ -1,5 +1,5 @@
 {
-  "name": "@aimemory/mcp-remote",
+  "name": "@memxus/mcp",
   "version": "1.1.0",
   "description": "Memxus AI Context Engine — Remote MCP Server with OAuth 2.1, Streamable HTTP, GitHub/Notion sync, and Skills routing",
   "type": "module",
@@ -11,7 +11,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "node --import tsx --import ./src/test/setup-env.ts --test src/**/*.test.ts",
+    "test": "node --import tsx --import ./src/test/setup-env.ts --test src/**/*.test.ts scripts/**/*.test.mjs",
     "test:smoke": "node scripts/smoke-mcp.mjs",
     "test:smoke-v32": "node scripts/smoke-v32-total.mjs",
     "lint": "eslint src --ext .ts",
