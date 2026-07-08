@@ -3,7 +3,7 @@
   "name": "com.memxus/memxus",
   "title": "Memxus — AI Context Engine",
   "description": "AI context engine for developers: GitHub, Notion, memory unified for Claude, Cursor, and ChatGPT.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "websiteUrl": "https://memxus.com",
   "repository": {
     "url": "https://github.com/gpitrella/memxus-remote-mcp",
@@ -25,7 +25,7 @@
   "_meta": {
     "io.modelcontextprotocol.registry/publisher-provided": {
       "license": "AGPL-3.0",
-      "extendedDescription": "The AI context engine for developers. Automatically builds persistent context from your GitHub repos, Notion docs, commits, PRs, and decisions — then delivers it to Claude, Cursor, ChatGPT, Gemini, and any AI tool you use. Not a memory tool. A context engine that reads your real work and activates the right official AI skills for your stack. Cross-platform, encrypted, portable.",
+      "extendedDescription": "The AI context engine for developers. Automatically builds persistent context from your GitHub repos, Notion docs, commits, PRs, and decisions — then delivers it to Claude, Cursor, ChatGPT, Gemini, and any AI tool you use. Not a memory tool. A context engine that reads your real work. Cross-platform, encrypted, portable.",
       "categories": ["memory", "context", "productivity", "ai-tools", "collaboration"],
       "tags": [
         "memory",
@@ -33,7 +33,6 @@
         "persistent-memory",
         "github-integration",
         "notion-integration",
-        "ai-skills",
         "portable-context",
         "cross-platform",
         "claude",
@@ -117,26 +116,6 @@
         {
           "name": "check_connect_status",
           "description": "Poll GitHub or Notion connection status after connect_source. Confirms when source context is ready."
-        },
-        {
-          "name": "get_context_with_skills",
-          "description": "Preferred when skill routing is on: memory context plus ranked skill suggestions (default use in chat). User approves via use N | install N | skip N."
-        },
-        {
-          "name": "suggest_skills",
-          "description": "Discover Agent Skills for a topic from project memory stack signals. Returns up to 2 suggestions with use/install/skip hints."
-        },
-        {
-          "name": "use_skill_in_chat",
-          "description": "Load a suggested skill into the chat session without local install. Call after user replies use N."
-        },
-        {
-          "name": "install_skill",
-          "description": "Return install command for a skill; set confirmed after user runs it in terminal."
-        },
-        {
-          "name": "reset_skill_decision",
-          "description": "Clear a skip decision so a skill can be suggested again for a collection."
         }
       ],
       "links": {

@@ -178,7 +178,7 @@ export function createMCPServer(ctx: McpContext): Server {
   }
 
   const server = new Server(
-    { name: 'memxus', version: '1.1.0' },
+    { name: 'memxus', version: '1.2.0' },
     { capabilities: { tools: {}, resources: {}, prompts: {} } }
   );
 
