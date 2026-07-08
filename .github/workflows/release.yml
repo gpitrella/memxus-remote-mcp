@@ -38,7 +38,7 @@ jobs:
         env:
           MEMXUS_API_KEY: ${{ secrets.MEMXUS_API_KEY }}
           MCP_SMOKE_URL: https://mcp.memxus.com/mcp
-          SMOKE_MANIFEST: full
+          SMOKE_MANIFEST: auto
         run: |
           if [ -z "$MEMXUS_API_KEY" ]; then
             echo "MEMXUS_API_KEY not set — skipping live smoke"

@@ -67,7 +67,7 @@ test('anonymous initialize returns public server info', async () => {
   assert.equal(nextCalled, false);
   assert.equal(res.statusCode, 200);
   const body = res.body as { result: { serverInfo: { name: string } } };
-  assert.equal(body.result.serverInfo.name, 'aimemory-remote');
+  assert.equal(body.result.serverInfo.name, 'memxus');
 });
 
 test('notifications/initialized without auth returns 202', async () => {

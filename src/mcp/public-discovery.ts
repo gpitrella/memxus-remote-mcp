@@ -5,7 +5,7 @@ import { MEMXUS_MCP_PROMPTS } from './prompts.js';
 import { resolveBearerAuthContext } from '../lib/auth.js';
 import { getCachedUserMcpPreferences } from '../lib/mcp-preferences-cache.js';
 
-const SERVER_INFO = { name: 'aimemory-remote', version: '1.1.0' } as const;
+const SERVER_INFO = { name: 'memxus', version: '1.1.0' } as const;
 const PROTOCOL_VERSION = '2024-11-05';
 const CAPABILITIES = { tools: {}, resources: {}, prompts: {} } as const;
 
