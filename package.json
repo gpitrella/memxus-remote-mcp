@@ -1,7 +1,7 @@
 {
   "name": "@memxus/mcp",
-  "version": "1.1.0",
-  "description": "Memxus AI Context Engine — Remote MCP Server with OAuth 2.1, Streamable HTTP, GitHub/Notion sync, and Skills routing",
+  "version": "1.2.0",
+  "description": "Memxus AI Context Engine — Remote MCP Server with OAuth 2.1, Streamable HTTP, GitHub/Notion sync",
   "type": "module",
   "main": "dist/index.js",
   "engines": {
@@ -47,6 +47,7 @@
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "eslint": "^8.56.0",
+    "mcp-proxy": "6.4.3",
     "tsx": "^4.7.0",
     "typescript": "^5.3.0"
   }

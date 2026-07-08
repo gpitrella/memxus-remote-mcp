@@ -113,4 +113,45 @@ Keep **one Railway replica** and `MCP_STATELESS=false` (or unset) for Glama, Cla
 - **ChatGPT public OAuth** (`memxus-chatgpt`): separate client; PKCE bypass + `client_secret` — not affected by Glama redirect helpers.
 - **ChatGPT Custom GPT (private)**: REST `api.memxus.com` + API key — unrelated to RemoteMCP OAuth.
 
+## Glama Dockerfile build-check (stdio bridge)
+
+Glama auto-wraps your container CMD as `mcp-proxy -- <your-cmd>`, expecting a **stdio MCP** child. Memxus is a **Streamable HTTP** server on port 3002 (`POST /mcp`), so `node dist/index.js` alone times out with MCP error `-32001`.
+
+The `mcp-proxy` CLI does **not** expose a `--transport streamablehttp <url>` flag. The reverse bridge (HTTP client → stdio) exists only as the `startStdioServer` API — implemented in [`scripts/glama-build-bridge.mjs`](../scripts/glama-build-bridge.mjs).
+
+### Architecture
+
+```
+Glama mcp-proxy (stdio) → glama-build-bridge.mjs (stdio) → http://127.0.0.1:3002/mcp → dist/index.js
+```
+
+Health wait uses `GET /health` (no auth). Anonymous `initialize` and `tools/list` probes work via public discovery (9 core tools without Bearer).
+
+### Glama admin panel settings
+
+| Field | Value |
+|-------|--------|
+| Build steps | `["npm ci", "npm run build"]` |
+| CMD arguments | `["node", "scripts/glama-build-bridge.mjs"]` |
+
+Glama generates: `mcp-proxy -- node scripts/glama-build-bridge.mjs`
+
+**Do not use:** `pnpm run start`, `node dist/index.js` alone, or `mcp-proxy --transport streamablehttp ...`.
+
+### Env for the local child process
+
+The bridge injects minimal env (mirrors CI test defaults) so the child boots even when Glama sets `NODE_ENV=production` without Railway vars:
+
+- `NODE_ENV=test` — skips production startup guards
+- `MCP_PUBLIC_URL`, `DASHBOARD_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- `DISABLE_SKILLS=true`
+
+### stdout warning
+
+The bridge spawns Express with `stdio: ['ignore', 'pipe', 'pipe']` and forwards child output to **stderr** only. Express `console.log` on stdout would corrupt the MCP stdio channel used by `mcp-proxy`.
+
+### Production listing (remote)
+
+For live OAuth health, use the remote URL directly in Glama Inspector / Connectors: `https://mcp.memxus.com/mcp`. The Docker build-check is only for Glama's container inspect badge.
+
 See also [REVIEWER.md](../REVIEWER.md).

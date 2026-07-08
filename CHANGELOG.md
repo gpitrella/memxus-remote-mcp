@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-08
+
+### Changed
+
+- Public manifest: 13 tools (9 core + 4 connect); skill routing deferred (`DISABLE_SKILLS` in production)
+- MCP identity `memxus`; npm package `@memxus/mcp`
+- README: v1.2.0, YouTube demo thumbnail, connect-only Context Engine tools
+
+### Added
+
+- Manifest tier validation: core / connect / skills / full (`scripts/mcp-tool-manifest.test.mjs`)
+
+### Fixed
+
+- Release smoke: `SMOKE_MANIFEST=auto` accepts connect tier (13 tools)
+- CI `npm test` glob on Linux (`scripts/*.test.mjs`)
+
 ## [1.1.0] - 2026-06-26
 
 ### Changed

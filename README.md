@@ -11,7 +11,7 @@ Builds persistent context from GitHub, Notion, and your saved decisions — deli
 [![Node 20+](https://img.shields.io/badge/Node-20%2B-brightgreen)](https://nodejs.org)
 [![Railway](https://img.shields.io/badge/Deployed%20on-Railway-purple)](https://railway.app)
 [![MCP](https://img.shields.io/badge/Protocol-MCP%202.0-orange)](https://modelcontextprotocol.io)
-[![Registry v1.1.0](https://img.shields.io/badge/Registry-v1.1.0-blue)](https://registry.modelcontextprotocol.io)
+[![Registry v1.2.0](https://img.shields.io/badge/Registry-v1.2.0-blue)](https://registry.modelcontextprotocol.io)
 
 [Website](https://memxus.com) · [Docs](https://memxus.com/docs/mcp) · [Connect your first AI](https://memxus.com/install) · [Glama Inspector](https://glama.ai/mcp/connectors/com.memxus/memxus)
 
@@ -46,7 +46,7 @@ Your stack, project decisions, coding preferences and workflow context get repea
 
 Memxus is the **AI context engine** — a hosted remote MCP server that automatically builds and delivers persistent project context to every AI client you use.
 
-GitHub repos, Notion docs, commits, PRs, issues, and saved decisions become searchable context. **GitHub and Notion connectors are live in production (v1.1.0)** — connect from the dashboard or directly from chat via MCP connector tools. Skill routing suggests official AI skills matched to your stack.
+GitHub repos, Notion docs, commits, PRs, issues, and saved decisions become searchable context. **GitHub and Notion connectors are live in production (v1.2.0)** — connect from the dashboard or directly from chat via MCP connector tools.
 
 No local setup.  
 No file syncing.  
@@ -61,7 +61,6 @@ Connect once with OAuth and your context becomes portable across your entire AI 
 - Keep project architecture and stack context available across Claude, Cursor, and ChatGPT
 - Sync GitHub and Notion into unified project collections — one context per repo
 - Stop pasting the same context into every new AI session
-- Get official AI skill suggestions matched to your stack (`get_context_with_skills`)
 - Share team context across agents and workflows
 - Build AI apps with persistent context through MCP or API
 
@@ -86,7 +85,7 @@ Memxus reads your **real work** — not generic memory snippets. Synced content 
 
 **How to use synced context**
 
-Call `recall`, `get_context`, or `get_context_with_skills` with `collection=project:<slug>` (or let semantic search find it). GitHub/Notion content is tagged and searchable alongside manual memories.
+Call `recall` or `get_context` with `collection=project:<slug>` (or let semantic search find it). GitHub/Notion content is tagged and searchable alongside manual memories.
 
 ```mermaid
 flowchart LR
@@ -94,11 +93,11 @@ flowchart LR
   Notion[Notion pages] --> Sync
   Manual[Manual remember] --> Sync
   Sync --> Collection["project:slug"]
-  Collection --> Tools["recall / get_context / get_context_with_skills"]
+  Collection --> Tools["recall / get_context"]
   Tools --> Clients[Claude Cursor ChatGPT]
 ```
 
-> **Context Engine tools (6):** visible when *In-app connect* and *Skill routing* are enabled in [dashboard settings](https://dashboard.memxus.com). Production ships the full 15-tool manifest for users with v2 prefs on.
+> **Context Engine connector tools (4):** connect GitHub/Notion from chat via MCP. Production ships a 13-tool public manifest (9 core + 4 connect) with skill routing deferred.
 
 ---
 
@@ -165,7 +164,7 @@ For marketplace reviewers: see [REVIEWER.md](REVIEWER.md) for OAuth and Bearer t
 
 ## Available tools
 
-Registry `com.memxus/memxus` v1.1.0 — **9 core** tools always available, plus **6 Context Engine** tools when v2 prefs are enabled.
+Registry `com.memxus/memxus` v1.2.0 — **9 core** tools always available, plus **4 connector** tools for GitHub/Notion sync from chat.
 
 ### Core tools (9)
 
@@ -181,7 +180,7 @@ Registry `com.memxus/memxus` v1.1.0 — **9 core** tools always available, plus 
 | `memory_stats` | Stats by type and collection |
 | `update` | Patch or append existing memory content, tags, or type |
 
-### Context Engine tools (6) — v1.1.0
+### Context Engine connector tools (4) — v1.2.0
 
 | Tool | Description |
 |------|-------------|
@@ -189,8 +188,6 @@ Registry `com.memxus/memxus` v1.1.0 — **9 core** tools always available, plus 
 | `list_syncable_items` | List repos or Notion pages available after connecting |
 | `set_sync_selection` | Choose what to sync and trigger initial sync into `project:<slug>` |
 | `check_connect_status` | Poll connection status after `connect_source` |
-| `get_context_with_skills` | Build context + suggest official AI skills for your stack and task |
-| `suggest_skills` | Discover skills from skills.sh without a full context block |
 
 Full tool reference: [memxus.com/docs/mcp](https://memxus.com/docs/mcp) · Marketplace reviewers: [REVIEWER.md](REVIEWER.md)
 
@@ -300,14 +297,14 @@ npm run build      # compile → dist/
 npm start          # node dist/index.js
 ```
 
-Marketplace reviewers: [REVIEWER.md](REVIEWER.md) · MCP docs: [memxus.com/docs/mcp](https://memxus.com/docs/mcp) · Registry: `com.memxus/memxus` v1.1.0
+Marketplace reviewers: [REVIEWER.md](REVIEWER.md) · MCP docs: [memxus.com/docs/mcp](https://memxus.com/docs/mcp) · Registry: `com.memxus/memxus` v1.2.0
 
 ---
 
 ## Releases
 
 1. Add entries under `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md)
-2. Bump version in `package.json`, `server.json`, and `src/mcp/server.ts`
+2. Bump version in `package.json`, `server.json`, `src/mcp/server.ts`, and `src/mcp/public-discovery.ts`
 3. Move the changelog section to `## [X.Y.Z] - YYYY-MM-DD`
 4. Commit, tag, and push:
 
@@ -355,8 +352,9 @@ If commands 1 or 4 find real secrets, rotate keys immediately and run `git filte
 
 - [x] GitHub connector (repo sync → `project:<slug>`)
 - [x] Notion connector (workspace page sync)
-- [x] MCP Registry v1.1.0 (`com.memxus/memxus` — AI Context Engine)
-- [x] Context Engine tools (connect + skills routing)
+- [x] MCP Registry v1.2.0 (`com.memxus/memxus` — AI Context Engine)
+- [x] Context Engine connector tools (GitHub/Notion from chat)
+- [ ] Skill routing (deferred)
 - [ ] Discord bot connector
 - [ ] Slack bot connector
 - [ ] Refresh tokens
