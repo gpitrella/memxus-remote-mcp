@@ -20,11 +20,11 @@ Builds persistent context from GitHub, Notion, and your saved decisions — deli
 ---
 
 <div align="center">
-  <video src="https://github.com/user-attachments/assets/99538f58-e404-4aff-8e9a-c6ea3213fbd3" width="100%" autoplay muted loop playsinline controls>
-    <a href="https://www.memxus.com/demo">Watch the Memxus demo</a>
-  </video>
-  <br>
-  <sub><a href="https://www.memxus.com/demo">Demo page</a> · <a href="https://www.memxus.com/memxus-demo.mp4">Direct MP4</a></sub>
+
+https://www.youtube.com/watch?v=Tg7BVuEXFm0
+
+▶️ [**Watch the demo on YouTube**](https://www.youtube.com/watch?v=Tg7BVuEXFm0) · [Demo page](https://www.memxus.com/demo)
+
 </div>
 
 ---
