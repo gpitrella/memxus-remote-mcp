@@ -30,6 +30,8 @@ export interface UpdateMemoryInput {
   type?: MemoryRow['memory_type'];
   importance?: number;
   collection?: string | null;
+  status?: 'active' | 'superseded' | 'retracted';
+  retracted_reason?: string;
 }
 
 export async function updateMemoryRecord(p: UpdateMemoryInput): Promise<MemoryRow> {
@@ -59,6 +61,8 @@ export async function updateMemoryRecord(p: UpdateMemoryInput): Promise<MemoryRo
   const memType = p.memory_type ?? p.type;
   if (memType !== undefined) updates.memory_type = memType;
   if (p.importance !== undefined) updates.importance = p.importance;
+  if (p.status !== undefined) updates.status = p.status;
+  if (p.retracted_reason !== undefined) updates.retracted_reason = p.retracted_reason;
 
   if (p.collection !== undefined) {
     updates.collection = normalizeCollectionSlug(p.collection);
