@@ -557,6 +557,7 @@ export function createMCPServer(ctx: McpContext): Server {
             tags: input.tags,
             visibility,
             group_id: input.group_id,
+            group_name: input.group_name,
           });
           if (ms.length === 0) {
             const text = 'No memories stored yet. Use the `remember` tool to save information.';

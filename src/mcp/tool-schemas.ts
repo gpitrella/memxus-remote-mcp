@@ -326,18 +326,19 @@ export const MCP_CORE_TOOLS: Tool[] = [
     name: 'list_memories',
     ...toolMeta('List memories', { readOnly: true, idempotent: true }),
     description:
-      'Browse recent memories in reverse-chronological order — no search query needed. Use this to review what was saved lately or audit a collection; use recall instead when you have a topic to search for semantically. Filter by collection, tags, or type to narrow to one group, and set full_content=true to get the complete text instead of the default 120-character preview.',
+      'List recent memories in reverse-chronological order (read-only). When to use: audit what is saved, browse a collection, or collect memory IDs for get_memory or forget. When NOT: semantic search by topic → recall; one full record → get_memory; aggregate counts only → memory_stats. Behavior: default 20 results (plan-capped), ordered by created_at descending; empty set returns a message suggesting remember; full_content controls preview in the message text (120 chars); structured memories[] always includes full content.',
     inputSchema: {
       type: 'object',
       properties: {
         limit: {
           type: 'number',
           description:
-            'How many memories to return. Omit for server default (20). Capped per your plan.',
+            'Positive integer max results. Omit for server default (20). Capped per your plan.',
         },
         full_content: {
           type: 'boolean',
-          description: 'When true, return full memory text instead of a 120-character preview.',
+          description:
+            'When true, message text shows full memory content. When false, message previews truncate at 120 chars; memories[].content in structured output is always full.',
           default: false,
         },
         type: MEMORY_TYPE_PROPERTY,
@@ -347,20 +348,29 @@ export const MCP_CORE_TOOLS: Tool[] = [
           description:
             'Optional. Defaults to user dashboard preference (private unless include_group_memories_in_context is on).',
         },
-        group_id: GROUP_VISIBILITY_FIELDS.group_id,
+        group_id: {
+          ...GROUP_VISIBILITY_FIELDS.group_id,
+          format: 'uuid',
+        },
         group_name: GROUP_VISIBILITY_FIELDS.group_name,
       },
     },
     outputSchema: {
       type: 'object',
       properties: {
-        count: { type: 'number', description: 'Number of memories listed.' },
+        count: {
+          type: 'number',
+          description: 'Memories returned (0–limit). Zero triggers empty-state message.',
+        },
         memories: {
           type: 'array',
           items: MEMORY_ITEM_SCHEMA,
-          description: 'Recent memories matching filters.',
+          description: 'Newest-first matches. Each item includes full content in structured output.',
         },
-        message: { type: 'string', description: 'Human-readable listing (same as content text).' },
+        message: {
+          type: 'string',
+          description: 'Human-readable listing; previews truncate at 120 chars unless full_content=true.',
+        },
       },
       required: ['count', 'memories', 'message'],
     },
@@ -410,13 +420,15 @@ export const MCP_CORE_TOOLS: Tool[] = [
     name: 'forget',
     ...toolMeta('Forget memory', { destructive: true, idempotent: false }),
     description:
-      'Permanently delete one memory by its UUID. This is irreversible: the memory and its vector embedding are removed and cannot be recovered. Get the memory_id from list_memories or recall first, and confirm with the user before deleting. To change a memory without losing it, use update (mode=replace) instead of forget.',
+      'Permanently delete one memory by UUID. When to use: user asks to remove outdated or incorrect context, or to free plan storage. When NOT: fix content → update (mode=replace); find the ID first → list_memories or recall. Requires delete OAuth scope. Non-idempotent: deleting the same memory_id twice fails. Errors: Memory not found, Not authorized to delete this memory. Side effects: removes the memory row and vector embedding with no recovery; invalidates plan cache.',
     inputSchema: {
       type: 'object',
       properties: {
         memory_id: {
           type: 'string',
-          description: 'UUID of the memory to delete (from list_memories or recall).',
+          format: 'uuid',
+          description:
+            'UUID of the memory to delete. Copy from the id field in list_memories or recall. Must be deletable by the authenticated user.',
         },
       },
       required: ['memory_id'],

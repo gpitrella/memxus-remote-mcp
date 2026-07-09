@@ -20,6 +20,7 @@ import {
   canDeleteMemory,
   canReadMemory,
   fetchGroupNameMap,
+  resolveGroupIdFromName,
   resolveMemoryWriteTarget,
   type AccessibleStatsRpcParams,
   type MemoryRow as AccessMemoryRow,
@@ -392,6 +393,7 @@ export async function listMemories(p: {
   tags?: string[];
   visibility?: VisibilityFilter;
   group_id?: string;
+  group_name?: string;
 }): Promise<MemoryRow[]> {
   const listLimit = resolveListLimit(resolveLimits(p.planLimits), p.limit);
   const scope: MemoryScopeFilters = {
@@ -402,13 +404,20 @@ export async function listMemories(p: {
   const memoryScope: MemoryScopeValue =
     p.visibility === 'private' ? 'personal' : p.visibility === 'shared' ? 'group' : 'all';
 
+  let groupId = p.group_id;
+  if (!groupId && p.group_name?.trim()) {
+    const resolved = await resolveGroupIdFromName(p.userId, p.group_name);
+    if ('error' in resolved) throw new Error(resolved.error);
+    groupId = resolved.groupId;
+  }
+
   let q: MemoryQueryBuilder = supabase.from('memories').select('*');
   const accessResult = await applyMemoryListFilter(q, {
     userId: p.userId,
     workforceWorkspaceId: p.workforceWorkspaceId,
     memoryScope,
     visibility: p.visibility ?? 'all',
-    groupId: p.group_id,
+    groupId,
   });
   if (accessResult.error) return [];
   q = applyActiveMemoryFilter(accessResult.query).order('created_at', { ascending: false }).limit(listLimit);
