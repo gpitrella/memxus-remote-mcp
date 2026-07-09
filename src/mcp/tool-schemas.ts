@@ -325,7 +325,8 @@ export const MCP_CORE_TOOLS: Tool[] = [
   {
     name: 'list_memories',
     ...toolMeta('List memories', { readOnly: true, idempotent: true }),
-    description: 'List recent memories. Filter by collection, tags, or type to browse one group.',
+    description:
+      'Browse recent memories in reverse-chronological order — no search query needed. Use this to review what was saved lately or audit a collection; use recall instead when you have a topic to search for semantically. Filter by collection, tags, or type to narrow to one group, and set full_content=true to get the complete text instead of the default 120-character preview.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -367,7 +368,8 @@ export const MCP_CORE_TOOLS: Tool[] = [
   {
     name: 'get_memory',
     ...toolMeta('Get memory', { readOnly: true, idempotent: true }),
-    description: 'Get the full content of a single memory by its UUID (from list_memories or recall).',
+    description:
+      'Retrieve the full content and metadata of one memory by its UUID. Use after list_memories or recall returned a truncated preview and you need the complete text. Returns content, memory_type, tags, collection, importance, and the creation timestamp. Get the UUID from a prior list_memories or recall result.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -407,7 +409,8 @@ export const MCP_CORE_TOOLS: Tool[] = [
   {
     name: 'forget',
     ...toolMeta('Forget memory', { destructive: true, idempotent: false }),
-    description: 'Delete a specific memory by ID.',
+    description:
+      'Permanently delete one memory by its UUID. This is irreversible: the memory and its vector embedding are removed and cannot be recovered. Get the memory_id from list_memories or recall first, and confirm with the user before deleting. To change a memory without losing it, use update (mode=replace) instead of forget.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -431,7 +434,8 @@ export const MCP_CORE_TOOLS: Tool[] = [
   {
     name: 'memory_stats',
     ...toolMeta('Get memory statistics', { readOnly: true, idempotent: true }),
-    description: 'Show statistics about stored memories (by type and collection).',
+    description:
+      'Show aggregate statistics about stored memories: the total count, a breakdown by memory_type and by collection, and storage bytes used versus the plan limit. Use to understand what is stored before browsing with list_memories, or to check remaining storage capacity. Takes no parameters.',
     inputSchema: { type: 'object', properties: {} },
     outputSchema: {
       type: 'object',
