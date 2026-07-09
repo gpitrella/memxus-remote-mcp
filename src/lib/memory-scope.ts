@@ -278,32 +278,20 @@ export function mergeCollectionLists(
   return [...bySlug.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export interface MemoryCollectionsUpsertClient {
-  from(table: 'memory_collections'): {
-    upsert(
-      values: Record<string, unknown>,
-      options: { onConflict: string; ignoreDuplicates: boolean }
-    ): PromiseLike<{ error: { message: string } | null }>;
-  };
-}
+import { upsertCollectionEncrypted } from './collection-persistence.js';
 
 /** Register collection folder on first memory save; never overwrite existing rows. */
 export async function ensureMemoryCollectionRegistered(
-  client: MemoryCollectionsUpsertClient,
   p: { userId: string; slug: string | null; defaultMemoryType: string }
 ): Promise<void> {
   if (!p.slug) return;
 
-  const { error } = await client.from('memory_collections').upsert(
-    {
-      user_id: p.userId,
-      slug: p.slug,
-      name: deriveCollectionName(p.slug),
-      description: null,
-      default_memory_type: p.defaultMemoryType,
-    },
-    { onConflict: 'user_id,slug', ignoreDuplicates: true }
-  );
+  const { error } = await upsertCollectionEncrypted(p.userId, {
+    slug: p.slug,
+    name: deriveCollectionName(p.slug),
+    description: null,
+    default_memory_type: p.defaultMemoryType,
+  });
 
   if (error) {
     console.warn(

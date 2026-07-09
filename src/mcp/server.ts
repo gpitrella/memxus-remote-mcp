@@ -121,6 +121,21 @@ function userFacingContextProps(
   };
 }
 
+/** Workforce tokens cannot use visibility=all (cross-scope leak). */
+function resolveMcpReadVisibility(
+  workforceWorkspaceId: string | undefined,
+  prefs: UserMcpPreferences,
+  explicit?: 'private' | 'shared' | 'all',
+): 'private' | 'shared' | 'all' {
+  if (workforceWorkspaceId) {
+    if (explicit === 'all') {
+      throw new Error('visibility=all is not allowed for workforce workspace tokens');
+    }
+    return explicit ?? 'private';
+  }
+  return resolveDefaultReadVisibility(prefs, explicit);
+}
+
 export { MCP_TOOLS, getActiveMcpTools, MCP_CORE_TOOLS } from './tool-schemas.js';
 
 export interface McpContext {
@@ -223,7 +238,7 @@ export function createMCPServer(ctx: McpContext): Server {
   });
 
   server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
-    const html = await readResource(req.params.uri, userId);
+    const html = await readResource(req.params.uri, userId, workforceWorkspaceId);
     const mimeType = getResourceMimeType(req.params.uri);
     return { contents: [{ uri: req.params.uri, mimeType, text: html }] };
   });
@@ -321,7 +336,7 @@ export function createMCPServer(ctx: McpContext): Server {
               exclude_memory_ids: z.array(z.string().uuid()).optional(),
             })
             .parse(a);
-          const visibility = resolveDefaultReadVisibility(prefs, input.visibility);
+          const visibility = resolveMcpReadVisibility(workforceWorkspaceId, prefs, input.visibility);
           const searchLimit = resolveSearchLimit(limits, input.limit);
           const { memories: ms, total } = await searchMemories({
             userId,
@@ -429,10 +444,10 @@ export function createMCPServer(ctx: McpContext): Server {
           if (isPicker) {
             const lang = await resolveLanguage(prefs);
             const skillCaps = resolveSkillCaps();
-            const allCollections = await getAllCollectionsByUsage(userId);
+            const allCollections = await getAllCollectionsByUsage(userId, workforceWorkspaceId);
             const topCollections = showAll
               ? allCollections
-              : await getTopCollectionsByUsage(userId, 5);
+              : await getTopCollectionsByUsage(userId, 5, workforceWorkspaceId);
             const showMore = !showAll && allCollections.length > topCollections.length;
             result = buildCollectionsPickerToolResult({
               lang,
@@ -446,7 +461,7 @@ export function createMCPServer(ctx: McpContext): Server {
             break;
           }
 
-          const visibility = resolveDefaultReadVisibility(prefs, input.visibility);
+          const visibility = resolveMcpReadVisibility(workforceWorkspaceId, prefs, input.visibility);
           const contextLimit = resolveSearchLimit(limits, input.max_memories);
           const { memories: ms, total } = await searchMemories({
             userId,
@@ -545,7 +560,7 @@ export function createMCPServer(ctx: McpContext): Server {
               group_name: z.string().optional(),
             })
             .parse(a);
-          const visibility = resolveDefaultReadVisibility(prefs, input.visibility);
+          const visibility = resolveMcpReadVisibility(workforceWorkspaceId, prefs, input.visibility);
           const listLimit = resolveListLimit(limits, input.limit);
           const ms = await listMemories({
             userId,
@@ -593,7 +608,7 @@ export function createMCPServer(ctx: McpContext): Server {
         }
         case 'list_collections': {
           assertMemoryReadScope(oauthScope, oauthOpts);
-          const cols = await listCollections(userId);
+          const cols = await listCollections(userId, workforceWorkspaceId);
           if (cols.length === 0) {
             const text =
               'No collections yet. Use remember with collection=project:<name> or personal:preferences.';
@@ -808,7 +823,7 @@ export function createMCPServer(ctx: McpContext): Server {
             .parse(a);
           const lang = await resolveLanguage(skillPrefs, input.topic);
           const skillCaps = resolveSkillCaps();
-          const visibility = resolveDefaultReadVisibility(skillPrefs, input.visibility);
+          const visibility = resolveMcpReadVisibility(workforceWorkspaceId, skillPrefs, input.visibility);
           const contextLimit = resolveSearchLimit(limits, input.max_memories);
           const { memories: ms, total } = await searchMemories({
             userId,
@@ -946,7 +961,7 @@ export function createMCPServer(ctx: McpContext): Server {
             limit: contextLimit,
             planLimits: limits,
             collection: input.collection,
-            visibility: resolveDefaultReadVisibility(skillPrefs),
+            visibility: resolveMcpReadVisibility(workforceWorkspaceId, skillPrefs),
             min_similarity: MCP_SEARCH_DEFAULTS.min_similarity,
           });
           const surfaced = await surfaceSkills({

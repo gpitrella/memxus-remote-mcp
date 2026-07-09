@@ -18,8 +18,8 @@ import {
   buildAccessibleStatsRpcParams,
   buildAccessibleVectorRpcParams,
   canDeleteMemory,
-  canReadMemory,
   fetchGroupNameMap,
+  getMemoryForAccess,
   resolveGroupIdFromName,
   resolveMemoryWriteTarget,
   type AccessibleStatsRpcParams,
@@ -28,6 +28,11 @@ import {
   type MemoryScopeValue,
   type VisibilityFilter,
 } from '../lib/memory-access.js';
+import { assertWorkspaceReadsAllowed } from '../lib/workforce-billing-state.js';
+import {
+  assertWorkforceMemoryCreate,
+  assertWorkforceMemoryMutation,
+} from '../lib/workforce-memory-gate.js';
 import {
   applyTextSearchOr,
   resolveMinSimilarity,
@@ -46,6 +51,7 @@ import {
   shouldUseStrictProjectScope,
 } from '../lib/memory-scope.js';
 import { appendToMemory } from '../lib/memory-append.js';
+import { fetchCollectionsDecrypted } from '../lib/collection-persistence.js';
 import {
   prepareContentForStorage,
   decryptMemoryRow,
@@ -116,7 +122,7 @@ export async function saveMemory(p: {
     memory_type: p.type ?? 'general',
   });
 
-  await ensureMemoryCollectionRegistered(supabase, {
+  await ensureMemoryCollectionRegistered({
     userId: p.userId,
     slug: collection,
     defaultMemoryType: p.type ?? 'general',
@@ -137,6 +143,21 @@ export async function saveMemory(p: {
   }
 
   const memoryScope = writeTarget.scope;
+
+  if (memoryScope === 'workforce' && writeTarget.workforceWorkspaceId) {
+    const readBilling = await assertWorkspaceReadsAllowed(writeTarget.workforceWorkspaceId);
+    if (!readBilling.ok) {
+      throw new Error(readBilling.message);
+    }
+    const createGate = await assertWorkforceMemoryCreate(
+      p.userId,
+      writeTarget.workforceWorkspaceId,
+      p.workforceWorkspaceId
+    );
+    if (!createGate.ok) {
+      throw new Error(createGate.message);
+    }
+  }
 
   const scopeInfo = {
     user_id: p.userId,
@@ -203,6 +224,13 @@ export async function searchMemories(p: {
   min_similarity?: number;
   exclude_memory_ids?: string[];
 }): Promise<SearchMemoriesResult> {
+  if (p.workforceWorkspaceId) {
+    const readBilling = await assertWorkspaceReadsAllowed(p.workforceWorkspaceId);
+    if (!readBilling.ok) {
+      throw new Error(readBilling.message);
+    }
+  }
+
   const searchStartedAt = Date.now();
   const planLimits = resolveLimits(p.planLimits);
   const limit = resolveSearchLimit(planLimits, p.limit);
@@ -214,7 +242,9 @@ export async function searchMemories(p: {
   const rawCollection = p.collection ?? null;
   const shouldResolveCollectionHints = Boolean(rawCollection?.trim());
   const collectionsPromise = shouldResolveCollectionHints
-    ? listCollections(p.userId).catch(() => [] as Awaited<ReturnType<typeof listCollections>>)
+    ? listCollections(p.userId, p.workforceWorkspaceId).catch(
+        () => [] as Awaited<ReturnType<typeof listCollections>>
+      )
     : Promise.resolve([] as Awaited<ReturnType<typeof listCollections>>);
   const embeddingPromise = generateEmbedding(p.query);
   const prepStartedAt = Date.now();
@@ -262,6 +292,9 @@ export async function searchMemories(p: {
       );
       const { data, error } = await supabase.rpc('search_memories_accessible', rpcParams);
       if (error || !data?.length) {
+        if (p.workforceWorkspaceId) {
+          return [];
+        }
         const legacyParams = buildVectorRpcParams(p.userId, queryEmbedding, fetchLimit, threshold, scope);
         const legacy = await supabase.rpc('search_memories_vector', legacyParams);
         if (legacy.error || !legacy.data?.length) return [];
@@ -363,20 +396,13 @@ export async function getMemoryById(p: {
   workforceWorkspaceId?: string;
   memoryId: string;
 }): Promise<MemoryRow> {
-  const { data, error } = await supabase
-    .from('memories')
-    .select('*')
-    .eq('id', p.memoryId)
-    .single();
-  if (error || !data) throw new Error('Memory not found');
-  const allowed = await canReadMemory(
-    p.userId,
-    data as AccessMemoryRow,
-    p.workforceWorkspaceId
-  );
-  if (!allowed) throw new Error('Memory not found');
+  const access = await getMemoryForAccess(p.memoryId, {
+    userId: p.userId,
+    workforceWorkspaceId: p.workforceWorkspaceId,
+  });
+  if (!access.ok) throw new Error('Memory not found');
 
-  const dec = await decryptMemoryRow(data as unknown as MemoryRowMinimal, p.userId);
+  const dec = await decryptMemoryRow(access.memory as unknown as MemoryRowMinimal, p.userId);
   if (!dec) throw new Error('Memory not found');
 
   const [row] = await enrichRowsWithGroupNames([dec as unknown as Record<string, unknown>], fetchGroupNameMap);
@@ -439,23 +465,22 @@ export async function listMemories(p: {
   return enriched as unknown as MemoryRow[];
 }
 
-export async function listCollections(userId: string): Promise<
+export async function listCollections(
+  userId: string,
+  workforceWorkspaceId?: string
+): Promise<
   Array<{ slug: string; name: string; description: string | null }>
 > {
-  const { data: registered, error: regError } = await supabase
-    .from('memory_collections')
-    .select('slug, name, description')
-    .eq('user_id', userId)
-    .order('name');
+  let memQuery = supabase.from('memories').select('collection').not('collection', 'is', null);
+  if (workforceWorkspaceId) {
+    memQuery = memQuery
+      .eq('scope', 'workforce')
+      .eq('workforce_workspace_id', workforceWorkspaceId);
+  } else {
+    memQuery = memQuery.eq('user_id', userId);
+  }
 
-  if (regError) throw new Error(`listCollections: ${regError.message}`);
-
-  const { data: memories, error: memError } = await supabase
-    .from('memories')
-    .select('collection')
-    .eq('user_id', userId)
-    .not('collection', 'is', null);
-
+  const { data: memories, error: memError } = await memQuery;
   if (memError) throw new Error(`listCollections: ${memError.message}`);
 
   const slugs = new Set<string>();
@@ -463,14 +488,34 @@ export async function listCollections(userId: string): Promise<
     if (row.collection) slugs.add(row.collection);
   }
 
-  return mergeCollectionLists(registered ?? [], slugs);
+  const registered = await fetchCollectionsDecrypted(userId);
+
+  const filteredRegistered =
+    workforceWorkspaceId && slugs.size > 0
+      ? registered.filter((r) => slugs.has(r.slug))
+      : workforceWorkspaceId
+        ? []
+        : registered;
+
+  return mergeCollectionLists(
+    filteredRegistered.map((r) => ({
+      slug: r.slug,
+      name: r.name,
+      description: r.description as string | null,
+    })),
+    slugs
+  );
 }
 
 export async function getTopCollectionsByUsage(
   userId: string,
   limit = 5,
+  workforceWorkspaceId?: string
 ): Promise<Array<{ slug: string; name: string; description: string | null; memoryCount: number }>> {
-  const [stats, collections] = await Promise.all([getStats(userId), listCollections(userId)]);
+  const [stats, collections] = await Promise.all([
+    getStats(userId, workforceWorkspaceId),
+    listCollections(userId, workforceWorkspaceId),
+  ]);
   const metaBySlug = new Map(collections.map((row) => [row.slug, row]));
 
   return Object.entries(stats.byCollection)
@@ -490,8 +535,12 @@ export async function getTopCollectionsByUsage(
 
 export async function getAllCollectionsByUsage(
   userId: string,
+  workforceWorkspaceId?: string
 ): Promise<Array<{ slug: string; name: string; description: string | null; memoryCount: number }>> {
-  const [stats, collections] = await Promise.all([getStats(userId), listCollections(userId)]);
+  const [stats, collections] = await Promise.all([
+    getStats(userId, workforceWorkspaceId),
+    listCollections(userId, workforceWorkspaceId),
+  ]);
   const metaBySlug = new Map(collections.map((row) => [row.slug, row]));
   const counts = new Map<string, number>();
 
@@ -521,13 +570,26 @@ export async function deleteMemory(p: {
   workforceWorkspaceId?: string;
   memoryId: string;
 }): Promise<void> {
-  const { data: existing, error: fetchError } = await supabase
-    .from('memories')
-    .select('*')
-    .eq('id', p.memoryId)
-    .single();
-  if (fetchError || !existing) throw new Error('Memory not found');
-  const canDelete = await canDeleteMemory(p.userId, existing as AccessMemoryRow);
+  const access = await getMemoryForAccess(p.memoryId, {
+    userId: p.userId,
+    workforceWorkspaceId: p.workforceWorkspaceId,
+  });
+  if (!access.ok) throw new Error('Memory not found');
+
+  const existing = access.memory;
+  const wfGate = await assertWorkforceMemoryMutation(
+    p.userId,
+    existing,
+    'delete',
+    { workforceWorkspaceId: p.workforceWorkspaceId }
+  );
+  if (!wfGate.ok) throw new Error(wfGate.message);
+
+  const canDelete = await canDeleteMemory(
+    p.userId,
+    existing as AccessMemoryRow,
+    p.workforceWorkspaceId
+  );
   if (!canDelete) throw new Error('Not authorized to delete this memory');
   const { error } = await supabase.from('memories').delete().eq('id', p.memoryId);
   if (error) throw new Error(`deleteMemory: ${error.message}`);

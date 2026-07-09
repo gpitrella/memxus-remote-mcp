@@ -11,8 +11,17 @@ import {
   type GroupRole,
 } from './group-access.js';
 import type { MemoryScopeFilters } from './memory-scope.js';
+import {
+  getWorkforceMemberRole,
+  type WorkforceRole,
+} from './workforce-access.js';
+import { assertWorkspaceWritesAllowed } from './workforce-billing-state.js';
+import {
+  canDeleteWorkspaceMemory,
+  canEditWorkspaceMemory,
+} from './workforce-rbac.js';
 
-type WorkforceRole = 'owner' | 'admin' | 'member';
+export type { WorkforceRole };
 
 export type MemoryScopeValue = 'personal' | 'workforce' | 'group' | 'all';
 export type VisibilityFilter = 'private' | 'shared' | 'all';
@@ -254,17 +263,108 @@ export async function canReadMemory(
   return false;
 }
 
-export async function canUpdateMemory(userId: string, memory: MemoryRow): Promise<boolean> {
+export type MemoryForAccessResult =
+  | { ok: true; memory: MemoryRow }
+  | { ok: false; notFound: true };
+
+/** Fetch memory by id and verify read access (workforce pin → 404 on mismatch). */
+export async function getMemoryForAccess(
+  memoryId: string,
+  opts: { userId: string; workforceWorkspaceId?: string }
+): Promise<MemoryForAccessResult> {
+  const { data, error } = await supabase
+    .from('memories')
+    .select('*')
+    .eq('id', memoryId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return { ok: false, notFound: true };
+  }
+
+  const memory = data as MemoryRow;
+  const allowed = await canReadMemory(opts.userId, memory, opts.workforceWorkspaceId);
+  if (!allowed) {
+    return { ok: false, notFound: true };
+  }
+
+  return { ok: true, memory };
+}
+
+async function resolveWorkforceRole(
+  userId: string,
+  workspaceId: string,
+  apiKeyWorkforceWsId?: string
+): Promise<WorkforceRole | null> {
+  if (apiKeyWorkforceWsId) {
+    return apiKeyWorkforceWsId === workspaceId ? 'member' : null;
+  }
+  return getWorkforceMemberRole(userId, workspaceId);
+}
+
+async function canMutateWorkforceMemory(
+  userId: string,
+  memory: MemoryRow,
+  apiKeyWorkforceWsId?: string
+): Promise<boolean> {
+  if (apiKeyWorkforceWsId) {
+    if (
+      memory.scope !== 'workforce' ||
+      memory.workforce_workspace_id !== apiKeyWorkforceWsId
+    ) {
+      return false;
+    }
+  }
+
+  const wsId = memory.workforce_workspace_id;
+  if (!wsId) return false;
+
+  const role = await resolveWorkforceRole(userId, wsId, apiKeyWorkforceWsId);
+  if (!role || role === 'viewer') return false;
+
+  const billing = await assertWorkspaceWritesAllowed(wsId);
+  if (!billing.ok) return false;
+
+  return canEditWorkspaceMemory(role, memory.user_id, userId, billing.state);
+}
+
+export async function canUpdateMemory(
+  userId: string,
+  memory: MemoryRow,
+  apiKeyWorkforceWsId?: string
+): Promise<boolean> {
   if (memory.scope === 'personal') return memory.user_id === userId;
-  if (memory.scope === 'workforce') return memory.user_id === userId;
   if (memory.scope === 'group') return memory.user_id === userId;
+  if (memory.scope === 'workforce') {
+    return canMutateWorkforceMemory(userId, memory, apiKeyWorkforceWsId);
+  }
   return false;
 }
 
-export async function canDeleteMemory(userId: string, memory: MemoryRow): Promise<boolean> {
+export async function canDeleteMemory(
+  userId: string,
+  memory: MemoryRow,
+  apiKeyWorkforceWsId?: string
+): Promise<boolean> {
   if (memory.scope === 'personal') return memory.user_id === userId;
-  if (memory.scope === 'workforce') return memory.user_id === userId;
   if (memory.scope === 'group') return canDeleteGroupMemory(userId, memory);
+  if (memory.scope === 'workforce') {
+    if (apiKeyWorkforceWsId) {
+      if (
+        memory.scope !== 'workforce' ||
+        memory.workforce_workspace_id !== apiKeyWorkforceWsId
+      ) {
+        return false;
+      }
+    }
+    const wsId = memory.workforce_workspace_id;
+    if (!wsId) return false;
+    const role = await resolveWorkforceRole(userId, wsId, apiKeyWorkforceWsId);
+    if (!role || role === 'viewer') return false;
+    const billing = await assertWorkspaceWritesAllowed(wsId);
+    if (!billing.ok) return false;
+    return canDeleteWorkspaceMemory(role, memory.user_id, userId, billing.state);
+  }
   return false;
 }
 
@@ -272,13 +372,7 @@ async function getWorkforceMemberRoleSafe(
   userId: string,
   workspaceId: string
 ): Promise<WorkforceRole | null> {
-  const { data } = await supabase
-    .from('workforce_workspace_members')
-    .select('role')
-    .eq('workspace_id', workspaceId)
-    .eq('user_id', userId)
-    .maybeSingle();
-  return data?.role ? (data.role as WorkforceRole) : null;
+  return getWorkforceMemberRole(userId, workspaceId);
 }
 
 function parseVisibility(

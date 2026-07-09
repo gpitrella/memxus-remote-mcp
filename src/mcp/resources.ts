@@ -60,7 +60,11 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-export async function readResource(uri: string, userId: string): Promise<string> {
+export async function readResource(
+  uri: string,
+  userId: string,
+  workforceWorkspaceId?: string
+): Promise<string> {
   if (uri === SKILL_CARD_RESOURCE_URI) {
     return skillCardDocument;
   }
@@ -70,7 +74,7 @@ export async function readResource(uri: string, userId: string): Promise<string>
   if (uri !== 'memory://recent') throw new Error(`Unknown resource: ${uri}`);
   const planCtx = await loadUserPlan(userId);
   const limits = planCtx?.limits ?? getPlan('free').limits;
-  const memories = await listMemories({ userId, planLimits: limits });
+  const memories = await listMemories({ userId, workforceWorkspaceId, planLimits: limits });
   const items = memories
     .map(
       (m) =>

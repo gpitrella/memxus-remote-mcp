@@ -5,7 +5,8 @@
 
 import { supabase } from './supabase.js';
 import { scheduleEmbeddingUpdate } from './embedding-background.js';
-import { canUpdateMemory, type MemoryRow as AccessMemoryRow } from './memory-access.js';
+import { canUpdateMemory, getMemoryForAccess, type MemoryRow as AccessMemoryRow } from './memory-access.js';
+import { assertWorkforceMemoryMutation } from './workforce-memory-gate.js';
 import { normalizeCollectionSlug, normalizeTags, resolveCollection } from './memory-scope.js';
 import { appendToMemory } from './memory-append.js';
 import {
@@ -78,15 +79,27 @@ export async function updateMemoryRecord(p: UpdateMemoryInput): Promise<MemoryRo
     throw new Error('No fields to update');
   }
 
-  const { data: existing, error: fetchError } = await supabase
-    .from('memories')
-    .select('*')
-    .eq('id', p.memoryId)
-    .single();
+  const access = await getMemoryForAccess(p.memoryId, {
+    userId: p.userId,
+    workforceWorkspaceId: p.workforceWorkspaceId,
+  });
+  if (!access.ok) throw new Error('Memory not found');
 
-  if (fetchError || !existing) throw new Error('Memory not found');
+  const existing = access.memory;
 
-  const canUpdate = await canUpdateMemory(p.userId, existing as AccessMemoryRow);
+  const wfGate = await assertWorkforceMemoryMutation(
+    p.userId,
+    existing,
+    'update',
+    { workforceWorkspaceId: p.workforceWorkspaceId }
+  );
+  if (!wfGate.ok) throw new Error(wfGate.message);
+
+  const canUpdate = await canUpdateMemory(
+    p.userId,
+    existing as AccessMemoryRow,
+    p.workforceWorkspaceId
+  );
   if (!canUpdate) throw new Error('Not authorized to update this memory');
 
   await decryptMemoryRow(existing as unknown as MemoryRowMinimal, p.userId);
