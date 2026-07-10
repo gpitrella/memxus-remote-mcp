@@ -80,6 +80,13 @@ import {
   type UserMcpPreferences,
 } from '../lib/mcp-preferences.js';
 import { assertOAuthScopes, assertMemoryReadScope, assertMemoryWriteScope, assertMemoryDeleteScope } from '../lib/oauth-scopes.js';
+import {
+  normalizeWorkspaceParam,
+  resolveWorkspaceEcho,
+  assertWorkspaceParamMatchesMemory,
+  WorkspaceResolutionError,
+  type ResolvedWorkspace,
+} from '../lib/workspace-resolution.js';
 import { getCachedUserMcpPreferences } from '../lib/mcp-preferences-cache.js';
 import { toolSuccess, toolSuccessWithUserFacing, toStructuredMemory, toStructuredMemories, type ToolSuccessResult } from './tool-results.js';
 import { buildSkillCardMeta, buildSkillCardPayload } from './skill-card.js';
@@ -118,6 +125,20 @@ function userFacingContextProps(
   return {
     excludedMemoryCount: excludeMemoryIds?.length ?? 0,
     requestedLimit,
+  };
+}
+
+/** Attach the resolved_workspace echo to a tool's structuredContent (spec §6). */
+function withResolvedWorkspace<T extends ToolSuccessResult>(
+  result: T,
+  resolvedWorkspace: ResolvedWorkspace,
+): T {
+  return {
+    ...result,
+    structuredContent: {
+      ...result.structuredContent,
+      resolved_workspace: resolvedWorkspace,
+    },
   };
 }
 
@@ -272,6 +293,7 @@ export function createMCPServer(ctx: McpContext): Server {
           const input = z
             .object({
               content: z.string().min(1),
+              workspace: z.string().optional(),
               type: memoryTypeEnum.default('general'),
               tags: z.array(z.string()).default([]),
               collection: z.string().optional().nullable(),
@@ -282,6 +304,11 @@ export function createMCPServer(ctx: McpContext): Server {
               group_name: z.string().optional(),
             })
             .parse(a);
+          const wsResult = await normalizeWorkspaceParam(
+            { workspace: input.workspace },
+            userId,
+            workforceWorkspaceId,
+          );
           let visibility = input.visibility ?? prefs.default_memory_visibility;
           let visibilityFallback: string | undefined;
           if (
@@ -295,7 +322,7 @@ export function createMCPServer(ctx: McpContext): Server {
           }
           const m = await saveMemory({
             userId,
-            workforceWorkspaceId,
+            workforceWorkspaceId: wsResult.workspace_id ?? undefined,
             content: input.content,
             type: input.type,
             tags: input.tags,
@@ -307,15 +334,18 @@ export function createMCPServer(ctx: McpContext): Server {
             group_name: input.group_name,
           });
           const text = formatRememberText(m);
-          result = toolSuccess(text, {
-            memory_id: m.id,
-            memory_type: m.memory_type,
-            collection: m.collection ?? '',
-            tags: m.tags,
-            importance: m.importance,
-            message: visibilityFallback ? `${text}\n${visibilityFallback}` : text,
-            ...(visibilityFallback ? { visibility_fallback: visibilityFallback } : {}),
-          });
+          result = withResolvedWorkspace(
+            toolSuccess(text, {
+              memory_id: m.id,
+              memory_type: m.memory_type,
+              collection: m.collection ?? '',
+              tags: m.tags,
+              importance: m.importance,
+              message: visibilityFallback ? `${text}\n${visibilityFallback}` : text,
+              ...(visibilityFallback ? { visibility_fallback: visibilityFallback } : {}),
+            }),
+            wsResult.resolved_workspace,
+          );
           invalidatePlanContextCache(userId);
           break;
         }
@@ -325,6 +355,7 @@ export function createMCPServer(ctx: McpContext): Server {
           const input = z
             .object({
               query: z.string().min(1),
+              workspace: z.string().optional(),
               limit: z.number().int().optional(),
               type: memoryTypeEnum.optional(),
               collection: z.string().optional().nullable(),
@@ -336,11 +367,17 @@ export function createMCPServer(ctx: McpContext): Server {
               exclude_memory_ids: z.array(z.string().uuid()).optional(),
             })
             .parse(a);
-          const visibility = resolveMcpReadVisibility(workforceWorkspaceId, prefs, input.visibility);
+          const recallWs = await normalizeWorkspaceParam(
+            { workspace: input.workspace },
+            userId,
+            workforceWorkspaceId,
+          );
+          const effectiveWsId = recallWs.workspace_id ?? undefined;
+          const visibility = resolveMcpReadVisibility(effectiveWsId, prefs, input.visibility);
           const searchLimit = resolveSearchLimit(limits, input.limit);
           const { memories: ms, total } = await searchMemories({
             userId,
-            workforceWorkspaceId,
+            workforceWorkspaceId: effectiveWsId,
             query: input.query,
             limit: searchLimit,
             planLimits: limits,
@@ -417,6 +454,7 @@ export function createMCPServer(ctx: McpContext): Server {
               userFacing,
             );
           }
+          result = withResolvedWorkspace(result as ToolSuccessResult, recallWs.resolved_workspace);
           break;
         }
         case 'get_context': {
@@ -425,6 +463,7 @@ export function createMCPServer(ctx: McpContext): Server {
           const input = z
             .object({
               topic: z.string().min(1).optional(),
+              workspace: z.string().optional(),
               include_skills: z.boolean().optional(),
               max_memories: z.number().int().optional(),
               type: memoryTypeEnum.optional(),
@@ -436,6 +475,12 @@ export function createMCPServer(ctx: McpContext): Server {
               exclude_memory_ids: z.array(z.string().uuid()).optional(),
             })
             .parse(a);
+          const contextWs = await normalizeWorkspaceParam(
+            { workspace: input.workspace },
+            userId,
+            workforceWorkspaceId,
+          );
+          const effectiveWsId = contextWs.workspace_id ?? undefined;
           const topic = input.topic?.trim();
           const collectionRaw = input.collection?.trim();
           const showAll = collectionRaw?.toLowerCase() === 'all';
@@ -444,28 +489,31 @@ export function createMCPServer(ctx: McpContext): Server {
           if (isPicker) {
             const lang = await resolveLanguage(prefs);
             const skillCaps = resolveSkillCaps();
-            const allCollections = await getAllCollectionsByUsage(userId, workforceWorkspaceId);
+            const allCollections = await getAllCollectionsByUsage(userId, effectiveWsId);
             const topCollections = showAll
               ? allCollections
-              : await getTopCollectionsByUsage(userId, 5, workforceWorkspaceId);
+              : await getTopCollectionsByUsage(userId, 5, effectiveWsId);
             const showMore = !showAll && allCollections.length > topCollections.length;
-            result = buildCollectionsPickerToolResult({
-              lang,
-              collections: topCollections,
-              showMore,
-              showAll,
-              allCollections: showAll ? allCollections : undefined,
-              includeSkills: input.include_skills ?? false,
-              caps: skillCaps,
-            });
+            result = withResolvedWorkspace(
+              buildCollectionsPickerToolResult({
+                lang,
+                collections: topCollections,
+                showMore,
+                showAll,
+                allCollections: showAll ? allCollections : undefined,
+                includeSkills: input.include_skills ?? false,
+                caps: skillCaps,
+              }) as ToolSuccessResult,
+              contextWs.resolved_workspace,
+            );
             break;
           }
 
-          const visibility = resolveMcpReadVisibility(workforceWorkspaceId, prefs, input.visibility);
+          const visibility = resolveMcpReadVisibility(effectiveWsId, prefs, input.visibility);
           const contextLimit = resolveSearchLimit(limits, input.max_memories);
           const { memories: ms, total } = await searchMemories({
             userId,
-            workforceWorkspaceId,
+            workforceWorkspaceId: effectiveWsId,
             query: topic!,
             limit: contextLimit,
             planLimits: limits,
@@ -543,6 +591,7 @@ export function createMCPServer(ctx: McpContext): Server {
               userFacing,
             );
           }
+          result = withResolvedWorkspace(result as ToolSuccessResult, contextWs.resolved_workspace);
           break;
         }
         case 'list_memories': {
@@ -551,6 +600,7 @@ export function createMCPServer(ctx: McpContext): Server {
           const input = z
             .object({
               limit: z.number().int().optional(),
+              workspace: z.string().optional(),
               full_content: z.boolean().default(false),
               type: memoryTypeEnum.optional(),
               collection: z.string().optional().nullable(),
@@ -560,11 +610,17 @@ export function createMCPServer(ctx: McpContext): Server {
               group_name: z.string().optional(),
             })
             .parse(a);
-          const visibility = resolveMcpReadVisibility(workforceWorkspaceId, prefs, input.visibility);
+          const listWs = await normalizeWorkspaceParam(
+            { workspace: input.workspace },
+            userId,
+            workforceWorkspaceId,
+          );
+          const listEffectiveWsId = listWs.workspace_id ?? undefined;
+          const visibility = resolveMcpReadVisibility(listEffectiveWsId, prefs, input.visibility);
           const listLimit = resolveListLimit(limits, input.limit);
           const ms = await listMemories({
             userId,
-            workforceWorkspaceId,
+            workforceWorkspaceId: listEffectiveWsId,
             limit: listLimit,
             planLimits: limits,
             type: input.type,
@@ -587,12 +643,16 @@ export function createMCPServer(ctx: McpContext): Server {
               message: text,
             });
           }
+          result = withResolvedWorkspace(result as ToolSuccessResult, listWs.resolved_workspace);
           break;
         }
         case 'get_memory': {
           assertMemoryReadScope(oauthScope, oauthOpts);
           const input = z
-            .object({ memory_id: z.string().uuid('memory_id must be a valid UUID') })
+            .object({
+              memory_id: z.string().uuid('memory_id must be a valid UUID'),
+              workspace: z.string().optional(),
+            })
             .parse(a);
           const m = await getMemoryById({
             userId,
@@ -600,10 +660,15 @@ export function createMCPServer(ctx: McpContext): Server {
             memoryId: input.memory_id,
           });
           const text = formatGetMemoryText(m);
-          result = toolSuccess(text, {
-            ...toStructuredMemory(m),
-            message: text,
-          });
+          const echo = await resolveWorkspaceEcho(m.workforce_workspace_id ?? null, userId);
+          assertWorkspaceParamMatchesMemory(input.workspace, echo);
+          result = withResolvedWorkspace(
+            toolSuccess(text, {
+              ...toStructuredMemory(m),
+              message: text,
+            }),
+            echo,
+          );
           break;
         }
         case 'list_collections': {
@@ -634,30 +699,55 @@ export function createMCPServer(ctx: McpContext): Server {
         case 'forget': {
           assertMemoryDeleteScope(oauthScope, oauthOpts);
           const input = z
-            .object({ memory_id: z.string().uuid('memory_id must be a valid UUID') })
+            .object({
+              memory_id: z.string().uuid('memory_id must be a valid UUID'),
+              workspace: z.string().optional(),
+            })
             .parse(a);
-          await deleteMemory({ userId, workforceWorkspaceId, memoryId: input.memory_id });
+          if (input.workspace) {
+            const preCheckMemory = await getMemoryById({
+              userId,
+              workforceWorkspaceId,
+              memoryId: input.memory_id,
+            });
+            const preEcho = await resolveWorkspaceEcho(preCheckMemory.workforce_workspace_id ?? null, userId);
+            assertWorkspaceParamMatchesMemory(input.workspace, preEcho);
+          }
+          const deleted = await deleteMemory({ userId, workforceWorkspaceId, memoryId: input.memory_id });
           const text = `Memory ${input.memory_id} deleted.`;
-          result = toolSuccess(text, {
-            memory_id: input.memory_id,
-            deleted: true,
-            message: text,
-          });
+          const forgetEcho = await resolveWorkspaceEcho(deleted.workforce_workspace_id, userId);
+          result = withResolvedWorkspace(
+            toolSuccess(text, {
+              memory_id: input.memory_id,
+              deleted: true,
+              message: text,
+            }),
+            forgetEcho,
+          );
           invalidatePlanContextCache(userId);
           break;
         }
         case 'memory_stats': {
           assertMemoryReadScope(oauthScope, oauthOpts);
-          const s = await getStats(userId, workforceWorkspaceId);
+          const statsInput = z.object({ workspace: z.string().optional() }).parse(a ?? {});
+          const statsWs = await normalizeWorkspaceParam(
+            { workspace: statsInput.workspace },
+            userId,
+            workforceWorkspaceId,
+          );
+          const s = await getStats(userId, statsWs.workspace_id ?? undefined);
           const text = formatMemoryStatsText(s);
-          result = toolSuccess(text, {
-            total: s.total,
-            by_type: s.byType,
-            by_collection: s.byCollection,
-            storage_bytes_used: s.storageBytesUsed,
-            storage_bytes_limit: s.storageBytesLimit,
-            message: text,
-          });
+          result = withResolvedWorkspace(
+            toolSuccess(text, {
+              total: s.total,
+              by_type: s.byType,
+              by_collection: s.byCollection,
+              storage_bytes_used: s.storageBytesUsed,
+              storage_bytes_limit: s.storageBytesLimit,
+              message: text,
+            }),
+            statsWs.resolved_workspace,
+          );
           break;
         }
         case 'update': {
@@ -671,8 +761,14 @@ export function createMCPServer(ctx: McpContext): Server {
               collection: z.string().optional().nullable(),
               importance: z.number().min(0).max(1).optional(),
               mode: z.enum(['replace', 'append']).default('replace'),
+              workspace: z.string().optional(),
             })
             .parse(a);
+          if (input.workspace) {
+            const preCheckMemory = await getMemoryById({ userId, workforceWorkspaceId, memoryId: input.id });
+            const preEcho = await resolveWorkspaceEcho(preCheckMemory.workforce_workspace_id ?? null, userId);
+            assertWorkspaceParamMatchesMemory(input.workspace, preEcho);
+          }
           const m = await updateMemoryRecord({
             userId,
             workforceWorkspaceId,
@@ -685,14 +781,18 @@ export function createMCPServer(ctx: McpContext): Server {
             importance: input.importance,
           });
           const text = formatUpdateText(m);
-          result = toolSuccess(text, {
-            memory_id: m.id,
-            memory_type: m.memory_type,
-            collection: m.collection ?? '',
-            tags: m.tags,
-            importance: m.importance,
-            message: text,
-          });
+          const updateEcho = await resolveWorkspaceEcho(m.workforce_workspace_id ?? null, userId);
+          result = withResolvedWorkspace(
+            toolSuccess(text, {
+              memory_id: m.id,
+              memory_type: m.memory_type,
+              collection: m.collection ?? '',
+              tags: m.tags,
+              importance: m.importance,
+              message: text,
+            }),
+            updateEcho,
+          );
           invalidatePlanContextCache(userId);
           break;
         }

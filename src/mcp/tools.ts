@@ -406,7 +406,11 @@ export async function getMemoryById(p: {
   if (!dec) throw new Error('Memory not found');
 
   const [row] = await enrichRowsWithGroupNames([dec as unknown as Record<string, unknown>], fetchGroupNameMap);
-  return row as unknown as MemoryRow;
+  return {
+    ...(row as unknown as MemoryRow),
+    workforce_workspace_id:
+      (access.memory as { workforce_workspace_id?: string | null }).workforce_workspace_id ?? null,
+  };
 }
 
 export async function listMemories(p: {
@@ -569,7 +573,7 @@ export async function deleteMemory(p: {
   userId: string;
   workforceWorkspaceId?: string;
   memoryId: string;
-}): Promise<void> {
+}): Promise<{ workforce_workspace_id: string | null }> {
   const access = await getMemoryForAccess(p.memoryId, {
     userId: p.userId,
     workforceWorkspaceId: p.workforceWorkspaceId,
@@ -593,6 +597,7 @@ export async function deleteMemory(p: {
   if (!canDelete) throw new Error('Not authorized to delete this memory');
   const { error } = await supabase.from('memories').delete().eq('id', p.memoryId);
   if (error) throw new Error(`deleteMemory: ${error.message}`);
+  return { workforce_workspace_id: (existing as { workforce_workspace_id?: string | null }).workforce_workspace_id ?? null };
 }
 
 export async function getStats(

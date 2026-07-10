@@ -44,6 +44,29 @@ const GROUP_VISIBILITY_FIELDS = {
   },
 };
 
+const WORKSPACE_FIELD = {
+  workspace: {
+    type: 'string',
+    description:
+      'To operate on a team workspace, pass its exact name, slug, or ID (e.g. "Acme"). Omit — or pass "personal" — for your personal memory (default). Every response echoes resolved_workspace so you can confirm where the operation actually happened.',
+  },
+};
+
+const RESOLVED_WORKSPACE_OUTPUT = {
+  resolved_workspace: {
+    type: 'object',
+    description:
+      'The workspace this call actually operated on (defense against writing to the wrong team by typo or name collision). id=null means Personal.',
+    properties: {
+      id: { type: ['string', 'null'], description: 'Workspace UUID, or null for Personal.' },
+      name: { type: 'string', description: 'Display name ("Personal" for personal memory).' },
+      role: { type: 'string', description: 'Your role in this workspace (owner/admin/member/viewer). Omitted for Personal.' },
+      writes_allowed: { type: 'boolean', description: 'Whether writes are currently allowed (role + billing gate).' },
+    },
+    required: ['id', 'name', 'writes_allowed'],
+  },
+};
+
 const SCOPE_FIELDS = {
   collection: {
     type: 'string',
@@ -124,11 +147,12 @@ export const MCP_CORE_TOOLS: Tool[] = [
     name: 'remember',
     ...toolMeta('Remember', { openWorld: true, idempotent: false }),
     description:
-      'Save important information to long-term memory. Always set collection when the topic is clear: project work → project:<slug>, personal tastes → personal:preferences. Use append_to to extend an existing memory instead of creating duplicates. Vector search indexing completes asynchronously within a few seconds after save.',
+      'Save important information to long-term memory. Always set collection when the topic is clear: project work → project:<slug>, personal tastes → personal:preferences. Use append_to to extend an existing memory instead of creating duplicates. Vector search indexing completes asynchronously within a few seconds after save. To save to a team workspace instead of personal memory, pass workspace: <name>.',
     inputSchema: {
       type: 'object',
       properties: {
         content: { type: 'string', description: 'The information to remember.' },
+        ...WORKSPACE_FIELD,
         type: {
           ...MEMORY_TYPE_PROPERTY,
           default: 'general',
@@ -172,6 +196,7 @@ export const MCP_CORE_TOOLS: Tool[] = [
         },
         importance: { type: 'number', description: 'Stored importance (0–1).' },
         message: { type: 'string', description: 'Human-readable confirmation (same as content text).' },
+        ...RESOLVED_WORKSPACE_OUTPUT,
       },
       required: ['memory_id', 'memory_type', 'message'],
     },
@@ -180,7 +205,7 @@ export const MCP_CORE_TOOLS: Tool[] = [
     name: 'recall',
     ...toolMeta('Recall memories', { readOnly: true, openWorld: true, idempotent: true }),
     description: appendRenderingInstructions(
-      'Search long-term memory. Call list_collections when scope is unclear. For GitHub/Notion synced content use collection project:<slug> (unified per project) or tags github/notion. Connect at dashboard.memxus.com/integrations.',
+      'Search long-term memory. Call list_collections when scope is unclear. For GitHub/Notion synced content use collection project:<slug> (unified per project) or tags github/notion. Connect at dashboard.memxus.com/integrations. To search a team workspace instead of personal memory, pass workspace: <name>.',
     ),
     inputSchema: {
       type: 'object',
@@ -190,6 +215,7 @@ export const MCP_CORE_TOOLS: Tool[] = [
           description:
             'Natural-language search query (e.g. "Henry project stack", "user prefers dark mode").',
         },
+        ...WORKSPACE_FIELD,
         limit: {
           type: 'number',
           description:
@@ -241,6 +267,7 @@ export const MCP_CORE_TOOLS: Tool[] = [
         tokens_used: { type: 'number', description: 'Estimated tokens in the injected response.' },
         impact_summary: { type: 'object', additionalProperties: true },
         impact_summary_text: { type: 'string', description: 'Token reuse line for the AHORRO block when ENABLE_IMPACT_SUMMARY is on.' },
+        ...RESOLVED_WORKSPACE_OUTPUT,
       },
       required: ['count', 'memories', 'message'],
     },
@@ -249,7 +276,7 @@ export const MCP_CORE_TOOLS: Tool[] = [
     name: 'get_context',
     ...toolMeta('Get context', { readOnly: true, openWorld: true, idempotent: true }),
     description: appendRenderingInstructions(
-      'Build a formatted context block for the current topic. Omit topic and collection to show the text collection picker (Memxus menu flow). Call list_collections when unsure of the exact slug. Partial collection names are resolved server-side. If the user\'s first message appears to be a coding task, technical question, or project-related request, call get_context with the detected topic BEFORE responding — do not wait for the user to ask.',
+      'Build a formatted context block for the current topic. Omit topic and collection to show the text collection picker (Memxus menu flow). Call list_collections when unsure of the exact slug. Partial collection names are resolved server-side. If the user\'s first message appears to be a coding task, technical question, or project-related request, call get_context with the detected topic BEFORE responding — do not wait for the user to ask. To build context from a team workspace instead of personal memory, pass workspace: <name>.',
     ),
     inputSchema: {
       type: 'object',
@@ -259,6 +286,7 @@ export const MCP_CORE_TOOLS: Tool[] = [
           description:
             'Subject to build context for (e.g. "current project", "client meeting notes"). Omit with collection to show the collection picker.',
         },
+        ...WORKSPACE_FIELD,
         include_skills: {
           type: 'boolean',
           description:
@@ -318,6 +346,7 @@ export const MCP_CORE_TOOLS: Tool[] = [
         truncated: { type: 'boolean', description: 'True when memories were trimmed to the token budget.' },
         impact_summary: { type: 'object', additionalProperties: true },
         impact_summary_text: { type: 'string', description: 'Token reuse line for the AHORRO block when ENABLE_IMPACT_SUMMARY is on.' },
+        ...RESOLVED_WORKSPACE_OUTPUT,
       },
       required: ['count', 'message'],
     },
@@ -326,7 +355,7 @@ export const MCP_CORE_TOOLS: Tool[] = [
     name: 'list_memories',
     ...toolMeta('List memories', { readOnly: true, idempotent: true }),
     description:
-      'List recent memories in reverse-chronological order (read-only). When to use: audit what is saved, browse a collection, or collect memory IDs for get_memory or forget. When NOT: semantic search by topic → recall; one full record → get_memory; aggregate counts only → memory_stats. Behavior: default 20 results (plan-capped), ordered by created_at descending; empty set returns a message suggesting remember; full_content controls preview in the message text (120 chars); structured memories[] always includes full content.',
+      'List recent memories in reverse-chronological order (read-only). When to use: audit what is saved, browse a collection, or collect memory IDs for get_memory or forget. When NOT: semantic search by topic → recall; one full record → get_memory; aggregate counts only → memory_stats. Behavior: default 20 results (plan-capped), ordered by created_at descending; empty set returns a message suggesting remember; full_content controls preview in the message text (120 chars); structured memories[] always includes full content. To list a team workspace instead of personal memory, pass workspace: <name>.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -335,6 +364,7 @@ export const MCP_CORE_TOOLS: Tool[] = [
           description:
             'Positive integer max results. Omit for server default (20). Capped per your plan.',
         },
+        ...WORKSPACE_FIELD,
         full_content: {
           type: 'boolean',
           description:
@@ -371,6 +401,7 @@ export const MCP_CORE_TOOLS: Tool[] = [
           type: 'string',
           description: 'Human-readable listing; previews truncate at 120 chars unless full_content=true.',
         },
+        ...RESOLVED_WORKSPACE_OUTPUT,
       },
       required: ['count', 'memories', 'message'],
     },
@@ -379,11 +410,12 @@ export const MCP_CORE_TOOLS: Tool[] = [
     name: 'get_memory',
     ...toolMeta('Get memory', { readOnly: true, idempotent: true }),
     description:
-      'Retrieve the full content and metadata of one memory by its UUID. Use after list_memories or recall returned a truncated preview and you need the complete text. Returns content, memory_type, tags, collection, importance, and the creation timestamp. Get the UUID from a prior list_memories or recall result.',
+      'Retrieve the full content and metadata of one memory by its UUID. Use after list_memories or recall returned a truncated preview and you need the complete text. Returns content, memory_type, tags, collection, importance, and the creation timestamp. Get the UUID from a prior list_memories or recall result. The workspace this memory belongs to is determined by its ID and echoed in resolved_workspace; optionally pass workspace: <name> to confirm the memory belongs to that team workspace (errors if it does not).',
     inputSchema: {
       type: 'object',
       properties: {
         memory_id: { type: 'string', description: 'UUID of the memory to retrieve.' },
+        ...WORKSPACE_FIELD,
       },
       required: ['memory_id'],
     },
@@ -392,6 +424,7 @@ export const MCP_CORE_TOOLS: Tool[] = [
       properties: {
         ...MEMORY_ITEM_SCHEMA.properties,
         message: { type: 'string', description: 'Human-readable detail (same as content text).' },
+        ...RESOLVED_WORKSPACE_OUTPUT,
       },
       required: ['id', 'memory_type', 'content', 'message'],
     },
@@ -400,7 +433,7 @@ export const MCP_CORE_TOOLS: Tool[] = [
     name: 'list_collections',
     ...toolMeta('List collections', { readOnly: true, idempotent: true }),
     description:
-      'List memory collections (folders/scopes) for this user. GitHub/Notion syncs appear under project:<slug> when unified collections are enabled. Call before scoped recall/get_context when the user mentions a project name.',
+      'List memory collections (folders/scopes) for this user. GitHub/Notion syncs appear under project:<slug> when unified collections are enabled. Call before scoped recall/get_context when the user mentions a project name. To see which team workspaces you can pass as workspace: <name> to other tools, read the memory://workspaces resource.',
     inputSchema: { type: 'object', properties: {} },
     outputSchema: {
       type: 'object',
@@ -420,7 +453,7 @@ export const MCP_CORE_TOOLS: Tool[] = [
     name: 'forget',
     ...toolMeta('Forget memory', { destructive: true, idempotent: false }),
     description:
-      'Permanently delete one memory by UUID. When to use: user asks to remove outdated or incorrect context, or to free plan storage. When NOT: fix content → update (mode=replace); find the ID first → list_memories or recall. Requires delete OAuth scope. Non-idempotent: deleting the same memory_id twice fails. Errors: Memory not found, Not authorized to delete this memory. Side effects: removes the memory row and vector embedding with no recovery; invalidates plan cache.',
+      'Permanently delete one memory by UUID. When to use: user asks to remove outdated or incorrect context, or to free plan storage. When NOT: fix content → update (mode=replace); find the ID first → list_memories or recall. Requires delete OAuth scope. Non-idempotent: deleting the same memory_id twice fails. Errors: Memory not found, Not authorized to delete this memory. Side effects: removes the memory row and vector embedding with no recovery; invalidates plan cache. The target workspace is always the one the memory itself belongs to (echoed in resolved_workspace); optionally pass workspace: <name> as a safety confirmation — the call fails if the memory is not actually in that workspace.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -430,6 +463,7 @@ export const MCP_CORE_TOOLS: Tool[] = [
           description:
             'UUID of the memory to delete. Copy from the id field in list_memories or recall. Must be deletable by the authenticated user.',
         },
+        ...WORKSPACE_FIELD,
       },
       required: ['memory_id'],
     },
@@ -439,6 +473,7 @@ export const MCP_CORE_TOOLS: Tool[] = [
         memory_id: { type: 'string', description: 'UUID of the deleted memory.' },
         deleted: { type: 'boolean', description: 'True when deletion succeeded.' },
         message: { type: 'string', description: 'Human-readable confirmation (same as content text).' },
+        ...RESOLVED_WORKSPACE_OUTPUT,
       },
       required: ['memory_id', 'deleted', 'message'],
     },
@@ -447,8 +482,13 @@ export const MCP_CORE_TOOLS: Tool[] = [
     name: 'memory_stats',
     ...toolMeta('Get memory statistics', { readOnly: true, idempotent: true }),
     description:
-      'Show aggregate statistics about stored memories: the total count, a breakdown by memory_type and by collection, and storage bytes used versus the plan limit. Use to understand what is stored before browsing with list_memories, or to check remaining storage capacity. Takes no parameters.',
-    inputSchema: { type: 'object', properties: {} },
+      'Show aggregate statistics about stored memories: the total count, a breakdown by memory_type and by collection, and storage bytes used versus the plan limit. Use to understand what is stored before browsing with list_memories, or to check remaining storage capacity. To show stats for a team workspace instead of personal memory, pass workspace: <name>.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...WORKSPACE_FIELD,
+      },
+    },
     outputSchema: {
       type: 'object',
       properties: {
@@ -472,6 +512,7 @@ export const MCP_CORE_TOOLS: Tool[] = [
           description: 'Plan storage limit in bytes (-1 = unlimited).',
         },
         message: { type: 'string', description: 'Human-readable statistics (same as content text).' },
+        ...RESOLVED_WORKSPACE_OUTPUT,
       },
       required: ['total', 'by_type', 'by_collection', 'message'],
     },
@@ -480,13 +521,14 @@ export const MCP_CORE_TOOLS: Tool[] = [
     name: 'update',
     ...toolMeta('Update memory', { openWorld: true, idempotent: true }),
     description:
-      'Update an existing memory by ID. Use mode replace (default) to patch fields, or append to extend content. Re-embeds only when content changes.',
+      'Update an existing memory by ID. Use mode replace (default) to patch fields, or append to extend content. Re-embeds only when content changes. The target workspace is always the one the memory itself belongs to (echoed in resolved_workspace); optionally pass workspace: <name> as a safety confirmation — the call fails if the memory is not actually in that workspace.',
     inputSchema: {
       type: 'object',
       properties: {
         id: { type: 'string', description: 'UUID of the memory to update.' },
         content: { type: 'string', description: 'New or appended content.' },
         type: MEMORY_TYPE_PROPERTY,
+        ...WORKSPACE_FIELD,
         ...SCOPE_FIELDS,
         importance: {
           type: 'number',
@@ -516,6 +558,7 @@ export const MCP_CORE_TOOLS: Tool[] = [
         },
         importance: { type: 'number', description: 'Stored importance (0–1).' },
         message: { type: 'string', description: 'Human-readable confirmation.' },
+        ...RESOLVED_WORKSPACE_OUTPUT,
       },
       required: ['memory_id', 'memory_type', 'message'],
     },

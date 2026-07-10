@@ -127,5 +127,8 @@ export async function updateMemoryRecord(p: UpdateMemoryInput): Promise<MemoryRo
 
   const dec = await decryptMemoryRow(data as unknown as MemoryRowMinimal, p.userId);
   if (!dec) throw new Error('Memory not found');
-  return dec as unknown as MemoryRow;
+  return {
+    ...(dec as unknown as MemoryRow),
+    workforce_workspace_id: existing.workforce_workspace_id ?? null,
+  };
 }

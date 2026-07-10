@@ -42,8 +42,9 @@ const LEGACY_INPUT_KEYS: Record<string, string[]> = {
     'visibility',
     'group_id',
     'group_name',
+    'workspace',
   ],
-  recall: ['query', 'limit', 'type', 'collection', 'tags', 'visibility', 'group_id', 'group_name', 'include_skills', 'exclude_memory_ids'],
+  recall: ['query', 'limit', 'type', 'collection', 'tags', 'visibility', 'group_id', 'group_name', 'include_skills', 'exclude_memory_ids', 'workspace'],
   get_context: [
     'topic',
     'include_skills',
@@ -55,6 +56,7 @@ const LEGACY_INPUT_KEYS: Record<string, string[]> = {
     'group_id',
     'group_name',
     'exclude_memory_ids',
+    'workspace',
   ],
   list_memories: [
     'limit',
@@ -65,12 +67,13 @@ const LEGACY_INPUT_KEYS: Record<string, string[]> = {
     'visibility',
     'group_id',
     'group_name',
+    'workspace',
   ],
-  get_memory: ['memory_id'],
+  get_memory: ['memory_id', 'workspace'],
   list_collections: [],
-  forget: ['memory_id'],
-  memory_stats: [],
-  update: ['id', 'content', 'type', 'collection', 'tags', 'importance', 'mode'],
+  forget: ['memory_id', 'workspace'],
+  memory_stats: ['workspace'],
+  update: ['id', 'content', 'type', 'collection', 'tags', 'importance', 'mode', 'workspace'],
 };
 
 const LEGACY_REQUIRED: Record<string, string[]> = {
