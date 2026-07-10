@@ -84,7 +84,6 @@ import {
   normalizeWorkspaceParam,
   resolveWorkspaceEcho,
   assertWorkspaceParamMatchesMemory,
-  WorkspaceResolutionError,
   type ResolvedWorkspace,
 } from '../lib/workspace-resolution.js';
 import { getCachedUserMcpPreferences } from '../lib/mcp-preferences-cache.js';

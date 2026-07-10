@@ -99,7 +99,7 @@ export async function findCollectionBySlugDecrypted(
 ): Promise<CollectionRowMinimal | null> {
   const slugHash = computeCollectionSlugHash(userId, plaintextSlug);
 
-  let { data, error } = await supabaseAdmin
+  const { data: initialData, error } = await supabaseAdmin
     .from('memory_collections')
     .select('*')
     .eq('user_id', userId)
@@ -108,6 +108,7 @@ export async function findCollectionBySlugDecrypted(
 
   if (error) return null;
 
+  let data = initialData;
   if (!data) {
     const legacy = await supabaseAdmin
       .from('memory_collections')
