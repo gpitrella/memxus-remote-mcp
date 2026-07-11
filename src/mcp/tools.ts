@@ -166,6 +166,23 @@ export async function saveMemory(p: {
     workforce_workspace_id: memoryScope === 'workforce' ? writeTarget.workforceWorkspaceId : null,
   };
 
+  // Auto-tag with workspace:<slug> (spec: descubribilidad §3.1) — additive, never
+  // replaces user/model tags. Mirrors API-IAMemory/src/routes/memories.ts (not a
+  // SYNC'd file, but the same behavior — keeps discoverability consistent across
+  // the dashboard write path and this MCP write path).
+  let tagsForStorage = tags;
+  if (memoryScope === 'workforce' && scopeInfo.workforce_workspace_id) {
+    const { data: wsRow } = await supabase
+      .from('workforce_workspaces')
+      .select('slug')
+      .eq('id', scopeInfo.workforce_workspace_id)
+      .maybeSingle();
+    const workspaceTag = wsRow?.slug ? `workspace:${wsRow.slug}` : null;
+    if (workspaceTag && !tagsForStorage.includes(workspaceTag)) {
+      tagsForStorage = [...tagsForStorage, workspaceTag];
+    }
+  }
+
   // Encrypt content + metadata for storage (embedding generated from plaintext)
   const { content: encContent, metadata: encMeta } = await prepareContentForStorage(
     p.content,
@@ -179,7 +196,7 @@ export async function saveMemory(p: {
       user_id: p.userId,
       content: encContent,
       memory_type: p.type ?? 'general',
-      tags,
+      tags: tagsForStorage,
       collection,
       thread_id: p.thread_id ?? null,
       importance: p.importance ?? 0.5,

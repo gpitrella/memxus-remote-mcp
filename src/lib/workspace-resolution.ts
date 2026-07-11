@@ -158,6 +158,27 @@ export function assertWorkspaceParamMatchesMemory(
 }
 
 /**
+ * Discoverability hint (spec: descubribilidad §3.2) — when a `recall` query
+ * mentions a workspace name/slug but no explicit `workspace` param was given,
+ * suggest it. Substring match, NOT the anti-ambiguity exact match used for
+ * resolution — this never changes the scope, only nudges the caller. Personal
+ * stays the default even when a match is found.
+ */
+export async function suggestWorkspaceForQuery(
+  query: string,
+  userId: string
+): Promise<string | null> {
+  const candidates = await listUserWorkspaceCandidates(userId);
+  const q = query.trim().toLowerCase();
+  if (!q) return null;
+  const match = candidates.find(
+    (c) => q.includes(c.name.toLowerCase()) || q.includes(c.slug.toLowerCase())
+  );
+  if (!match) return null;
+  return `Tip: this searched your Personal memory only. To search the "${match.name}" workspace instead, pass workspace: "${match.name}".`;
+}
+
+/**
  * Normalize the `workspace` tool param BEFORE resolving scope for a call.
  *
  * Semantics (spec §6):

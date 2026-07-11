@@ -84,6 +84,7 @@ import {
   normalizeWorkspaceParam,
   resolveWorkspaceEcho,
   assertWorkspaceParamMatchesMemory,
+  suggestWorkspaceForQuery,
   type ResolvedWorkspace,
 } from '../lib/workspace-resolution.js';
 import { getCachedUserMcpPreferences } from '../lib/mcp-preferences-cache.js';
@@ -390,8 +391,13 @@ export function createMCPServer(ctx: McpContext): Server {
             exclude_memory_ids: input.exclude_memory_ids,
           });
           const scope = input.collection ? ` in collection "${input.collection}"` : '';
+          const workspaceHint = !input.workspace
+            ? await suggestWorkspaceForQuery(input.query, userId)
+            : null;
           if (ms.length === 0) {
-            const text = `No memories found for that query${scope}.`;
+            const text = workspaceHint
+              ? `No memories found for that query${scope}.\n\n${workspaceHint}`
+              : `No memories found for that query${scope}.`;
             const userFacing = buildUserFacingTemplate({
               topic: input.query,
               collection: input.collection,
@@ -407,6 +413,7 @@ export function createMCPServer(ctx: McpContext): Server {
           } else {
             const formatted = ms.map((m, i) => formatMemoryLine(m, i)).join('\n\n---\n\n');
             let text = `Found ${ms.length}:\n\n${formatted}`;
+            if (workspaceHint) text = `${text}\n\n${workspaceHint}`;
             const skillPrefs = await resolvePrefs();
             let suggestedSkills: ReturnType<typeof mapActiveSkillsForResponse> | undefined;
             let skillsMessage: string | undefined;

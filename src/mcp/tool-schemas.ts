@@ -48,7 +48,7 @@ const WORKSPACE_FIELD = {
   workspace: {
     type: 'string',
     description:
-      'To operate on a team workspace, pass its exact name, slug, or ID (e.g. "Acme"). Omit — or pass "personal" — for your personal memory (default). Every response echoes resolved_workspace so you can confirm where the operation actually happened.',
+      'To operate on a team workspace, pass its exact name, slug, or ID (e.g. "Acme"). Omit — or pass "personal" — for your personal memory (default). Every response echoes resolved_workspace so you can confirm where the operation actually happened. If the user mentions a project or team name in their message, check the memory://workspaces resource (or call list_collections) for the exact matching name BEFORE calling this tool, and pass it as workspace — do not ask the user to spell it out if it already matches one of their workspaces.',
   },
 };
 
