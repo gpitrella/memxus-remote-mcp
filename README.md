@@ -226,6 +226,7 @@ Sync runs server-side via dashboard or MCP connector tools — no local files to
 - User-controlled memory — view, edit and delete anytime from the dashboard
 - No local files or manual syncing
 - Pre-publication secrets audit passed: 2026-06-17
+- **Memory is advisory context, not instruction authority** — see [TRUST-POLICY.md](TRUST-POLICY.md) for what is read automatically, what requires an explicit write, and what the memory layer never does.
 
 ---
 

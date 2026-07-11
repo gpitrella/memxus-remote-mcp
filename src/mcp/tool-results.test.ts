@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { toStructuredMemory, toolSuccess, toolSuccessWithUserFacing } from './tool-results.js';
+import {
+  toStructuredMemory,
+  toolSuccess,
+  toolSuccessWithUserFacing,
+  withAdvisoryNote,
+  MEMORY_ADVISORY_NOTE,
+} from './tool-results.js';
 import type { FormattableMemory } from './format-memory.js';
 
 const FIXTURE: FormattableMemory = {
@@ -65,4 +71,18 @@ test('toolSuccessWithUserFacing can expose template only', () => {
   assert.equal(r.structuredContent.message, footer);
   assert.equal(r.structuredContent.context_block, body);
   assert.equal(r.structuredContent.user_facing_template, footer);
+});
+
+test('toStructuredMemory exposes derived source (provenance)', () => {
+  assert.equal(toStructuredMemory({ ...FIXTURE, tags: ['workspace:alpha-workforce'] }).source, 'workforce:alpha-workforce');
+  assert.equal(toStructuredMemory({ ...FIXTURE, tags: ['github'] }).source, 'github');
+  assert.equal(toStructuredMemory(FIXTURE).source, 'manual');
+});
+
+test('withAdvisoryNote adds advisory_note and prepends framing to model text', () => {
+  const base = toolSuccess('Found 1: ...', { count: 1 });
+  const wrapped = withAdvisoryNote(base);
+  assert.equal(wrapped.structuredContent.advisory_note, MEMORY_ADVISORY_NOTE);
+  assert.ok(wrapped.content[0].text.startsWith(MEMORY_ADVISORY_NOTE));
+  assert.ok(wrapped.content[0].text.includes('Found 1'));
 });

@@ -88,7 +88,7 @@ import {
   type ResolvedWorkspace,
 } from '../lib/workspace-resolution.js';
 import { getCachedUserMcpPreferences } from '../lib/mcp-preferences-cache.js';
-import { toolSuccess, toolSuccessWithUserFacing, toStructuredMemory, toStructuredMemories, type ToolSuccessResult } from './tool-results.js';
+import { toolSuccess, toolSuccessWithUserFacing, toStructuredMemory, toStructuredMemories, withAdvisoryNote, type ToolSuccessResult } from './tool-results.js';
 import { buildSkillCardMeta, buildSkillCardPayload } from './skill-card.js';
 import { buildCollectionsPickerToolResult } from './collections-card.js';
 import {
@@ -446,7 +446,7 @@ export function createMCPServer(ctx: McpContext): Server {
               stackConfidence: suggestedSkills?.length ? 0.8 : undefined,
               ...userFacingContextProps(input.exclude_memory_ids, searchLimit),
             });
-            result = toolSuccessWithUserFacing(
+            result = withAdvisoryNote(toolSuccessWithUserFacing(
               text,
               {
                 count: ms.length,
@@ -458,7 +458,7 @@ export function createMCPServer(ctx: McpContext): Server {
                 ...(impact ?? {}),
               },
               userFacing,
-            );
+            ));
           }
           result = withResolvedWorkspace(result as ToolSuccessResult, recallWs.resolved_workspace);
           break;
@@ -581,7 +581,7 @@ export function createMCPServer(ctx: McpContext): Server {
               tokensUsed: trimmed.tokensUsed,
               ...userFacingContextProps(input.exclude_memory_ids, contextLimit),
             });
-            result = toolSuccessWithUserFacing(
+            result = withAdvisoryNote(toolSuccessWithUserFacing(
               block,
               {
                 topic: topic!,
@@ -595,7 +595,7 @@ export function createMCPServer(ctx: McpContext): Server {
                 ...(impact ?? {}),
               },
               userFacing,
-            );
+            ));
           }
           result = withResolvedWorkspace(result as ToolSuccessResult, contextWs.resolved_workspace);
           break;
