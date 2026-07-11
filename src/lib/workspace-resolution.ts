@@ -170,10 +170,12 @@ export async function suggestWorkspaceForQuery(
 ): Promise<string | null> {
   const candidates = await listUserWorkspaceCandidates(userId);
   const q = query.trim().toLowerCase();
-  if (!q) return null;
-  const match = candidates.find(
-    (c) => q.includes(c.name.toLowerCase()) || q.includes(c.slug.toLowerCase())
-  );
+  if (!q || q.length < 3) return null;
+  const match = candidates.find((c) => {
+    const name = c.name.toLowerCase();
+    const slug = c.slug.toLowerCase();
+    return name.includes(q) || q.includes(name) || slug.includes(q) || q.includes(slug);
+  });
   if (!match) return null;
   return `Tip: this searched your Personal memory only. To search the "${match.name}" workspace instead, pass workspace: "${match.name}".`;
 }
