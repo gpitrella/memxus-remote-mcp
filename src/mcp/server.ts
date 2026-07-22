@@ -20,6 +20,7 @@ import {
   getMemoryById,
   getStats,
 } from './tools.js';
+import { maybeCreateWelcomeMemory } from './welcome.js';
 import { RESOURCES, readResource, getResourceMimeType } from './resources.js';
 import { getPlan } from '../lib/plans.js';
 import {
@@ -395,6 +396,16 @@ export function createMCPServer(ctx: McpContext): Server {
             ? await suggestWorkspaceForQuery(input.query, userId)
             : null;
           if (ms.length === 0) {
+            const welcome = await maybeCreateWelcomeMemory(userId, effectiveWsId);
+            if (welcome) {
+              result = toolSuccessWithUserFacing(
+                welcome.content,
+                { count: 1, total: 1, memories: toStructuredMemories([welcome]), message: welcome.content },
+                null,
+              );
+              result = withResolvedWorkspace(result as ToolSuccessResult, recallWs.resolved_workspace);
+              break;
+            }
             const text = workspaceHint
               ? `No memories found for that query${scope}.\n\n${workspaceHint}`
               : `No memories found for that query${scope}.`;
@@ -533,6 +544,23 @@ export function createMCPServer(ctx: McpContext): Server {
             exclude_memory_ids: input.exclude_memory_ids,
           });
           if (ms.length === 0) {
+            const welcome = await maybeCreateWelcomeMemory(userId, effectiveWsId);
+            if (welcome) {
+              result = toolSuccessWithUserFacing(
+                welcome.content,
+                {
+                  topic: topic!,
+                  count: 1,
+                  total: 1,
+                  context_block: welcome.content,
+                  memories: toStructuredMemories([welcome]),
+                  message: welcome.content,
+                },
+                null,
+              );
+              result = withResolvedWorkspace(result as ToolSuccessResult, contextWs.resolved_workspace);
+              break;
+            }
             const scope = input.collection ? ` (collection: ${input.collection})` : '';
             const text = `No relevant memories found for this topic${scope}.`;
             const userFacing = buildUserFacingTemplate({

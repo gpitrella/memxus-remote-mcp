@@ -1,8 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mock } from 'node:test';
 import type { Response } from 'express';
 import type { AuthedRequest } from '../lib/auth.js';
 import { handleMcp, handleMcpGet, handleMcpDelete, _test } from './transport.js';
+import { supabase } from '../lib/supabase.js';
+
+/** Generic benign stub for any Supabase table query not under test. */
+function chainableStub(): Record<string, unknown> {
+  const stub: Record<string, unknown> = {
+    select: () => stub,
+    eq: () => stub,
+    maybeSingle: async () => ({ data: null, error: null }),
+    single: async () => ({ data: null, error: null }),
+    insert: async () => ({ data: null, error: null }),
+    upsert: async () => ({ data: null, error: null }),
+    then: (resolve: (v: { data: null; error: null }) => void) => resolve({ data: null, error: null }),
+  };
+  return stub;
+}
 
 function mockAuthedReq(overrides: Partial<AuthedRequest> = {}): AuthedRequest {
   return {
@@ -296,4 +312,65 @@ test('extractHandshake returns undefined for non-initialize requests', () => {
     params: {},
   });
   assert.equal(handshake, undefined);
+});
+
+test('stateless initialize with clientInfo records exactly one client_sessions insert', async (t) => {
+  _test.setStatelessMode(true);
+  let inserted: Record<string, unknown> | undefined;
+  const spy = mock.method(supabase, 'from', (table: string) => {
+    if (table === 'client_sessions') {
+      return {
+        insert: async (row: Record<string, unknown>) => {
+          inserted = row;
+          return { data: null, error: null };
+        },
+      };
+    }
+    return chainableStub();
+  });
+  t.after(() => spy.mock.restore());
+
+  const req = mockAuthedReq({
+    userId: 'user-1',
+    body: {
+      jsonrpc: '2.0',
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'claude-ai', version: '2.0.0' },
+      },
+      id: 1,
+    },
+  });
+  const res = mockRes();
+  await handleMcp(req, res);
+
+  assert.equal(inserted?.user_id, 'user-1');
+  assert.equal(inserted?.client_name, 'claude-ai');
+  assert.equal(inserted?.client_version, '2.0.0');
+  assert.equal(inserted?.stateless, true);
+});
+
+test('a subsequent non-initialize call does not record another client_sessions row', async (t) => {
+  _test.setStatelessMode(true);
+  let insertCount = 0;
+  const spy = mock.method(supabase, 'from', (table: string) => {
+    if (table === 'client_sessions') {
+      return {
+        insert: async () => {
+          insertCount += 1;
+          return { data: null, error: null };
+        },
+      };
+    }
+    return chainableStub();
+  });
+  t.after(() => spy.mock.restore());
+
+  const req = mockAuthedReq({ userId: 'user-1', body: toolsListBody });
+  const res = mockRes();
+  await handleMcp(req, res);
+
+  assert.equal(insertCount, 0);
 });

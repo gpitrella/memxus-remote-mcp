@@ -7,6 +7,7 @@ import { AuthedRequest } from '../lib/auth.js';
 import { getCachedUserMcpPreferences } from '../lib/mcp-preferences-cache.js';
 import { sendMcpUnauthorized } from '../oauth/unauthorized.js';
 import type { McpHandshakeContext } from '../lib/skill-capabilities.js';
+import { recordClientSession } from '../lib/client-sessions.js';
 
 interface Session {
   transport: StreamableHTTPServerTransport;
@@ -226,9 +227,11 @@ async function handleStatelessPost(req: AuthedRequest, res: Response): Promise<v
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
   });
+  const handshake = extractHandshake(req.body);
+  if (handshake) recordClientSession(req.userId!, handshake, undefined, true);
   const server = createMCPServer({
     ...(await createServerContext(req)),
-    handshake: extractHandshake(req.body),
+    handshake,
   });
   await server.connect(transport);
   try {
@@ -263,6 +266,7 @@ async function handleStatefulPost(req: AuthedRequest, res: Response): Promise<vo
 
     const handshake = extractHandshake(req.body);
     const newSessionId = randomUUID();
+    if (handshake) recordClientSession(req.userId!, handshake, newSessionId, false);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => newSessionId,
       onsessioninitialized: (id) => {
