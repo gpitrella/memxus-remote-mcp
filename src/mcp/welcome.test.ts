@@ -23,7 +23,7 @@ const SAVED_MEMORY: MemoryRow = {
 };
 
 test('maybeCreateWelcomeMemory: creates a tagged welcome memory when the user has 0 memories', async () => {
-  let saveCalls: Parameters<typeof saveMemory>[0][] = [];
+  const saveCalls: Parameters<typeof saveMemory>[0][] = [];
   const deps = {
     getStats: (async () => statsWithTotal(0)) as typeof getStats,
     saveMemory: (async (p) => {
