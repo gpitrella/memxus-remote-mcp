@@ -1,9 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mock } from 'node:test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { MCP_TOOLS, MCP_CORE_TOOLS, MCP_SKILL_ROUTING_TOOLS, getActiveMcpTools } from './tool-schemas.js';
 import { createMCPServer } from './server.js';
+import { supabase } from '../lib/supabase.js';
+
+/** Generic benign stub for any Supabase table query not under test. */
+function chainableStub(): Record<string, unknown> {
+  const stub: Record<string, unknown> = {
+    select: () => stub,
+    eq: () => stub,
+    maybeSingle: async () => ({ data: null, error: null }),
+    single: async () => ({ data: null, error: null }),
+  };
+  return stub;
+}
+
+function statsRpcPayload(total: number) {
+  return { total, by_type: {}, by_collection: {} };
+}
 
 async function withTestClient(fn: (client: Client) => Promise<void>): Promise<void> {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -241,4 +258,49 @@ test('listTools exposes core tools (9 by default)', async () => {
       [...CORE_TOOL_NAMES]
     );
   });
+});
+
+test('createMCPServer sets initialize instructions for a zero-memory user', async (t) => {
+  const rpcSpy = mock.method(supabase, 'rpc', async () => ({ data: statsRpcPayload(0), error: null }));
+  const fromSpy = mock.method(supabase, 'from', () => chainableStub());
+  t.after(() => {
+    rpcSpy.mock.restore();
+    fromSpy.mock.restore();
+  });
+
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const server = await createMCPServer({ userId: 'zero-memory-test-user' });
+  const client = new Client({ name: 'memxus-server-test', version: '1.0.0' });
+  await server.connect(serverTransport);
+  await client.connect(clientTransport);
+  try {
+    assert.equal(
+      client.getInstructions()?.includes('has no saved memories yet'),
+      true,
+    );
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('createMCPServer omits initialize instructions once the user has memories', async (t) => {
+  const rpcSpy = mock.method(supabase, 'rpc', async () => ({ data: statsRpcPayload(5), error: null }));
+  const fromSpy = mock.method(supabase, 'from', () => chainableStub());
+  t.after(() => {
+    rpcSpy.mock.restore();
+    fromSpy.mock.restore();
+  });
+
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const server = await createMCPServer({ userId: 'active-test-user' });
+  const client = new Client({ name: 'memxus-server-test', version: '1.0.0' });
+  await server.connect(serverTransport);
+  await client.connect(clientTransport);
+  try {
+    assert.equal(client.getInstructions(), undefined);
+  } finally {
+    await client.close();
+    await server.close();
+  }
 });
