@@ -174,9 +174,33 @@ export interface McpContext {
 
 const memoryTypeEnum = z.enum(['general', 'preference', 'fact', 'instruction', 'conversation']);
 
-export function createMCPServer(ctx: McpContext): Server {
+export async function createMCPServer(ctx: McpContext): Promise<Server> {
   const { userId, apiKeyId, workforceWorkspaceId, oauthScope, isOAuthToken } = ctx;
   const oauthOpts = { isOAuthToken };
+
+  // Nudge the model to greet proactively on connect when this user has never
+  // saved anything — the only real onboarding hook MCP's initialize handshake
+  // offers (the server can never push a chat message on its own). Omitted
+  // entirely for users with any memories, so nothing changes for them.
+  // TODO(copy-review): this text is read by the model, not the end user —
+  // still worth a human sanity-check before relying on the exact wording.
+  //
+  // Fails open: this is a best-effort onboarding nudge, not a critical path —
+  // if Supabase is unreachable, the connection must still succeed with no
+  // instructions rather than failing the whole handshake.
+  let instructions: string | undefined;
+  try {
+    const connectStats = await getStats(userId, workforceWorkspaceId);
+    instructions =
+      connectStats.total === 0
+        ? "This user has no saved memories yet. Proactively greet them at the start of the " +
+          "conversation (don't wait to be asked): briefly explain you can remember things they " +
+          "tell you to save (facts, preferences, decisions, project context) and invite them to " +
+          "save their first memory or ask what's already there."
+        : undefined;
+  } catch (err) {
+    console.error('[createMCPServer] getStats failed, connecting without instructions:', err);
+  }
 
   async function resolvePrefs(): Promise<UserMcpPreferences> {
     return ctx.mcpPreferences ?? getCachedUserMcpPreferences(userId);
@@ -216,7 +240,7 @@ export function createMCPServer(ctx: McpContext): Server {
 
   const server = new Server(
     { name: 'memxus', version: '1.2.0' },
-    { capabilities: { tools: {}, resources: {}, prompts: {} } }
+    { capabilities: { tools: {}, resources: {}, prompts: {} }, ...(instructions ? { instructions } : {}) }
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -504,6 +528,18 @@ export function createMCPServer(ctx: McpContext): Server {
           const isPicker = showAll || (!topic && !collectionRaw);
 
           if (isPicker) {
+            const welcome = await maybeCreateWelcomeMemory(userId, effectiveWsId);
+            if (welcome) {
+              result = withResolvedWorkspace(
+                toolSuccessWithUserFacing(
+                  welcome.content,
+                  { count: 1, total: 1, memories: toStructuredMemories([welcome]), message: welcome.content },
+                  null,
+                ) as ToolSuccessResult,
+                contextWs.resolved_workspace,
+              );
+              break;
+            }
             const lang = await resolveLanguage(prefs);
             const skillCaps = resolveSkillCaps();
             const allCollections = await getAllCollectionsByUsage(userId, effectiveWsId);
@@ -665,8 +701,17 @@ export function createMCPServer(ctx: McpContext): Server {
             group_name: input.group_name,
           });
           if (ms.length === 0) {
-            const text = 'No memories stored yet. Use the `remember` tool to save information.';
-            result = toolSuccess(text, { count: 0, memories: [], message: text });
+            const welcome = await maybeCreateWelcomeMemory(userId, listEffectiveWsId);
+            if (welcome) {
+              result = toolSuccess(welcome.content, {
+                count: 1,
+                memories: toStructuredMemories([welcome]),
+                message: welcome.content,
+              });
+            } else {
+              const text = 'No memories stored yet. Use the `remember` tool to save information.';
+              result = toolSuccess(text, { count: 0, memories: [], message: text });
+            }
           } else {
             const verbose = input.full_content;
             const formatted = ms.map((m, i) => formatMemoryLine(m, i, verbose)).join('\n\n');

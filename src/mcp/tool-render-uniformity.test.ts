@@ -93,7 +93,7 @@ test('listTools returns 9 core tools when DISABLE_SKILLS is true', async () => {
   process.env[DISABLE_SKILLS] = 'true';
   try {
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-    const server = createMCPServer({ userId: 'uniformity-test-user' });
+    const server = await createMCPServer({ userId: 'uniformity-test-user' });
     const client = new Client({ name: 'uniformity-test', version: '1.0.0' });
     await server.connect(serverTransport);
     await client.connect(clientTransport);

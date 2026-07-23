@@ -229,7 +229,7 @@ async function handleStatelessPost(req: AuthedRequest, res: Response): Promise<v
   });
   const handshake = extractHandshake(req.body);
   if (handshake) recordClientSession(req.userId!, handshake, undefined, true);
-  const server = createMCPServer({
+  const server = await createMCPServer({
     ...(await createServerContext(req)),
     handshake,
   });
@@ -279,7 +279,7 @@ async function handleStatefulPost(req: AuthedRequest, res: Response): Promise<vo
     transport.onclose = () => {
       if (transport.sessionId) sessions.delete(transport.sessionId);
     };
-    const server = createMCPServer({
+    const server = await createMCPServer({
       ...(await createServerContext(req)),
       handshake,
       sessionId: newSessionId,

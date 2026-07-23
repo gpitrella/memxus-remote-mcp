@@ -7,7 +7,7 @@ import { createMCPServer } from './server.js';
 
 async function withTestClient(fn: (client: Client) => Promise<void>): Promise<void> {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const server = createMCPServer({ userId: 'test-user' });
+  const server = await createMCPServer({ userId: 'test-user' });
   const client = new Client({ name: 'memxus-server-test', version: '1.0.0' });
   await server.connect(serverTransport);
   await client.connect(clientTransport);
