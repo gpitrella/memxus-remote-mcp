@@ -3,7 +3,7 @@
   "name": "com.memxus/memxus",
   "title": "Memxus — AI Context Engine",
   "description": "AI context engine for developers: GitHub, Notion, memory unified for Claude, Cursor, and ChatGPT.",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "websiteUrl": "https://memxus.com",
   "repository": {
     "url": "https://github.com/gpitrella/memxus-remote-mcp",

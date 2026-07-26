@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300" width="760" height="300" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" role="img" aria-label="Code example: remember a decision in Claude, recall it later in Cursor, get the exact answer back.">
+  <style>
+    .win    { fill: #0d1117; stroke: #1e2630; }
+    .bar    { fill: #161b22; }
+    .title  { fill: #7d8794; }
+    .comment{ fill: #6a7681; }
+    .fn     { fill: #47CEAC; }
+    .str    { fill: #e3b341; }
+    .punct  { fill: #9aa5b1; }
+    .arrow  { fill: #47CEAC; }
+    .ret    { fill: #cdd9e5; }
+  </style>
+
+  <!-- window -->
+  <rect class="win" x="8" y="8" width="744" height="284" rx="14" stroke-width="1.5"/>
+  <rect class="bar" x="8" y="8" width="744" height="40" rx="14"/>
+  <rect class="bar" x="8" y="30" width="744" height="18"/>
+  <circle cx="34" cy="28" r="6" fill="#ff5f56"/>
+  <circle cx="56" cy="28" r="6" fill="#ffbd2e"/>
+  <circle cx="78" cy="28" r="6" fill="#27c93f"/>
+  <text class="title" x="380" y="33" font-size="12.5" text-anchor="middle">memxus — save once, recall anywhere</text>
+
+  <g font-size="14.5">
+    <text x="30" y="90"><tspan class="comment"># in Claude</tspan></text>
+    <text x="30" y="116"><tspan class="fn">remember</tspan><tspan class="punct">(</tspan><tspan class="str">"We chose Postgres over Mongo for strong consistency"</tspan><tspan class="punct">)</tspan></text>
+
+    <text x="30" y="158"><tspan class="comment"># later, in Cursor</tspan></text>
+    <text x="30" y="184"><tspan class="fn">recall</tspan><tspan class="punct">(</tspan><tspan class="str">"why did we pick our database?"</tspan><tspan class="punct">)</tspan></text>
+
+    <text x="30" y="226"><tspan class="arrow">→ </tspan><tspan class="ret">"We chose Postgres over Mongo for strong consistency"</tspan></text>
+    <text x="30" y="262"><tspan class="comment"># same memory. every AI. no repeating yourself.</tspan></text>
+  </g>
+</svg>

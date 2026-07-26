@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-07-26
+
+### Changed
+
+- README rewritten to match the landing page: leads with the `save → recall` gesture, frames GitHub/Notion sync as an optional deep layer, and adds the "not generic memory — your real work, portable" differentiator
+- Simplified the context flow diagram to a 3-step `Save → Memxus → Recall anywhere` mermaid
+
+### Added
+
+- `docs/assets/memxus-flow.svg` — theme-aware "save anywhere → one engine → recall anywhere → you control" graphic embedded in the README
+- `docs/assets/memxus-code.svg` — code card showing the `remember` / `recall` gesture across AI clients
+
 ## [1.2.0] - 2026-07-08
 
 ### Changed

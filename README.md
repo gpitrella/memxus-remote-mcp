@@ -2,14 +2,14 @@
 
 **One context engine. Every AI.**
 
-Builds persistent context from GitHub, Notion, and your saved decisions — delivered to Claude, Cursor, ChatGPT, VS Code, and any MCP-compatible client.
+Save what matters once — recall it in Claude, Cursor, ChatGPT, Gemini, and any MCP client. Not generic memory: your real decisions, preferences and work context, portable across every AI. Multiply your productivity by giving your AI the right context — without repeating yourself.
 
 [Glama MCP Connector](https://glama.ai/mcp/connectors/com.memxus/memxus)
 [License: AGPL-3.0](LICENSE)
 [Node 20+](https://nodejs.org)
 [Railway](https://railway.app)
 [MCP](https://modelcontextprotocol.io)
-[Registry v1.2.0](https://registry.modelcontextprotocol.io)
+[Registry v1.2.1](https://registry.modelcontextprotocol.io)
 
 [Website](https://memxus.com) · [Docs](https://memxus.com/docs/mcp) · [Connect your first AI](https://memxus.com/install) · [Glama Inspector](https://glama.ai/mcp/connectors/com.memxus/memxus)
 
@@ -21,6 +21,16 @@ Builds persistent context from GitHub, Notion, and your saved decisions — deli
 
 ---
 
+<p align="center">
+  <img src="docs/assets/memxus-flow.svg" alt="Save context from anywhere → one Memxus context engine → recall it in any AI → you stay in control" width="820">
+</p>
+
+<p align="center">
+  <img src="docs/assets/memxus-code.svg" alt="remember a decision in Claude, recall it later in Cursor, get the exact answer back" width="680">
+</p>
+
+---
+
 ## The problem
 
 Every AI tool starts from zero.
@@ -28,28 +38,24 @@ Every AI tool starts from zero.
 Claude doesn't know what Cursor knows. Cursor doesn't know what ChatGPT knows.  
 Your stack, project decisions, coding preferences and workflow context get repeated again and again.
 
-**Memxus fixes that with a shared context engine for your AI tools** — not another chatbot, but persistent context built from your real work sources.
+**Memxus fixes that with a shared context engine for your AI tools** — not another chatbot, and not generic memory. The fix is simple: save something once, recall it in any AI. Connect, save, done — it's instantly available everywhere. Sync your full stack (repos, docs, decisions) later, only if you want more depth.
 
-> Sync GitHub once → every AI knows your stack. Save a decision in Claude → recall it in Cursor → reuse it in ChatGPT.
+> Save a decision in Claude → recall it in Cursor → reuse it in ChatGPT. Want deeper context? Sync your GitHub and Notion too — optional, whenever you're ready.
 
 ---
 
 ## What is Memxus?
 
-Memxus is the **AI context engine** — a hosted remote MCP server that automatically builds and delivers persistent project context to every AI client you use.
+Memxus is the **AI context engine** — a hosted remote MCP server for your AI clients. The core gesture is dead simple: `remember` to save (a decision, a preference, a note), `recall` to bring it back in any AI. Connect once with OAuth and your context is portable across your entire AI workflow — no local setup, no file syncing, no copy-pasting between tools.
 
-GitHub repos, Notion docs, commits, PRs, issues, and saved decisions become searchable context. **GitHub and Notion connectors are live in production (v1.2.0)** — connect from the dashboard or directly from chat via MCP connector tools.
-
-No local setup.  
-No file syncing.  
-No copy-pasting context between tools.
-
-Connect once with OAuth and your context becomes portable across your entire AI workflow.
+Want more? Sync real work sources — GitHub repos, Notion docs, commits, PRs, issues — and they become searchable context too. **GitHub and Notion connectors are live in production (v1.2.0).** Skill routing suggests official AI skills matched to your stack. But this is the optional deep layer — you get value from the first `save`.
 
 ---
 
 ## Why developers use Memxus
 
+- **Save once, recall in every AI** — stop repeating your stack, decisions and preferences across Claude, Cursor and ChatGPT
+- **Ask once** — no more hunting through 5 tools to remember why you chose X
 - Keep project architecture and stack context available across Claude, Cursor, and ChatGPT
 - Sync GitHub and Notion into unified project collections — one context per repo
 - Stop pasting the same context into every new AI session
@@ -83,13 +89,10 @@ Call `recall` or `get_context` with `collection=project:<slug>` (or let semantic
 
 ```mermaid
 flowchart LR
-  GitHub[GitHub repos] --> Sync[Memxus sync]
-  Notion[Notion pages] --> Sync
-  Manual[Manual remember] --> Sync
-  Sync --> Collection["project:slug"]
-  Collection --> Tools["recall / get_context"]
-  Tools --> Clients[Claude Cursor ChatGPT]
+  Save["💾 Save — from any AI"] --> Memxus["🧠 Memxus — your persistent memory"] --> Recall["✨ Recall anywhere — Claude · Cursor · ChatGPT · Gemini"]
 ```
+
+> **Optional — sync your whole stack:** GitHub repos, Notion pages, files, docs and decisions become recallable context too. But you don't have to: just `save` and it's instantly available everywhere.
 
 
 
@@ -162,7 +165,7 @@ For marketplace reviewers: see [REVIEWER.md](REVIEWER.md) for OAuth and Bearer t
 
 ## Available tools
 
-Registry `com.memxus/memxus` v1.2.0 — **9 core** tools always available, plus **4 connector** tools for GitHub/Notion sync from chat.
+Registry `com.memxus/memxus` v1.2.1 — **9 core** tools always available, plus **4 connector** tools for GitHub/Notion sync from chat.
 
 ### Core tools (9)
 
@@ -180,7 +183,7 @@ Registry `com.memxus/memxus` v1.2.0 — **9 core** tools always available, plus 
 | `update`           | Patch or append existing memory content, tags, or type                                     |
 
 
-### Context Engine connector tools (4) — v1.2.0
+### Context Engine connector tools (4) — v1.2.1
 
 
 | Tool                   | Description                                                        |
@@ -302,7 +305,7 @@ npm run build      # compile → dist/
 npm start          # node dist/index.js
 ```
 
-Marketplace reviewers: [REVIEWER.md](REVIEWER.md) · MCP docs: [memxus.com/docs/mcp](https://memxus.com/docs/mcp) · Registry: `com.memxus/memxus` v1.2.0
+Marketplace reviewers: [REVIEWER.md](REVIEWER.md) · MCP docs: [memxus.com/docs/mcp](https://memxus.com/docs/mcp) · Registry: `com.memxus/memxus` v1.2.1
 
 ---
 
