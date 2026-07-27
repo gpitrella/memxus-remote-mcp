@@ -1,17 +1,23 @@
-# Memxus — AI Context Engine
+# Memxus — Context Engineering
 
-**One context engine. Every AI.**
+### One context layer. Every AI.
 
-Save what matters once — recall it in Claude, Cursor, ChatGPT, Gemini, and any MCP client. Not generic memory: your real decisions, preferences and work context, portable across every AI. Multiply your productivity by giving your AI the right context — without repeating yourself.
+**Multiply your productivity by giving every AI the right context.**
 
-[Glama MCP Connector](https://glama.ai/mcp/connectors/com.memxus/memxus)
+Memxus brings Context Engineering to your entire AI workflow.
+
+Save your real decisions, preferences and work context once. Find them in seconds and give Claude, Cursor, ChatGPT, Gemini or any MCP client the exact context required for each task.
+
+No repeated explanations. No starting from zero. Better answers, faster.
+
+[Glama MCP Server](https://glama.ai/mcp/servers/gpitrella/memxus-remote-mcp)
 [License: AGPL-3.0](LICENSE)
 [Node 20+](https://nodejs.org)
 [Railway](https://railway.app)
 [MCP](https://modelcontextprotocol.io)
 [Registry v1.2.1](https://registry.modelcontextprotocol.io)
 
-[Website](https://memxus.com) · [Docs](https://memxus.com/docs/mcp) · [Connect your first AI](https://memxus.com/install) · [Glama Inspector](https://glama.ai/mcp/connectors/com.memxus/memxus)
+[Website](https://memxus.com) · [Docs](https://memxus.com/docs/mcp) · [Connect your first AI](https://memxus.com/install)
 
 ---
 
@@ -22,7 +28,7 @@ Save what matters once — recall it in Claude, Cursor, ChatGPT, Gemini, and any
 ---
 
 <p align="center">
-  <img src="docs/assets/memxus-flow.svg" alt="Save context from anywhere → one Memxus context engine → recall it in any AI → you stay in control" width="820">
+  <img src="docs/assets/memxus-context-engineering.jpg" alt="Memxus Context Engineering hub: save from anywhere, recall in any AI, control via Dashboard" width="820">
 </p>
 
 <p align="center">
@@ -33,22 +39,49 @@ Save what matters once — recall it in Claude, Cursor, ChatGPT, Gemini, and any
 
 ## The problem
 
-Every AI tool starts from zero.
+AI tools are powerful, but their productivity drops when they do not have the right context.
 
-Claude doesn't know what Cursor knows. Cursor doesn't know what ChatGPT knows.  
-Your stack, project decisions, coding preferences and workflow context get repeated again and again.
+Claude does not know what Cursor knows. Cursor does not know what ChatGPT knows. Your project decisions, preferences, architecture and workflow context get repeated across every tool and every new conversation.
 
-**Memxus fixes that with a shared context engine for your AI tools** — not another chatbot, and not generic memory. The fix is simple: save something once, recall it in any AI. Connect, save, done — it's instantly available everywhere. Sync your full stack (repos, docs, decisions) later, only if you want more depth.
+That creates unnecessary work:
 
-> Save a decision in Claude → recall it in Cursor → reuse it in ChatGPT. Want deeper context? Sync your GitHub and Notion too — optional, whenever you're ready.
+- Re-explaining the same information
+- Searching across repositories, documents and conversations
+- Correcting answers based on missing context
+- Repeating technical and product decisions
+- Starting every AI task from zero
+
+**Memxus solves this through Context Engineering.**
+
+Save what matters once, find it in seconds and give every AI the exact context it needs for the task.
+
+The result is less repetition, less back-and-forth, faster execution and better answers across your entire AI workflow.
+
+> Save a decision in Claude → recall it in Cursor → reuse it in ChatGPT.  
+> Need deeper context? Connect GitHub and Notion whenever you are ready.
 
 ---
 
 ## What is Memxus?
 
-Memxus is the **AI context engine** — a hosted remote MCP server for your AI clients. The core gesture is dead simple: `remember` to save (a decision, a preference, a note), `recall` to bring it back in any AI. Connect once with OAuth and your context is portable across your entire AI workflow — no local setup, no file syncing, no copy-pasting between tools.
+Memxus is a **Context Engineering** designed to multiply your productivity by giving every AI the right context.
 
-Want more? Sync real work sources — GitHub repos, Notion docs, commits, PRs, issues — and they become searchable context too. **GitHub and Notion connectors are live in production (v1.2.0).** Skill routing suggests official AI skills matched to your stack. But this is the optional deep layer — you get value from the first `save`.
+It creates a shared context layer across Claude, Cursor, ChatGPT, Gemini and any MCP-compatible client.
+
+The core workflow is simple:
+
+- `remember` what matters
+- `recall` it from any AI
+- find relevant context in seconds
+- give each AI the information it needs to produce a better answer
+
+Connect once with OAuth and your decisions, preferences and work context become portable across your entire AI workflow — without local setup, repeated explanations or copying and pasting between tools.
+
+For deeper context, Memxus can also connect to real work sources such as GitHub and Notion. Repositories, documentation, commits, pull requests, issues and selected workspace pages become searchable alongside your manually saved context.
+
+GitHub and Notion connectors are live in production. This deeper synchronization is optional: Memxus delivers value from the first saved decision.
+
+**Save once. Find it fast. Give every AI the right context. Work faster.**
 
 ---
 
@@ -92,15 +125,23 @@ flowchart LR
   Save["💾 Save — from any AI"] --> Memxus["🧠 Memxus — your persistent memory"] --> Recall["✨ Recall anywhere — Claude · Cursor · ChatGPT · Gemini"]
 ```
 
-> **Optional — sync your whole stack:** GitHub repos, Notion pages, files, docs and decisions become recallable context too. But you don't have to: just `save` and it's instantly available everywhere.
+### Start saving in one message
 
+After you connect Memxus to any AI, paste a line like this — Memxus calls `remember` and your context is available everywhere:
 
+```text
+Remember this in Memxus: we use Postgres + pgvector for semantic search.
+```
+
+No GitHub/Notion sync needed to start. Sync later when you want deeper project context.
+
+> **Optional — sync your whole stack:** GitHub repos, Notion pages, files, docs and decisions become recallable context too.
 
 > **Context Engine connector tools (4):** connect GitHub/Notion from chat via MCP. Production ships a 13-tool public manifest (9 core + 4 connect) with skill routing deferred.
 
 ---
 
-## Connect in 30 seconds
+## Connect in 1 second, one click
 
 ```
 URL:       https://mcp.memxus.com/mcp
