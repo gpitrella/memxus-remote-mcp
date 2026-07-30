@@ -3,7 +3,7 @@
   "name": "com.memxus/memxus",
   "title": "Memxus — AI Context Engine",
   "description": "Persistent memory layer that saves and recalls your project context and preferences.",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "websiteUrl": "https://memxus.com",
   "repository": {
     "url": "https://github.com/gpitrella/memxus-remote-mcp",
@@ -25,7 +25,7 @@
   "_meta": {
     "io.modelcontextprotocol.registry/publisher-provided": {
       "license": "AGPL-3.0",
-      "extendedDescription": "Multiply your productivity by putting your context to work. The AI context engine for developers. Automatically builds persistent context from your GitHub repos, Notion docs, commits, PRs, and decisions — then delivers it to any MCP-compatible AI client. Nine core tools are always available; GitHub/Notion in-app connect and skill routing are opt-in via feature flags and user preferences. Not a memory tool. A context engine that reads your real work. Cross-platform, encrypted, portable.",
+      "extendedDescription": "Multiply your productivity by putting your context to work. The AI context engine for developers. Automatically builds persistent context from your GitHub repos, Notion docs, commits, PRs, and decisions — then delivers it to any MCP-compatible AI client. Nine core tools are always available; GitHub/Notion in-app connect is opt-in per account. Not a memory tool. A context engine that reads your real work. Cross-platform, encrypted, portable.",
       "categories": ["memory", "context", "productivity", "ai-tools", "collaboration"],
       "tags": [
         "memory",

@@ -137,7 +137,7 @@ No GitHub/Notion sync needed to start. Sync later when you want deeper project c
 
 > **Optional — sync your whole stack:** GitHub repos, Notion pages, files, docs and decisions become recallable context too.
 
-> **Context Engine connector tools (4):** connect GitHub/Notion from chat via MCP. Production ships a 13-tool public manifest (9 core + 4 connect) with skill routing deferred.
+> **Context Engine connector tools (4):** connect GitHub/Notion from chat via MCP. Production advertises the 9 core tools; the 4 connector tools are enabled per account, so a newly connected client sees the core 9.
 
 ---
 

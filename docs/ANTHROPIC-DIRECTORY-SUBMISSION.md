@@ -42,12 +42,10 @@
 original Anthropic form submission that listed 8 tools; it must be declared as
 the 9th core tool on re-review.
 
-### Opt-in (not declared; gated behind feature flags + user prefs)
+### Not declared (never part of the advertised surface)
 
-- In-app connect (4 tools): `connect_source`, `list_syncable_items`, `set_sync_selection`, `check_connect_status`
-- Skill routing (6 tools): `get_context_with_skills`, `suggest_skills`, `use_skill_in_chat`, `install_skill`, `skip_skill`, `reset_skill_decision`
-
-Production ships with connect/skills **off** so anonymous discovery and Claude Directory probes see the 9-tool core surface.
+- **In-app connect (4 tools)** — `connect_source`, `list_syncable_items`, `set_sync_selection`, `check_connect_status`. Opt-in per account: `ENABLE_INAPP_CONNECT` plus `in_app_connect_enabled` in the user's `mcp_preferences`, which defaults to `false`. A newly connected account sees the core 9.
+- **Skill routing (6 tools)** — `get_context_with_skills`, `suggest_skills`, `use_skill_in_chat`, `install_skill`, `skip_skill`, `reset_skill_decision`. **Not opt-in: disabled outright.** Production sets `DISABLE_SKILLS=true`, and `areSkillsHardDisabled()` is a hard kill-switch — with it on, these tools are never listed regardless of user preferences. Do not describe skill routing as available anywhere public while this holds.
 
 ### OAuth scopes
 
@@ -91,7 +89,7 @@ The longer description no longer names third-party assistants.
 
 `update` is the only addition to the original list of 8: it is a core write tool that shipped after our initial submission, so please add it as the 9th declared tool.
 
-GitHub/Notion connect and skill routing remain opt-in behind feature flags and per-user preferences; they default to off, so a new account sees the 9 tools above. They are not part of this listing.
+The GitHub/Notion connector tools are enabled per account and off by default, so a newly connected account sees exactly the 9 tools above. Skill routing is disabled in production and is not available to any account. Neither is part of this listing.
 
 Verifiable now:
 

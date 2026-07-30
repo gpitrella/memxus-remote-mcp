@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-07-30
+
+### Fixed
+
+- Registry `extendedDescription` claimed skill routing was "opt-in via feature flags and user preferences". It is not: production sets `DISABLE_SKILLS=true` and `areSkillsHardDisabled()` is a hard kill-switch, so the six skill-routing tools are never listed for any account regardless of preferences. Only the GitHub/Notion connector tools are genuinely opt-in per account
+- README no longer advertises a "13-tool public manifest with skill routing deferred" — the advertised surface is the 9 core tools
+- `docs/ANTHROPIC-DIRECTORY-SUBMISSION.md` now records skill routing as disabled rather than opt-in
+
 ## [1.3.0] - 2026-07-30
 
 Anthropic MCP Directory review: the advertised surface now matches what the server actually serves, and tool descriptions describe the tool instead of instructing the assistant.
