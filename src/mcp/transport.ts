@@ -26,8 +26,6 @@ const STATELESS_POST_FALLBACK_METHODS = new Set([
   'tools/list',
   'resources/list',
   'resources/templates/list',
-  'prompts/list',
-  'prompts/get',
 ]);
 
 const DEFAULT_SESSION_TTL_MS = 60 * 60 * 1000;

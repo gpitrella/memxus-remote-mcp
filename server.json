@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "com.memxus/memxus",
   "title": "Memxus — AI Context Engine",
-  "description": "AI context engine for developers: GitHub, Notion, memory unified for Claude, Cursor, and ChatGPT.",
-  "version": "1.2.1",
+  "description": "Persistent memory layer that saves and recalls your project context and preferences.",
+  "version": "1.3.0",
   "websiteUrl": "https://memxus.com",
   "repository": {
     "url": "https://github.com/gpitrella/memxus-remote-mcp",
@@ -25,7 +25,7 @@
   "_meta": {
     "io.modelcontextprotocol.registry/publisher-provided": {
       "license": "AGPL-3.0",
-      "extendedDescription": "The AI context engine for developers. Automatically builds persistent context from your GitHub repos, Notion docs, commits, PRs, and decisions — then delivers it to Claude, Cursor, ChatGPT, Gemini, and any AI tool you use. Not a memory tool. A context engine that reads your real work. Cross-platform, encrypted, portable.",
+      "extendedDescription": "The AI context engine for developers. Automatically builds persistent context from your GitHub repos, Notion docs, commits, PRs, and decisions — then delivers it to any MCP-compatible AI client. Nine core tools are always available; GitHub/Notion in-app connect and skill routing are opt-in via feature flags and user preferences. Not a memory tool. A context engine that reads your real work. Cross-platform, encrypted, portable.",
       "categories": ["memory", "context", "productivity", "ai-tools", "collaboration"],
       "tags": [
         "memory",
@@ -75,7 +75,7 @@
         },
         {
           "name": "get_context",
-          "description": "Build a formatted context block for the current topic — ideal for injecting relevant memory from GitHub, Notion, and saved decisions into agent prompts. If the user's first message appears to be a coding task, technical question, or project-related request, call get_context with the detected topic BEFORE responding."
+          "description": "Builds a formatted context block for a topic from stored memories; use when the user asks to load or recall project context. Ideal for injecting relevant memory from GitHub, Notion, and saved decisions into agent prompts."
         },
         {
           "name": "list_memories",
@@ -100,22 +100,6 @@
         {
           "name": "update",
           "description": "Update existing memory content, tags, visibility, or type. Useful for refining saved context as your project evolves."
-        },
-        {
-          "name": "connect_source",
-          "description": "Connect GitHub or Notion from chat. Returns auth URL and poll token to sync repos, commits, PRs, and Notion docs into project context."
-        },
-        {
-          "name": "list_syncable_items",
-          "description": "List syncable GitHub repositories or Notion pages after connecting a source. Select items to build project context."
-        },
-        {
-          "name": "set_sync_selection",
-          "description": "Save which repos or Notion pages to sync, then trigger initial sync into project:<slug> collections."
-        },
-        {
-          "name": "check_connect_status",
-          "description": "Poll GitHub or Notion connection status after connect_source. Confirms when source context is ready."
         }
       ],
       "links": {

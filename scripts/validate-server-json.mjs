@@ -66,6 +66,18 @@ if (missingCore.length > 0) {
   errors.push(`_meta.tools missing core tools: ${missingCore.join(', ')}`);
 }
 
+const extraTools = toolNames.filter((name) => !CORE_TOOLS.includes(name));
+if (extraTools.length > 0) {
+  errors.push(
+    `_meta.tools must declare exactly the 9 core tools; unexpected: ${extraTools.join(', ')}`
+  );
+}
+if (toolNames.length !== CORE_TOOLS.length) {
+  errors.push(
+    `_meta.tools count must be ${CORE_TOOLS.length}, got ${toolNames.length}`
+  );
+}
+
 if (errors.length > 0) {
   console.error('server.json validation failed:');
   for (const err of errors) console.error(`  - ${err}`);

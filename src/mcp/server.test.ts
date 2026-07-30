@@ -206,43 +206,21 @@ test('listResourceTemplates returns empty array for Glama Inspector compatibilit
   });
 });
 
-test('listResources exposes memory, skill-card, and collections-card resources', async () => {
+test('listResources exposes only memory://recent', async () => {
   await withTestClient(async (client) => {
     const result = await client.listResources();
-    assert.equal(result.resources.length, 3);
+    assert.equal(result.resources.length, 1);
     assert.equal(result.resources[0]?.uri, 'memory://recent');
-    assert.equal(result.resources[1]?.uri, 'ui://memxus/skill-card');
-    assert.equal(result.resources[2]?.uri, 'ui://memxus/collections-card');
-    assert.equal(result.resources[1]?.mimeType, 'text/html;profile=mcp-app');
-    assert.equal(result.resources[2]?.mimeType, 'text/html;profile=mcp-app');
+    assert.ok(!result.resources.some((r) => r.uri.startsWith('ui://')));
+    assert.ok(!result.resources.some((r) => r.mimeType?.includes('profile=mcp-app')));
   });
 });
 
-test('listPrompts returns Memxus context prompts without arguments', async () => {
-  await withTestClient(async (client) => {
-    const result = await client.listPrompts();
-    assert.equal(result.prompts.length, 2);
-    assert.equal(result.prompts[0]?.name, 'memxus-context');
-    assert.equal(result.prompts[1]?.name, 'memxus-context-skills');
-    for (const prompt of result.prompts) {
-      assert.deepEqual(prompt.arguments ?? [], []);
-    }
-  });
-});
-
-test('get_context tool definition does not expose collections-card _meta.ui', () => {
-  const tool = MCP_CORE_TOOLS.find((t) => t.name === 'get_context');
-  assert.ok(tool);
-  const meta = tool!._meta as { ui?: { resourceUri?: string } } | undefined;
-  assert.equal(meta?.ui?.resourceUri, undefined);
-});
-
-test('get_context_with_skills tool definition exposes skill-card _meta.ui', () => {
-  const tool = MCP_SKILL_ROUTING_TOOLS.find((t) => t.name === 'get_context_with_skills');
-  assert.ok(tool);
-  const meta = tool!._meta as { ui?: { resourceUri?: string; visibility?: string[] } };
-  assert.equal(meta.ui?.resourceUri, 'ui://memxus/skill-card');
-  assert.deepEqual(meta.ui?.visibility, ['model', 'app']);
+test('no tool definition exposes _meta.ui', () => {
+  for (const tool of [...MCP_CORE_TOOLS, ...MCP_SKILL_ROUTING_TOOLS]) {
+    const meta = tool._meta as { ui?: { resourceUri?: string } } | undefined;
+    assert.equal(meta?.ui, undefined, `${tool.name} must not expose _meta.ui`);
+  }
 });
 
 test('listTools exposes core tools (9 by default)', async () => {
@@ -251,8 +229,6 @@ test('listTools exposes core tools (9 by default)', async () => {
     assert.equal(result.tools.length, 9);
     const getContext = result.tools.find((t) => t.name === 'get_context');
     assert.ok(getContext);
-    const meta = getContext!._meta as { ui?: { resourceUri?: string } } | undefined;
-    assert.equal(meta?.ui?.resourceUri, undefined);
     assert.deepEqual(
       result.tools.map((tool) => tool.name),
       [...CORE_TOOL_NAMES]

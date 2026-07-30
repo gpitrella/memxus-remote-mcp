@@ -1,8 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { buildCollectionsPickerToolResult } from './collections-card.js';
@@ -12,8 +9,6 @@ import { createMCPServer } from './server.js';
 import { DEFAULT_USER_MCP_PREFERENCES } from '../lib/mcp-preferences.js';
 import { DISABLE_SKILLS, ENABLE_SKILL_ROUTING } from '../lib/feature-flags.js';
 import type { EffectiveCapabilities } from '../lib/skill-capabilities.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const CAPS: EffectiveCapabilities = {
   surface: 'code-editor',
@@ -47,20 +42,15 @@ test('buildCollectionsPickerToolResult never attaches _meta.ui', () => {
   }
 });
 
-test('buildSkillCardMeta returns undefined when renderApps is false', () => {
-  const payload = buildSkillCardPayload({
-    lang: 'es',
-    skills: [],
-    caps: { ...CAPS, renderApps: false },
-  });
-  assert.equal(buildSkillCardMeta(payload), undefined);
-});
-
-test('server.ts only uses buildSkillCardMeta in skills domain handlers', () => {
-  const serverSource = readFileSync(join(__dirname, 'server.ts'), 'utf8');
-  assert.doesNotMatch(serverSource, /buildCollectionsCardMeta/);
-  const metaCalls = serverSource.match(/buildSkillCardMeta\(/g) ?? [];
-  assert.equal(metaCalls.length, 2);
+test('buildSkillCardMeta always returns undefined (widgets removed)', () => {
+  for (const renderApps of [true, false]) {
+    const payload = buildSkillCardPayload({
+      lang: 'es',
+      skills: [],
+      caps: { ...CAPS, renderApps },
+    });
+    assert.equal(buildSkillCardMeta(payload), undefined, `renderApps=${renderApps}`);
+  }
 });
 
 test('getActiveMcpTools excludes skill tools when DISABLE_SKILLS is true', () => {

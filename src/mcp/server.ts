@@ -4,8 +4,6 @@ import {
   ListToolsRequestSchema,
   ListResourcesRequestSchema,
   ListResourceTemplatesRequestSchema,
-  ListPromptsRequestSchema,
-  GetPromptRequestSchema,
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
@@ -92,13 +90,6 @@ import { getCachedUserMcpPreferences } from '../lib/mcp-preferences-cache.js';
 import { toolSuccess, toolSuccessWithUserFacing, toStructuredMemory, toStructuredMemories, withAdvisoryNote, type ToolSuccessResult } from './tool-results.js';
 import { buildSkillCardMeta, buildSkillCardPayload } from './skill-card.js';
 import { buildCollectionsPickerToolResult } from './collections-card.js';
-import {
-  MEMXUS_MCP_PROMPTS,
-  MEMXUS_CONTEXT_PROMPT,
-  MEMXUS_CONTEXT_SKILLS_PROMPT,
-  MEMXUS_CONTEXT_PROMPT_INSTRUCTION,
-  MEMXUS_CONTEXT_SKILLS_PROMPT_INSTRUCTION,
-} from './prompts.js';
 import { detectLanguage, t, type SupportedLanguage } from '../lib/i18n.js';
 import { getUserLanguageState, updateDetectedLanguage } from '../lib/user-language-state.js';
 import {
@@ -193,10 +184,9 @@ export async function createMCPServer(ctx: McpContext): Promise<Server> {
     const connectStats = await getStats(userId, workforceWorkspaceId);
     instructions =
       connectStats.total === 0
-        ? "This user has no saved memories yet. Proactively greet them at the start of the " +
-          "conversation (don't wait to be asked): briefly explain you can remember things they " +
-          "tell you to save (facts, preferences, decisions, project context) and invite them to " +
-          "save their first memory or ask what's already there."
+        ? 'This user has no saved memories yet. You can remember things they save — facts, ' +
+          'preferences, decisions, project context. Start by greeting them and mentioning what ' +
+          'Memxus can help with.'
         : undefined;
   } catch (err) {
     console.error('[createMCPServer] getStats failed, connecting without instructions:', err);
@@ -239,8 +229,8 @@ export async function createMCPServer(ctx: McpContext): Promise<Server> {
   }
 
   const server = new Server(
-    { name: 'memxus', version: '1.2.1' },
-    { capabilities: { tools: {}, resources: {}, prompts: {} }, ...(instructions ? { instructions } : {}) }
+    { name: 'memxus', version: '1.3.0' },
+    { capabilities: { tools: {}, resources: {} }, ...(instructions ? { instructions } : {}) }
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -253,35 +243,6 @@ export async function createMCPServer(ctx: McpContext): Promise<Server> {
   server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
     resourceTemplates: [],
   }));
-
-  server.setRequestHandler(ListPromptsRequestSchema, async () => ({
-    prompts: [...MEMXUS_MCP_PROMPTS],
-  }));
-
-  server.setRequestHandler(GetPromptRequestSchema, async (req) => {
-    const promptName = req.params.name;
-    if (promptName !== MEMXUS_CONTEXT_PROMPT && promptName !== MEMXUS_CONTEXT_SKILLS_PROMPT) {
-      throw new Error(`Unknown prompt: ${promptName}`);
-    }
-
-    const includeSkills = promptName === MEMXUS_CONTEXT_SKILLS_PROMPT;
-    const instruction = includeSkills
-      ? MEMXUS_CONTEXT_SKILLS_PROMPT_INSTRUCTION
-      : MEMXUS_CONTEXT_PROMPT_INSTRUCTION;
-
-    return {
-      description: includeSkills ? 'Memxus context + skills' : 'Memxus context',
-      messages: [
-        {
-          role: 'user' as const,
-          content: {
-            type: 'text' as const,
-            text: instruction,
-          },
-        },
-      ],
-    };
-  });
 
   server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
     const html = await readResource(req.params.uri, userId, workforceWorkspaceId);

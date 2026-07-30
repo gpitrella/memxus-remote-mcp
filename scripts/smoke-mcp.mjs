@@ -42,6 +42,28 @@ async function main() {
   const { tier, count } = validateToolManifest(names, SMOKE_MANIFEST);
   console.log(`OK list_tools (${count} tools, manifest=${tier})`);
 
+  // Directory surface: resources/prompts must match docs/ANTHROPIC-DIRECTORY-SUBMISSION.md.
+  const { resources } = await client.listResources();
+  const resourceUris = resources.map((r) => r.uri);
+  if (resourceUris.length !== 1 || resourceUris[0] !== 'memory://recent') {
+    throw new Error(`Expected only memory://recent, got: ${resourceUris.join(', ') || '(none)'}`);
+  }
+  if (resources.some((r) => (r.mimeType ?? '').includes('profile=mcp-app'))) {
+    throw new Error('MCP-app widget resource is being served; submission declares "not an MCP app"');
+  }
+  console.log('OK list_resources (memory://recent only, no widgets)');
+
+  let promptCount = null;
+  try {
+    promptCount = (await client.listPrompts()).prompts.length;
+  } catch {
+    promptCount = 0; // capability not advertised — prompts/list rejected, which is the intent
+  }
+  if (promptCount !== 0) {
+    throw new Error(`Expected 0 prompts, got ${promptCount}`);
+  }
+  console.log('OK list_prompts (none advertised)');
+
   const stats1 = toolText(await client.callTool({ name: 'memory_stats', arguments: {} }));
   const total1 = Number(stats1.match(/Total:\s*(\d+)/)?.[1] ?? NaN);
   const stats2 = toolText(await client.callTool({ name: 'memory_stats', arguments: {} }));

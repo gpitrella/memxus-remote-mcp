@@ -28,7 +28,7 @@ OAuth metadata advertises `refresh_token`; token responses include `refresh_toke
 1. Add Memxus MCP in Glama with URL `https://mcp.memxus.com/mcp`.
 2. Use **OAuth** (not a manual API key in the Glama UI unless offered as fallback).
 3. Sign in with Google on **dashboard.memxus.com** when redirected (same account as your Memxus dashboard).
-4. Confirm tools: remember, recall, get_context, list_memories, get_memory, list_collections, forget, memory_stats.
+4. Confirm tools: remember, recall, get_context, list_memories, get_memory, list_collections, forget, memory_stats, update.
 
 ## MCP Inspector: Authenticate flow
 
@@ -81,10 +81,10 @@ curl -s -X POST https://mcp.memxus.com/oauth/register \
 
 | Tab | Supported | Notes |
 |-----|-----------|-------|
-| Tools | Yes | 8 tools; use `memory_stats` or `list_collections` to smoke-test |
+| Tools | Yes | 9 core tools; use `memory_stats` or `list_collections` to smoke-test |
 | Resources | Yes | `memory://recent` |
 | Resource Templates | Yes (empty) | Returns `[]`; Memxus has no template resources |
-| Prompts | Yes (empty) | Returns `[]`; Memxus has no MCP prompts |
+| Prompts | No | Capability not advertised |
 | Tasks | No | Not implemented |
 
 ## Railway logs: `GET /mcp` → 409

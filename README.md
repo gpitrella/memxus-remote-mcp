@@ -28,7 +28,7 @@ No repeated explanations. No starting from zero. Better answers, faster.
 ---
 
 <p align="center">
-  <img src="docs/assets/memxus-context-engineering.jpg" alt="Memxus Context Engineering hub: save from anywhere, recall in any AI, control via Dashboard" width="820">
+  <img src="docs/assets/memxus-context-engineering.png" alt="Memxus Context Engineering hub: save from anywhere, recall in any AI, control via Dashboard" width="820">
 </p>
 
 <p align="center">

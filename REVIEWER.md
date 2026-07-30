@@ -45,7 +45,7 @@ npx -y smithery mcp add memxus/memxus --client cursor --force
 2. Use the **same Google account** as [dashboard.memxus.com](https://dashboard.memxus.com).
 3. Restart Cursor.
 4. Keep a **single** `memxus` entry in `~/.cursor/mcp.json` (Smithery URL only). Remove `memxus-local` stdio and manual `https://mcp.memxus.com/mcp` + Bearer duplicates.
-5. Expected: **8 tools** — remember, recall, get_context, list_memories, get_memory, list_collections, forget, memory_stats.
+5. Expected: **9 tools** — remember, recall, get_context, list_memories, get_memory, list_collections, forget, memory_stats, update.
 
 Verify:
 
@@ -79,7 +79,7 @@ Full guide: [docs/GLAMA.md](docs/GLAMA.md)
 1. Add MCP URL `https://mcp.memxus.com/mcp` in Glama.
 2. OAuth with Google via dashboard redirect (same account as dashboard.memxus.com).
 3. Do **not** use browser extensions that rewrite OAuth to `http://127.0.0.1:.../callback`.
-4. Expected: **8 tools**; API key name **Glama (...)** in dashboard after connect.
+4. Expected: **9 tools**; API key name **Glama (...)** in dashboard after connect.
 
 Smoke:
 
@@ -92,7 +92,7 @@ curl -s https://mcp.memxus.com/.well-known/oauth-authorization-server/mcp
 1. Open **Chat: Open Customizations** → **MCP Servers** (or Extensions → search `@mcp memxus`).
 2. Click **Install** on Memxus → confirm trust.
 3. Complete OAuth (Google sign-in via dashboard when prompted).
-4. Expected: **8 tools** — remember, recall, get_context, list_memories, get_memory, list_collections, forget, memory_stats.
+4. Expected: **9 tools** — remember, recall, get_context, list_memories, get_memory, list_collections, forget, memory_stats, update.
 
 DCR smoke (after deploy with VS Code redirect allowlist):
 
@@ -152,7 +152,7 @@ Bearer fallback: dashboard API key in `mcp_config.json` with `Authorization: Bea
 
 3. Run `gemini` and authenticate: `/mcp auth memxus` (or connect when prompted after 401).
 4. Complete Google sign-in via dashboard when the browser opens.
-5. Expected: **8 tools**; API key name **Gemini CLI (...)** in dashboard after connect.
+5. Expected: **9 tools**; API key name **Gemini CLI (...)** in dashboard after connect.
 
 Bearer fallback:
 
@@ -176,7 +176,7 @@ curl -s -X POST https://mcp.memxus.com/oauth/register \
 1. Settings → MCP → Add server.
 2. URL: `https://mcp.memxus.com/mcp`
 3. Header: `Authorization: Bearer aimem_YOUR_KEY`
-4. Expected: same **8 tools** as above.
+4. Expected: same **9 tools** as above.
 
 Example JSON (VS Code):
 

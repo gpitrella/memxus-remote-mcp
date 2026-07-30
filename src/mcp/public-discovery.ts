@@ -1,19 +1,17 @@
 import { Request, Response, NextFunction } from 'express';
 import { MCP_CORE_TOOLS, getActiveMcpTools } from './tool-schemas.js';
 import { RESOURCES } from './resources.js';
-import { MEMXUS_MCP_PROMPTS } from './prompts.js';
 import { resolveBearerAuthContext } from '../lib/auth.js';
 import { getCachedUserMcpPreferences } from '../lib/mcp-preferences-cache.js';
 
-const SERVER_INFO = { name: 'memxus', version: '1.2.1' } as const;
+const SERVER_INFO = { name: 'memxus', version: '1.3.0' } as const;
 const PROTOCOL_VERSION = '2024-11-05';
-const CAPABILITIES = { tools: {}, resources: {}, prompts: {} } as const;
+const CAPABILITIES = { tools: {}, resources: {} } as const;
 
 const DISCOVERY_LIST_METHODS = new Set([
   'tools/list',
   'resources/list',
   'resources/templates/list',
-  'prompts/list',
 ]);
 
 function isJsonRpcMessage(body: unknown): body is { jsonrpc: '2.0'; method: string } {
@@ -63,8 +61,6 @@ async function respondDiscoveryList(method: string, req: Request): Promise<unkno
       return { resources: RESOURCES };
     case 'resources/templates/list':
       return { resourceTemplates: [] };
-    case 'prompts/list':
-      return { prompts: [...MEMXUS_MCP_PROMPTS] };
     default:
       return null;
   }

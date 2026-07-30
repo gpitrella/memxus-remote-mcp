@@ -4,9 +4,6 @@ import type { SupportedLanguage } from '../lib/i18n.js';
 import { t } from '../lib/i18n.js';
 import { communityNotice, presentSkill } from '../lib/skill-sanitizers.js';
 
-/** Interactive MCP App cards — Skills domain only; memory tools must return plain text. */
-export const SKILL_CARD_RESOURCE_URI = 'ui://memxus/skill-card';
-
 export type SkillCardPayload = {
   version: '1';
   lang: SupportedLanguage;
@@ -65,14 +62,9 @@ export function buildSkillCardPayload(input: {
   };
 }
 
+/** Widgets removed for Anthropic directory surface freeze — always plain text. */
 export function buildSkillCardMeta(
-  payload: SkillCardPayload,
+  _payload: SkillCardPayload,
 ): Record<string, unknown> | undefined {
-  if (!payload.client.renderApps) return undefined;
-  return {
-    ui: {
-      resourceUri: SKILL_CARD_RESOURCE_URI,
-      prefHeight: payload.compactLayout ? 520 : 420,
-    },
-  };
+  return undefined;
 }

@@ -1,11 +1,6 @@
-import { readFileSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
 import { loadUserPlan } from '../lib/plan-enforcement.js';
 import { getPlan } from '../lib/plans.js';
 import { listMemories } from './tools.js';
-import { SKILL_CARD_RESOURCE_URI } from './skill-card.js';
-import { COLLECTIONS_CARD_RESOURCE_URI } from './collections-card.js';
 
 export interface ResourceListItem {
   uri: string;
@@ -21,32 +16,7 @@ export const RESOURCES: ResourceListItem[] = [
     description: 'Your most recent memories (count capped per plan)',
     mimeType: 'text/html',
   },
-  {
-    uri: SKILL_CARD_RESOURCE_URI,
-    name: 'Memxus Skill Card',
-    description: 'Interactive MCP Apps card for suggested skills',
-    mimeType: 'text/html;profile=mcp-app',
-  },
-  {
-    uri: COLLECTIONS_CARD_RESOURCE_URI,
-    name: 'Memxus Collections',
-    description: 'Collection picker for Memxus context',
-    mimeType: 'text/html;profile=mcp-app',
-  },
 ];
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-function loadInlineDocument(relativeDir: string): string {
-  const base = join(__dirname, '../../resources', relativeDir);
-  const html = readFileSync(join(base, 'index.html'), 'utf8');
-  const css = readFileSync(join(base, 'card.css'), 'utf8');
-  const js = readFileSync(join(base, 'card.js'), 'utf8');
-  return html.replace('/* __INLINE_CSS__ */', css).replace('/* __INLINE_JS__ */', js);
-}
-
-const skillCardDocument = loadInlineDocument('skill-card');
-const collectionsCardDocument = loadInlineDocument('collections-card');
 
 export function getResourceMimeType(uri: string): string {
   return RESOURCES.find((r) => r.uri === uri)?.mimeType ?? 'text/html';
@@ -65,12 +35,6 @@ export async function readResource(
   userId: string,
   workforceWorkspaceId?: string
 ): Promise<string> {
-  if (uri === SKILL_CARD_RESOURCE_URI) {
-    return skillCardDocument;
-  }
-  if (uri === COLLECTIONS_CARD_RESOURCE_URI) {
-    return collectionsCardDocument;
-  }
   if (uri !== 'memory://recent') throw new Error(`Unknown resource: ${uri}`);
   const planCtx = await loadUserPlan(userId);
   const limits = planCtx?.limits ?? getPlan('free').limits;
