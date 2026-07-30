@@ -12,6 +12,12 @@ describe('rendering-instructions', () => {
     assert.ok(RENDERING_INSTRUCTIONS_BRIEF.length > 50);
   });
 
+  it('brief instructions describe the result without instructing the assistant', () => {
+    assert.doesNotMatch(RENDERING_INSTRUCTIONS_BRIEF, /\bshow the user\b/i);
+    assert.doesNotMatch(RENDERING_INSTRUCTIONS_BRIEF, /\bdo not (repeat|dump)\b/i);
+    assert.doesNotMatch(RENDERING_INSTRUCTIONS_BRIEF, /\bverbatim\b/i);
+  });
+
   it('appendRenderingInstructions extends tool description', () => {
     const base = 'Build context for a topic.';
     const out = appendRenderingInstructions(base);

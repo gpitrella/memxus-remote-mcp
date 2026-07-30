@@ -1,6 +1,6 @@
 {
   "name": "@memxus/mcp",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "Memxus AI Context Engine — Remote MCP Server with OAuth 2.1, Streamable HTTP, GitHub/Notion sync",
   "type": "module",
   "main": "dist/index.js",

@@ -50,7 +50,7 @@ test('directory surface: server.json declares exactly 9 core tools', () => {
   const names = (meta?.tools ?? []).map((t: { name: string }) => t.name).sort();
   assert.equal(names.length, 9);
   assert.deepEqual(names, [...DECLARED_CORE]);
-  assert.equal(serverJson.version, '1.3.1');
+  assert.equal(serverJson.version, '1.3.2');
   assert.match(serverJson.description, /Persistent memory layer/);
   assert.doesNotMatch(serverJson.description, /ChatGPT/);
   assert.doesNotMatch(meta?.extendedDescription ?? '', /ChatGPT/);
@@ -122,6 +122,9 @@ const BANNED_IN_DESCRIPTIONS: Array<[RegExp, string]> = [
   [/BEFORE (responding|calling)/i, 'proactive-invocation directive'],
   [/do not wait for the user/i, 'proactive-invocation directive'],
   [/do not ask the user/i, 'assistant-behaviour directive'],
+  [/\bshow the user\b/i, 'rendering directive aimed at the assistant'],
+  [/\bdo not (repeat|dump)\b/i, 'rendering directive aimed at the assistant'],
+  [/\bverbatim\b/i, 'rendering directive aimed at the assistant'],
   [/ui:\/\//, 'MCP-app widget URI (widgets are not served)'],
   [/memory:\/\/(?!recent\b)[a-z]+/i, 'resource URI that resources/list does not serve'],
 ];

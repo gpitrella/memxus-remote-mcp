@@ -229,7 +229,7 @@ export async function createMCPServer(ctx: McpContext): Promise<Server> {
   }
 
   const server = new Server(
-    { name: 'memxus', version: '1.3.1' },
+    { name: 'memxus', version: '1.3.2' },
     { capabilities: { tools: {}, resources: {} }, ...(instructions ? { instructions } : {}) }
   );
 

@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-07-30
+
+### Changed
+
+- Rendering guidance appended to `get_context` and `recall` is now declarative: it describes what the result contains (`user_facing_template` alongside the raw `context_block`, and how `exclude_memory_ids` / `max_memories` widen the result) instead of instructing the assistant to "show the user … verbatim" or "do not repeat" anything. Tool descriptions now describe the tool end to end, with no imperative aimed at the model
+
+### Added
+
+- Contract test bans `show the user`, `do not repeat/dump` and `verbatim` from every tool description and schema field, in every tier
+
 ## [1.3.1] - 2026-07-30
 
 ### Fixed
