@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-30
+
+Anthropic MCP Directory review: the advertised surface now matches what the server actually serves, and tool descriptions describe the tool instead of instructing the assistant.
+
+### Changed
+
+- `get_context` description is declarative — the proactive-invocation directive ("call get_context … BEFORE responding — do not wait for the user to ask") is removed from both the live schema and `server.json`
+- `workspace` and `list_collections` descriptions no longer reference `memory://workspaces`, a resource the server does not serve, and no longer carry a "BEFORE calling this tool" directive
+- `initialize` instructions no longer imperatively tell the assistant to greet unprompted
+- Rendering instructions trimmed to what the client needs to render the result; skill-routing flow directives dropped
+- Listing copy is agent-agnostic: `description` and `extendedDescription` no longer name third-party assistants
+- `server.json` declares the 9 core tools; connect tools stay opt-in behind feature flags and are no longer advertised
+
+### Removed
+
+- MCP prompts `memxus-context` and `memxus-context-skills`; the `prompts` capability is no longer advertised
+- MCP-app widget resources `ui://memxus/skill-card` and `ui://memxus/collections-card`, and their `_meta.ui` wiring — `resources/list` serves only `memory://recent`, so Memxus is not an MCP app
+
+### Added
+
+- `docs/ANTHROPIC-DIRECTORY-SUBMISSION.md` — canonical record of the declared directory surface (9 tools / 0 prompts / 1 resource) and the review reply
+- `src/mcp/directory-surface.contract.test.ts` — CI contract test that fails the build if code, `server.json` and the submission doc diverge, or if any description reintroduces directive language or a URI the server does not serve
+- Live smoke now asserts the resource and prompt surface, not just the tool list
+
 ## [1.2.1] - 2026-07-26
 
 ### Changed

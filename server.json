@@ -25,7 +25,7 @@
   "_meta": {
     "io.modelcontextprotocol.registry/publisher-provided": {
       "license": "AGPL-3.0",
-      "extendedDescription": "The AI context engine for developers. Automatically builds persistent context from your GitHub repos, Notion docs, commits, PRs, and decisions — then delivers it to any MCP-compatible AI client. Nine core tools are always available; GitHub/Notion in-app connect and skill routing are opt-in via feature flags and user preferences. Not a memory tool. A context engine that reads your real work. Cross-platform, encrypted, portable.",
+      "extendedDescription": "Multiply your productivity by putting your context to work. The AI context engine for developers. Automatically builds persistent context from your GitHub repos, Notion docs, commits, PRs, and decisions — then delivers it to any MCP-compatible AI client. Nine core tools are always available; GitHub/Notion in-app connect and skill routing are opt-in via feature flags and user preferences. Not a memory tool. A context engine that reads your real work. Cross-platform, encrypted, portable.",
       "categories": ["memory", "context", "productivity", "ai-tools", "collaboration"],
       "tags": [
         "memory",
